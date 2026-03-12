@@ -36,6 +36,8 @@ from datamodules.base import Supervision
 from datamodules.base.datamodule import SSNDataModule, InputNormalizationMethod
 from datamodules.base.dataset import SSNDataset
 
+import argparse_from_jsonschema
+
 class GenericDataset(SSNDataset):
 
     def __init__(
@@ -281,7 +283,7 @@ def test(
         "image_path": [],
         "mask_path": [],
     }
-    for batch in tqdm(test_loader, position=0, leave=True):
+    for batch in tqdm(test_loader, position=0, leave=True, desc="eval"):
         image_batch = batch["image"].to(device)
         anomaly_map, anomaly_score = model.forward(image_batch)
 
@@ -375,10 +377,11 @@ def test(
 
 def train_and_eval(model, datamodule, config, device):
     mlflow.set_tracking_uri("http://localhost:8081")
-    mlflow.set_experiment(config["mlflow_experiment"])
+    mlflow.set_experiment(config["name"])
     # Enable system metrics logging
     mlflow.enable_system_metrics_logging()
     with mlflow.start_run():
+        mlflow.log_params(config)
         args = {
             "model": model,
             "datamodule": datamodule,
@@ -406,29 +409,7 @@ def train_and_eval(model, datamodule, config, device):
         test(**args, normalize=True)
 
 if __name__ == "__main__":
-    base_config = {
-        "dataset_directory": Path("/data/ploscice"),
-        "setup_name": "SuperSimpleNet",
-        "backbone": "wide_resnet50_2",
-        "backbone_weights": "IMAGENET1K_V1",
-        "layers": ["layer2", "layer3"],
-        "patch_size": 3,
-        "noise": True,
-        "perlin": True,
-        "no_anomaly": "empty",
-        "bad": True,
-        "noise_std": 0.015,
-        # "perlin_thr": x,
-        "seed": 42,
-        "batch": 32,
-        "epochs": 300,
-        "seg_lr": 0.0002,
-        "dec_lr": 0.0002,
-        "adapt_lr": 0.0001,
-        "gamma": 0.4,
-        "eval_step_size": 4,
-        "results_save_path": Path("./results"),
-    }
+    base_config = argparse_from_jsonschema.parse(schema='./manifest.json')
 
     # for injecting weight path from nix
     if "__default_weights__" in locals():
@@ -443,6 +424,7 @@ if __name__ == "__main__":
             "flips": False,  # makes no difference, just faster if false to avoid computation
             "stop_grad": True,
             "clip_grad": False,
+            "layers": [ "layer2", "layer3" ],
         }
     else:
         config = {
@@ -453,24 +435,20 @@ if __name__ == "__main__":
             "flips": True,
             "stop_grad": False,
             "clip_grad": True,
+            "layers": [ "layer2", "layer3" ],
         }
-    config["mlflow_experiment"] = "Super Simple Net"
-    with open(config["dataset_directory"] / "manifest.json") as f:
+    with open(config["manifest"]) as f:
         manifest = json.load(f)
-    # should be configurable
-    config["perlin_thr"] = 0.6
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     seed_everything(config["seed"], workers=True)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    config["name"] = f"{config['setup_name']}"
-
     model = SuperSimpleNet(image_size=manifest["image_size"], config=config)
 
     datamodule = Generic(
-        root=Path(config["dataset_directory"]),
+        root=Path(config["manifest"]).absolute().parent,
         image_size=manifest["image_size"],
         train_batch_size=config["batch"],
         eval_batch_size=config["batch"],

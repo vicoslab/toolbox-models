@@ -5,6 +5,7 @@ RUN git apply *.patch && rm *.patch
 
 RUN uv venv --python 3.12
 RUN uv pip install -r requirements.txt
-RUN uv pip install pytorch_lightning lightning opencv-python kornia tifffile psutil mlflow
+RUN uv pip install pytorch_lightning lightning opencv-python kornia tifffile psutil mlflow argparse-from-jsonschema
 
 COPY ${src}/train .
+COPY ${src}/manifest.json .

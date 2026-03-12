@@ -1,5 +1,5 @@
 diff --git a/common/visualizer.py b/common/visualizer.py
-index 9682500..e3ed281 100644
+index 9682500..4cad428 100644
 --- a/common/visualizer.py
 +++ b/common/visualizer.py
 @@ -2,10 +2,11 @@ from pathlib import Path
@@ -15,7 +15,7 @@ index 9682500..e3ed281 100644
  
  
  class Visualizer:
-@@ -15,21 +16,23 @@ class Visualizer:
+@@ -15,21 +16,24 @@ class Visualizer:
      def visualize(self, results: dict):
          for image_path, mask_path, anomaly_map, score, seg_score, label in tqdm(
              zip(
@@ -34,6 +34,7 @@ index 9682500..e3ed281 100644
              ),
 -            total=len(results["label"]),
 +            total=len(results.label),
++            desc="visualise",
          ):
              anomaly_map = anomaly_map.squeeze()
              h, w = anomaly_map.shape
@@ -48,7 +49,7 @@ index 9682500..e3ed281 100644
              else:
                  gt_mask = np.zeros_like(anomaly_map)
              # images are normed to [0, 1] so we cut off at 0.5
-@@ -45,7 +48,7 @@ class Visualizer:
+@@ -45,7 +49,7 @@ class Visualizer:
              for s_plt in plots:
                  s_plt.axis("off")
  
@@ -57,7 +58,7 @@ index 9682500..e3ed281 100644
  
              plots[0].imshow(image)
              plots[0].title.set_text("Image")
-@@ -66,17 +69,13 @@ class Visualizer:
+@@ -66,17 +70,13 @@ class Visualizer:
  
              # subdir name is parent's name
              subdir_name = Path(image_path).parent.name
