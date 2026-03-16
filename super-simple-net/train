@@ -411,10 +411,6 @@ def train_and_eval(model, datamodule, config, device):
 if __name__ == "__main__":
     base_config = argparse_from_jsonschema.parse(schema='./manifest.json')
 
-    # for injecting weight path from nix
-    if "__default_weights__" in locals():
-        base_config["backbone_weights"] = locals()["__default_weights__"]
-
     supervision = Supervision.UNSUPERVISED
     if supervision != Supervision.FULLY_SUPERVISED:
         config = {
@@ -445,11 +441,12 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    model = SuperSimpleNet(image_size=manifest["image_size"], config=config)
+    image_size = [config["height"], config["width"]]
+    model = SuperSimpleNet(image_size=image_size, config=config)
 
     datamodule = Generic(
         root=Path(config["manifest"]).absolute().parent,
-        image_size=manifest["image_size"],
+        image_size=image_size,
         train_batch_size=config["batch"],
         eval_batch_size=config["batch"],
         num_workers=config["num_workers"],

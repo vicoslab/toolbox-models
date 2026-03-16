@@ -12,6 +12,16 @@
             "type": "string",
             "default": "SuperSimpleNet"
         },
+        "width": {
+            "description": "Width to scale image to.",
+            "type": "integer",
+            "default": 256
+        },
+        "height": {
+            "description": "Height to scale image to.",
+            "type": "integer",
+            "default": 256
+        },
         "backbone": {
             "description": "Model used for feature extraction.",
             "type": "string",
