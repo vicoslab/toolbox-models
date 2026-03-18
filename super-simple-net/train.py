@@ -2,7 +2,8 @@
 
 import os
 import sys
-1
+import tempfile
+
 from dataclasses import dataclass
 import copy
 import json
@@ -377,10 +378,10 @@ def test(
 
 def train_and_eval(model, datamodule, config, device):
     mlflow.set_tracking_uri("http://localhost:8081")
-    mlflow.set_experiment(config["name"])
+    mlflow.set_experiment("SuperSimpleNet")
     # Enable system metrics logging
     mlflow.enable_system_metrics_logging()
-    with mlflow.start_run():
+    with mlflow.start_run(run_name=config["name"] if "name" in config else None):
         mlflow.log_params(config)
         args = {
             "model": model,
@@ -404,12 +405,15 @@ def train_and_eval(model, datamodule, config, device):
             eval_step_size=config["eval_step_size"],
         )
 
-        mlflow.pytorch.log_model(model, name="model")
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d)
+            model.save_model(p)
+            mlflow.log_artifact(p / "weights.pt")
         
         test(**args, normalize=True)
 
 if __name__ == "__main__":
-    base_config = argparse_from_jsonschema.parse(schema='./manifest.json')
+    base_config = argparse_from_jsonschema.parse(schema='./model.json')
 
     supervision = Supervision.UNSUPERVISED
     if supervision != Supervision.FULLY_SUPERVISED:

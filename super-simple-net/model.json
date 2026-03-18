@@ -9,8 +9,7 @@
         },
         "name": {
             "description": "Title of experiments.",
-            "type": "string",
-            "default": "SuperSimpleNet"
+            "type": "string"
         },
         "width": {
             "description": "Width to scale image to.",
@@ -21,6 +20,10 @@
             "description": "Height to scale image to.",
             "type": "integer",
             "default": 256
+        },
+        "weights": {
+            "description": "Path to saved model (file that can be loaded with torch.load()).",
+            "type": "string"
         },
         "backbone": {
             "description": "Model used for feature extraction.",
