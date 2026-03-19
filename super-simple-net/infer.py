@@ -10,12 +10,12 @@ import argparse_from_jsonschema
 
 try:
     i = sys.argv.index('--')
-    old = sys.argv[:i]
-    sys.argv = [sys.argv[0]] + sys.argv[i+1:]
-    config = argparse_from_jsonschema.parse(schema='./model.json')
-    sys.argv = old
 except:
-    config = argparse_from_jsonschema.parse(schema='./model.json')
+    i = len(sys.argv)
+old = sys.argv[:i]
+sys.argv = [sys.argv[0]] + sys.argv[i+1:]
+config = argparse_from_jsonschema.parse(schema='./model.json')
+sys.argv = old
 
 IMAGE_SIZE=(config['height'], config['width'])
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
