@@ -37,7 +37,7 @@ from datamodules.base import Supervision
 from datamodules.base.datamodule import SSNDataModule, InputNormalizationMethod
 from datamodules.base.dataset import SSNDataset
 
-import argparse_from_jsonschema
+import modelargs
 
 class GenericDataset(SSNDataset):
 
@@ -413,7 +413,7 @@ def train_and_eval(model, datamodule, config, device):
         test(**args, normalize=True)
 
 if __name__ == "__main__":
-    base_config = argparse_from_jsonschema.parse(schema='./model.json')
+    base_config = modelargs.parse('./model.json')
 
     supervision = Supervision.UNSUPERVISED
     if supervision != Supervision.FULLY_SUPERVISED:

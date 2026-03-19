@@ -6,16 +6,9 @@ from model.supersimplenet import SuperSimpleNet
 from torchvision.transforms.v2 import ToImage, Resize, ToDtype, Normalize, Compose
 import torch
 
-import argparse_from_jsonschema
+import modelargs
 
-try:
-    i = sys.argv.index('--')
-except:
-    i = len(sys.argv)
-old = sys.argv[:i]
-sys.argv = [sys.argv[0]] + sys.argv[i+1:]
-config = argparse_from_jsonschema.parse(schema='./model.json')
-sys.argv = old
+config = modelargs.parse('./model.json')
 
 IMAGE_SIZE=(config['height'], config['width'])
 DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
