@@ -9,7 +9,7 @@ A model's training routine should expect a dataset defined by a `manifest.json` 
 Launching a standalone model container can help prevent rebuilds when developing.
 ```
 # launch container with persist dir to access weights from model training
-docker run --rm -it --network host --ipc host --device nvidia.com/gpu=all --entrypoint bash --mount type=volume,src=toolbox-persist,dst=/persist aibox-model-<model-name>
+docker run --rm -it --network host --ipc host --device nvidia.com/gpu=all --entrypoint bash --mount type=volume,src=toolbox-persist,dst=/persist toolbox-model-<model-name>
 
 # running the inference worker (note: use -- after gunicorn args to pass args to model)
 uv run gunicorn --bind :9090 infer:app -- --weights /path/to/model/weights.pt
