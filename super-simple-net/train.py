@@ -1,5 +1,3 @@
-#! .venv/bin/python
-
 import os
 import sys
 import tempfile
@@ -447,6 +445,8 @@ if __name__ == "__main__":
 
     image_size = [config["height"], config["width"]]
     model = SuperSimpleNet(image_size=image_size, config=config)
+    if config['weights']:
+        model.load_model(config['weights'])
 
     datamodule = Generic(
         root=Path(config["manifest"]).absolute().parent,

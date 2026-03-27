@@ -1,5 +1,3 @@
-#! .venv/bin/python
-
 import sys
 import numpy as np
 from model.supersimplenet import SuperSimpleNet
