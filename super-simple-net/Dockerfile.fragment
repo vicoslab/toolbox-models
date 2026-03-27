@@ -1,4 +1,4 @@
-RUN git clone --depth 1 https://github.com/blaz-r/SuperSimpleNet .
+ADD https://github.com/blaz-r/SuperSimpleNet.git .
 
 COPY ${src}/*.patch .
 RUN git apply *.patch && rm *.patch
