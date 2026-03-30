@@ -12,21 +12,18 @@ import mlflow
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
-from itertools import chain
 
 import torch
 import torch.nn.functional as F
-from torchvision.transforms.v2 import Compose, Resize, Normalize, ToDtype, ToImage
+from torchvision.transforms.v2 import Compose
 from pytorch_lightning import LightningDataModule, seed_everything
 
-from torchvision.transforms.v2 import Compose
 from torchmetrics import AveragePrecision, Metric
 from anomalib.metrics import AUROC, AUPRO
 
 from model.supersimplenet import SuperSimpleNet
 
 from common.visualizer import Visualizer
-from common.results_writer import ResultsWriter
 from common.loss import focal_loss
 
 from anomalib.data.utils import LabelName, Split
