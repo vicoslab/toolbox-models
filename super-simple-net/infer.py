@@ -5,6 +5,13 @@ from torchvision.transforms.v2 import ToImage, Resize, ToDtype, Normalize, Compo
 import torch
 from PIL import Image, ImageOps
 
+from label_studio_ml.api import init_app
+from label_studio_ml.model import LabelStudioMLBase
+from label_studio_ml.response import ModelResponse
+from label_studio_sdk.converter import brush
+from typing import List, Dict, Optional
+from uuid import uuid4
+
 import modelargs
 
 config = modelargs.parse('./model.json')
@@ -26,9 +33,9 @@ transforms = Compose([
 def transform(images: list[np.array]) -> torch.tensor:
     return torch.stack([transforms(image).to(DEVICE) for image in images])
 
-def predict(tensor: torch.tensor) -> list[np.array]:
+def predict(tensor: torch.tensor, shapes) -> list[np.array]:
     anomaly_map, anomaly_score = model.forward(tensor)
-    anomaly_map = list(anomaly_map.detach().cpu().squeeze(1).sigmoid().numpy())
+    anomaly_map = [Resize(size=shape)(x.detach().cpu().squeeze(1).sigmoid()).numpy() for (x,shape) in zip(anomaly_map, shapes)]
     return anomaly_map, anomaly_score.detach().cpu().sigmoid().numpy()
 
 def load(src):
@@ -42,7 +49,7 @@ if __name__ == '__main__':
 
     image = load(sys.argv[1])
 
-    maps, scores = predict(transform([image]))
+    maps, scores = predict(transform([image]), [image.shape[:2]])
 
     fig, axs = plt.subplots(1, 2)
     axs[0].imshow(image)
@@ -54,7 +61,59 @@ else:
     from io import BytesIO
     import base64
 
-    app = Flask(__name__)
+    class SuperSimpleNet(LabelStudioMLBase):
+        def get_results(self, maps, scores, width, height, from_name, to_name, label):
+            results = []
+
+            for anomaly_map, score in zip(maps, scores):
+
+                mask = np.where(anomaly_map < 0.5, 0, 255)
+                results.append({
+                    'id': str(uuid4())[:6],
+                    'from_name': from_name,
+                    'to_name': to_name,
+                    'original_width': width,
+                    'original_height': height,
+                    'image_rotation': 0,
+                    'value': {
+                        'format': 'rle',
+                        'rle': brush.mask2rle(mask),
+                        'labels': [label],
+                    },
+                    'score': float(score),
+                    'type': 'labels',
+                    'readonly': False
+                })
+
+            return [{
+                'result': results,
+                'model_version': 'Super Simple Net',
+            }]
+
+        def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
+
+            from_name, to_name, value = self.get_first_tag_occurence('Labels', 'Image')
+            label_from, labels = None, None
+            for tag_name, tag in self.parsed_label_config.items():
+                if len(tag['labels']) > 0:
+                    label_from = tag_name
+                    labels = tag['labels']
+                    break
+            
+            images = list(map(lambda task: load(self.get_local_path(task['data'][value], task_id=task['id'])), tasks))
+            maps, scores = predict(transform(images), [i.shape[:2] for i in images])
+            predictions = self.get_results(
+                maps=maps,
+                scores=scores,
+                width=IMAGE_SIZE[1],
+                height=IMAGE_SIZE[0],
+                from_name=from_name,
+                to_name=to_name,
+                label=labels[0])
+            
+            return ModelResponse(predictions=predictions)
+
+    app = init_app(model_class=SuperSimpleNet)
 
     def encode(img):
         img = (img * 255).astype(np.uint8)
@@ -63,13 +122,13 @@ else:
         pil_img.save(buff, format="WebP")
         return base64.b64encode(buff.getvalue()).decode("utf-8")
 
-    @app.route('/', methods=["POST"])
+    @app.route('/infer', methods=["POST"])
     def index():
         if 'images' not in request.files:
             return []
         
-        images = map(load, request.files.getlist('images'))
-        maps, scores = predict(transform(images))
+        images = [load(x) for x in request.files.getlist('images')]
+        maps, scores = predict(transform(images), [x.shape[:2] for x in images])
 
         return {
             'anomaly_maps': list(map(encode, maps)),
