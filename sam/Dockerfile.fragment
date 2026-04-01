@@ -1,0 +1,6 @@
+ADD https://github.com/facebookresearch/sam2.git .
+
+RUN uv venv
+RUN uv pip install -e .
+
+ADD https://dl.fbaipublicfiles.com/segment_anything_2/092824/sam2.1_hiera_large.pt checkpoints/sam2.1_hiera_large.pt

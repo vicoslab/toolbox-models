@@ -1,0 +1,6 @@
+{
+    "title": "Segment anything model",
+    "description": "Inference worker for assisted annotations in label studio",
+    "type": "object",
+    "properties": {}
+}
