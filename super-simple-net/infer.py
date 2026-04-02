@@ -93,10 +93,9 @@ else:
         def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
 
             from_name, to_name, value = self.get_first_tag_occurence('Labels', 'Image')
-            label_from, labels = None, None
+            labels = None
             for tag_name, tag in self.parsed_label_config.items():
                 if len(tag['labels']) > 0:
-                    label_from = tag_name
                     labels = tag['labels']
                     break
             

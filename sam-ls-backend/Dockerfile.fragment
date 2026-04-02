@@ -1,4 +1,4 @@
 COPY ${src}/infer.py ${src}/model.json .
 
 RUN uv venv
-RUN uv pip install /opt/apps/label-studio-ml-backend /opt/apps/modelargs ../sam gunicorn
+RUN uv pip install /opt/apps/label-studio-ml-backend /opt/apps/modelargs ../sam gunicorn einops pycocotools psutil
