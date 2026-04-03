@@ -33,9 +33,9 @@ transforms = Compose([
 def transform(images: list[np.array]) -> torch.tensor:
     return torch.stack([transforms(image).to(DEVICE) for image in images])
 
-def predict(tensor: torch.tensor, shapes) -> list[np.array]:
+def predict(tensor: torch.tensor, shapes: list[tuple[int,int]]) -> (list[np.array], np.array):
     anomaly_map, anomaly_score = model.forward(tensor)
-    anomaly_map = [Resize(size=shape)(x.detach().cpu().squeeze(1).sigmoid()).numpy() for (x,shape) in zip(anomaly_map, shapes)]
+    anomaly_map = [Resize(size=shape)(x).squeeze(0).sigmoid().numpy() for (x,shape) in zip(anomaly_map.detach().cpu(), shapes)]
     return anomaly_map, anomaly_score.detach().cpu().sigmoid().numpy()
 
 def load(src):
