@@ -7,4 +7,4 @@ RUN uv venv --python 3.12
 RUN uv pip install -r requirements.txt
 RUN uv pip install pytorch_lightning lightning opencv-python kornia tifffile psutil mlflow /opt/apps/modelargs flask gunicorn /opt/apps/label-studio-ml-backend
 
-COPY ${src}/train.py ${src}/infer.py ${src}/model.json .
+COPY ${src}/train.py ${src}/infer.py ${src}/model.json ${src}/ui.html .

@@ -1,0 +1,12 @@
+<infer-image name="image">
+    <infer-bbox id="infer" name="bbox" />
+</infer-image>
+
+<script>
+    document.getElementById("infer").onInference = function (results, request, response) {
+        const showMasks = document.createElement("show-masks");
+        showMasks.masks = response.masks;
+        showMasks.reference = request.get("image");
+        results.append(showMasks, document.createElement("hr"));
+    }
+</script>

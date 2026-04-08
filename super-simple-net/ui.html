@@ -1,0 +1,12 @@
+<infer-image id="infer" name="images" multiple />
+
+<script>
+    document.getElementById("infer").onInference = function (results, request, response) {
+        let s = "";
+        let n = response?.anomaly_maps?.length || 0;
+        for (let i = 0; i < n; i++) {
+            s += `<div><center>${response.scores[i].toFixed(3)}</center><img src="data:image/webp;base64,${response.anomaly_maps[i]}"></div>`;
+        }
+        results.innerHTML += "<div class=group>" + s + "</div><hr>";
+    }
+</script>
