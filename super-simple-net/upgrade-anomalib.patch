@@ -72,7 +72,7 @@ index 56453a7..ab45b7c 100644
 +            #collate_fn=ImageBatch.collate,
          )
 diff --git a/datamodules/base/dataset.py b/datamodules/base/dataset.py
-index d5e80fd..ea7882f 100644
+index d5e80fd..82bb04d 100644
 --- a/datamodules/base/dataset.py
 +++ b/datamodules/base/dataset.py
 @@ -1,14 +1,16 @@
@@ -168,7 +168,7 @@ index d5e80fd..ea7882f 100644
          """
          Get specified flip augmentation for current image if flips is true.
  
-@@ -317,9 +315,12 @@ class SSNDataset(Dataset):
+@@ -317,7 +315,10 @@ class SSNDataset(Dataset):
  
          image_path, mask_path, label_index, is_segmented = self.get_sample_data(index)
  
@@ -178,11 +178,8 @@ index d5e80fd..ea7882f 100644
 +        image = np.array(image.convert("RGB")) / 255.0
 +
          item = dict(
--            image_path=image_path,
-+            image_path=str(image_path),
+             image_path=image_path,
              label=label_index,
-             is_segmented=is_segmented,
-         )
 @@ -328,7 +329,9 @@ class SSNDataset(Dataset):
              # normal or not segmented are all zero
              mask = np.zeros(shape=image.shape[:2])
@@ -194,7 +191,18 @@ index d5e80fd..ea7882f 100644
  
              if self.dilate is not None and self.split == Split.TRAIN:
                  mask = cv2.dilate(mask, np.ones((self.dilate, self.dilate)))
-@@ -350,14 +353,11 @@ class SSNDataset(Dataset):
+@@ -337,9 +340,7 @@ class SSNDataset(Dataset):
+             # if current image is selected to be flip augmented
+             flip_augmentation = self.get_flip_augmentation(index)
+             if flip_augmentation is not None:
+-                flip_transformed = flip_augmentation(image=image, mask=mask)
+-                image = flip_transformed["image"]
+-                mask = flip_transformed["mask"]
++                image, mask = flip_augmentation(image, Mask(mask))
+ 
+         if self.dt is not None:
+             # apply distance transform
+@@ -350,14 +351,11 @@ class SSNDataset(Dataset):
              else:
                  loss_mask = self.distance_transform(mask, wp, p)
  
@@ -205,10 +213,9 @@ index d5e80fd..ea7882f 100644
 +            item["loss_mask"] = self.transform(Mask(Tensor(oss_mask)))
  
 -        item["image"] = transformed["image"]
--        item["mask_path"] = mask_path
--        item["mask"] = transformed["mask"]
 +        item["image"] = self.transform(Tensor(image.transpose(2,0,1)))
-+        item["mask_path"] = str(mask_path)
+         item["mask_path"] = mask_path
+-        item["mask"] = transformed["mask"]
 +        item["mask"] = self.transform(Mask(Tensor(mask)))
  
          self.counter = self.counter + 1

@@ -63,13 +63,10 @@ class GenericDataset(SSNDataset):
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
 
         samples = [{
-            "image_path": self.root / f["image_path"],
+            "image_path": str(self.root / f["image_path"]),
             "label_index": LabelName.NORMAL if f["label"] == "normal" else LabelName.ABNORMAL,
-            **(dict(mask_path=self.root / f["mask_path"], is_segmented=True) if "mask_path" in f else dict(mask_path=None, is_segmented=False))
-        } for f in manifest[self.split.value]]
-
-        if self.supervision == Supervision.UNSUPERVISED:
-            return pd.DataFrame(samples), pd.DataFrame()
+            **(dict(mask_path=str(self.root / f["mask_path"]), is_segmented=True) if "mask_path" in f else dict(mask_path="", is_segmented=False))
+        } for f in self.manifest[self.split.value]]
 
         return pd.DataFrame([x for x in samples if x["label_index"] == LabelName.NORMAL]), \
                pd.DataFrame([x for x in samples if x["label_index"] == LabelName.ABNORMAL])
@@ -78,6 +75,7 @@ class Generic(SSNDataModule):
 
     def __init__(
         self,
+        manifest,
         root: Path,
         image_size: tuple[int, int],
         supervision: Supervision = Supervision.FULLY_SUPERVISED,
@@ -376,7 +374,8 @@ def train_and_eval(model, datamodule, config, device):
     mlflow.set_experiment("SuperSimpleNet")
     # Enable system metrics logging
     mlflow.enable_system_metrics_logging()
-    with mlflow.start_run(run_name=config["name"] if "name" in config else None):
+    with mlflow.start_run(run_name=config["name"] if "name" in config else None) as run:
+        print(f"Experiment {run.info.experiment_id}: Run {run.info.run_id}")
         mlflow.log_params(config)
         args = {
             "model": model,
@@ -410,7 +409,46 @@ def train_and_eval(model, datamodule, config, device):
 if __name__ == "__main__":
     base_config = modelargs.parse('./model.json')
 
-    supervision = Supervision.UNSUPERVISED
+    manifest_path = Path(base_config["manifest"]).absolute()
+    root = manifest_path.parent
+    with open(manifest_path) as f:
+        manifest = json.load(f)
+    
+    if not ("train" in manifest and "test" in manifest):
+        if "data" in manifest:
+            gen = np.random.default_rng(seed=3999924951)
+            data = gen.permutation(manifest["data"])
+            pivot = round(0.7*len(data))
+            manifest = {
+                "train": data[:pivot],
+                "test": data[pivot:],
+            }
+        else:
+            raise ValueError("Passed manifest.json does not contain 'data' or 'train'/'test' attributes.")
+    
+    implicit_normal = False
+    fully_supervised = True
+    weakly_supervised = True
+    for split in ["train", "test"]:
+        for i,item in enumerate(manifest[split]):
+            if "label" not in item:
+                implicit_normal = True
+                manifest[split][i]["label"] = "normal"
+            if "mask_path" in item:
+                weakly_supervised = False
+            elif item["label"] != "normal":
+                fully_supervised = False
+    
+    if implicit_normal:
+        print("Warning: used 'normal' as label for image because no image-level annotation was supplied")
+
+    if fully_supervised:
+        supervision = Supervision.FULLY_SUPERVISED
+    elif weakly_supervised:
+        supervision = Supervision.WEAKLY_SUPERVISED
+    else:
+        supervision = Supervision.MIXED_SUPERVISION
+
     if supervision != Supervision.FULLY_SUPERVISED:
         config = {
             **base_config,
@@ -432,8 +470,6 @@ if __name__ == "__main__":
             "clip_grad": True,
             "layers": [ "layer2", "layer3" ],
         }
-    with open(config["manifest"]) as f:
-        manifest = json.load(f)
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     seed_everything(config["seed"], workers=True)
@@ -446,7 +482,8 @@ if __name__ == "__main__":
         model.load_model(config['weights'])
 
     datamodule = Generic(
-        root=Path(config["manifest"]).absolute().parent,
+        manifest,
+        root=root,
         image_size=image_size,
         train_batch_size=config["batch"],
         eval_batch_size=config["batch"],
