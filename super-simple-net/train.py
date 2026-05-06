@@ -374,7 +374,7 @@ def train_and_eval(model, datamodule, config, device):
     mlflow.set_experiment("SuperSimpleNet")
     # Enable system metrics logging
     mlflow.enable_system_metrics_logging()
-    with mlflow.start_run(run_name=config["name"] if "name" in config else None) as run:
+    with mlflow.start_run(run_name=config.get("name")) as run:
         print(f"Experiment {run.info.experiment_id}: Run {run.info.run_id}")
         mlflow.log_params(config)
         args = {

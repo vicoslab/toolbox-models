@@ -5,13 +5,6 @@ from torchvision.transforms.v2 import ToImage, Resize, ToDtype, Normalize, Compo
 import torch
 from PIL import Image, ImageOps
 
-from label_studio_ml.api import init_app
-from label_studio_ml.model import LabelStudioMLBase
-from label_studio_ml.response import ModelResponse
-from label_studio_sdk.converter import brush
-from typing import List, Dict, Optional
-from uuid import uuid4
-
 import modelargs
 
 config = modelargs.parse('./model.json')
@@ -57,6 +50,13 @@ if __name__ == '__main__':
     axs[1].imshow(maps[0])
     plt.savefig('test.png')
 else:
+    from label_studio_ml.api import init_app
+    from label_studio_ml.model import LabelStudioMLBase
+    from label_studio_ml.response import ModelResponse
+    from label_studio_sdk.converter import brush
+    from typing import List, Dict, Optional
+    from uuid import uuid4
+
     from flask import Flask, request
     from io import BytesIO
     import base64
@@ -122,11 +122,11 @@ else:
         return base64.b64encode(buff.getvalue()).decode("utf-8")
 
     @app.route('/infer', methods=["POST"])
-    def index():
+    def infer():
         if 'images' not in request.files:
             return []
         
-        images = [load(x) for x in request.files.getlist('images')]
+        images = list(map(load, request.files.getlist('images')))
         maps, scores = predict(transform(images), [x.shape[:2] for x in images])
 
         return {

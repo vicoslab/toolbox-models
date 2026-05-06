@@ -22,7 +22,7 @@
             "default": 256
         },
         "weights": {
-            "description": "Path to saved model (file that can be loaded with torch.load()).",
+            "description": "Path to saved model.",
             "type": "string"
         },
         "backbone": {
