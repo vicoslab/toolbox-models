@@ -1,0 +1,49 @@
+<infer-image id="infer" name="images" multiple />
+<template id="template-marker">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" stroke="limegreen" stroke-width="4px"
+        stroke-linecap="round" stroke-linejoin="round" fill="none">
+        <path d="M0 25 H45 L35 15 L45 25 L35 35" />
+    </svg>
+</template>
+
+<script>
+    const template = document.getElementById("template-marker");
+
+    function createMarker(markerSize, center, score, angle) {
+        const marker = document.importNode(template.content.children[0], true);
+        marker.style.width = markerSize;
+        marker.style.height = markerSize;
+        marker.style.left = center[0] * 100 + "%";
+        marker.style.top = center[1] * 100 + "%";
+        marker.style.position = "absolute";
+        marker.style.transformOrigin = "left center";
+        marker.style.transform = `translateY(-50%) rotate(${Math.round(angle)}deg)`;
+        marker.dataset.score = score;
+        return marker;
+    }
+    document.getElementById("infer").onInference = function (results, request, response) {
+        const group = document.createElement("div");
+        group.classList.add("group");
+        const images = request.getAll("images");
+        const { centers, scores, angles } = response;
+        for (let i = 0; i < images.length; i++) {
+            const wrapper = document.createElement("div");
+            wrapper.style.position = "relative";
+
+            const im = document.createElement("img");
+            im.src = URL.createObjectURL(images[i]);
+            im.onload = () => {
+                const { clientWidth: width, clientHeight: height } = im;
+                const markerSize = Math.round(Math.max(width, height) * 0.05) + "px";
+                for (let j = 0; j < centers[i].length; j++) {
+                    if (scores[i][j] < 0.5) continue;
+                    const [x, y, _] = centers[i][j];
+                    wrapper.appendChild(createMarker(markerSize, [x, y], scores[i][j], angles[i][j]));
+                }
+            };
+            wrapper.appendChild(im);
+            group.appendChild(wrapper);
+        }
+        results.append(group, document.createElement("hr"));
+    }
+</script>

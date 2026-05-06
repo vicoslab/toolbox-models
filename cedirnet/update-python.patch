@@ -1,0 +1,149 @@
+diff --git a/src/utils/transforms.py b/src/utils/transforms.py
+index c96db77..bd9a207 100644
+--- a/src/utils/transforms.py
++++ b/src/utils/transforms.py
+@@ -1,4 +1,4 @@
+-﻿import collections
++﻿from collections.abc import Iterable
+ import random
+ import os
+ 
+@@ -255,7 +255,7 @@ class RandomCustomRotation(object):
+         self.expand = expand
+         self.center = center
+ 
+-        if isinstance(self.resample, collections.Iterable):
++        if isinstance(self.resample, Iterable):
+             assert (len(keys) == len(self.resample))
+ 
+     @staticmethod
+@@ -286,7 +286,7 @@ class RandomCustomRotation(object):
+                 assert(k in sample)
+ 
+                 resample = self.resample
+-                if isinstance(resample, collections.Iterable):
++                if isinstance(resample, Iterable):
+                     resample = resample[idx]
+ 
+                 if type(sample[k]) == torch.Tensor and len(sample[k].shape) == 2:
+@@ -361,7 +361,7 @@ class RandomRotation(T.RandomRotation):
+ 
+         self.keys = keys
+ 
+-        if isinstance(self.resample, collections.Iterable):
++        if isinstance(self.resample, Iterable):
+             assert(len(keys) == len(self.resample))
+ 
+     @staticmethod
+@@ -386,7 +386,7 @@ class RandomRotation(T.RandomRotation):
+             assert(k in sample)
+ 
+             resample = self.resample
+-            if isinstance(resample, collections.Iterable):
++            if isinstance(resample, Iterable):
+                 resample = resample[idx]
+ 
+             if type(sample[k]) == torch.Tensor and len(sample[k].shape) == 2:
+@@ -495,7 +495,7 @@ class RandomResize(object):
+         self.keys_camK = keys_camK        
+         self.interpolation = interpolation
+ 
+-        if isinstance(self.interpolation, collections.Iterable):
++        if isinstance(self.interpolation, Iterable):
+             assert(len(keys) == len(self.interpolation))
+ 
+     @staticmethod
+@@ -524,7 +524,7 @@ class RandomResize(object):
+             assert(k in sample)
+ 
+             interpolation = self.interpolation
+-            if isinstance(interpolation, collections.Iterable):
++            if isinstance(interpolation, Iterable):
+                 interpolation = interpolation[idx]
+ 
+             new_size = int(get_image_size(sample[k])[1]*resize_factor), int(get_image_size(sample[k])[0]*resize_factor)
+@@ -586,7 +586,7 @@ class Resize(T.Resize):
+         self.keys_bbox = keys_bbox
+         self.keys_camK = keys_camK
+ 
+-        if isinstance(self.interpolation, collections.Iterable):
++        if isinstance(self.interpolation, Iterable):
+             assert(len(keys) == len(self.interpolation))
+ 
+     def __call__(self, sample, *args):
+@@ -599,7 +599,7 @@ class Resize(T.Resize):
+             assert(k in sample)
+ 
+             interpolation = self.interpolation
+-            if isinstance(interpolation, collections.Iterable):
++            if isinstance(interpolation, Iterable):
+                 interpolation = interpolation[idx]
+ 
+             if type(sample[k]) == torch.Tensor and len(sample[k].shape) == 2:
+@@ -830,7 +830,7 @@ class ToTensor(object):
+ 
+     def __init__(self, keys=[], type="float"):
+ 
+-        if isinstance(type, collections.Iterable):
++        if isinstance(type, Iterable):
+             assert(len(keys) == len(type))
+ 
+         self.keys = keys
+@@ -843,7 +843,7 @@ class ToTensor(object):
+             assert(k in sample)
+ 
+             t = self.type
+-            if isinstance(t, collections.Iterable):
++            if isinstance(t, Iterable):
+                 t = t[idx]
+ 
+             if isinstance(sample[k],Image.Image) or isinstance(sample[k],np.ndarray):
+@@ -908,13 +908,13 @@ class Normalize(object):
+ 
+     def __init__(self, keys=[], mean=[], std=[], shape=[]):
+ 
+-        if isinstance(type, collections.Iterable):
++        if isinstance(type, Iterable):
+             assert(len(keys) == len(mean))
+ 
+-        if isinstance(type, collections.Iterable):
++        if isinstance(type, Iterable):
+             assert(len(keys) == len(std))
+ 
+-        if isinstance(type, collections.Iterable):
++        if isinstance(type, Iterable):
+             assert(len(keys) == len(shape))
+ 
+ 
+@@ -930,15 +930,15 @@ class Normalize(object):
+             assert(k in sample)
+ 
+             m = self.mean
+-            if isinstance(m, collections.Iterable):
++            if isinstance(m, Iterable):
+                 m = m[idx]
+ 
+             s = self.std
+-            if isinstance(s, collections.Iterable):
++            if isinstance(s, Iterable):
+                 s = s[idx]
+ 
+             sh = self.shape
+-            if isinstance(sh, collections.Iterable):
++            if isinstance(sh, Iterable):
+                 sh = sh[idx]
+ 
+             sample[k] = (sample[k]  - m.reshape(sh) ) / s.reshape(sh)
+diff --git a/src/utils/utils.py b/src/utils/utils.py
+index b02ea39..00879f0 100644
+--- a/src/utils/utils.py
++++ b/src/utils/utils.py
+@@ -156,7 +156,7 @@ def variable_len_collate(batch, batch_first=True, padding_value=0):
+         if torch.utils.data.get_worker_info() is not None:
+             # If we're in a background process, concatenate directly into a
+             # shared memory tensor to avoid an extra copy
+-            storage = elem.storage()._new_shared(sum(numel))
++            storage = elem.untyped_storage()._new_shared(sum(numel))
+             out = elem.new(storage)
+         return torch.stack(batch, 0, out=out) if np.all(numel[0] == numel) else pad_sequence(batch,
+                                                                                              batch_first=batch_first,

@@ -1,0 +1,27 @@
+diff --git a/src/models/center_estimator.py b/src/models/center_estimator.py
+index 479e790..ddae7b0 100644
+--- a/src/models/center_estimator.py
++++ b/src/models/center_estimator.py
+@@ -154,8 +154,7 @@ class CenterEstimator(nn.Module):
+             # res = (batch, x,y, mask_score, center_score)
+             # voted_mask = 2D array of integers that match (1-based) index of centers in res
+             # conv_resp_out = list of 2D array with various respones (conv2d for center response, voted_mask, M, etc)
+-
+-        center_pred = torch.tensor(center_pred).to(input.device)
++            center_pred = torch.tensor(center_pred).to(input.device)
+ 
+         # convert center prediction list to tensor of fixed size so that it can be merger from parallel GPU processings
+         center_pred = self._pack_center_predictions(center_pred, batch_size=len(input))
+diff --git a/src/utils/utils.py b/src/utils/utils.py
+index d7659d7..b02ea39 100644
+--- a/src/utils/utils.py
++++ b/src/utils/utils.py
+@@ -8,7 +8,7 @@ import torch
+ 
+ from utils.visualize.vis import Visualizer
+ 
+-import scipy
++import scipy.ndimage
+ import torch.nn as nn
+ 
+ class AverageMeter(object):

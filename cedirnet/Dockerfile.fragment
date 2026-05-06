@@ -1,0 +1,18 @@
+ADD https://github.com/vicoslab/CeDiRNet-3DoF.git .
+
+COPY ${src}/*.patch .
+RUN git apply *.patch && rm *.patch
+
+COPY ${src}/base_config.py ${src}/extras.py src
+COPY ${src}/infer.py ${src}/train.py ${src}/ui.html ${src}/model.json ${src}/center-model.pth .
+
+RUN uv venv
+ENV UV_HTTP_TIMEOUT=90
+RUN uv pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
+RUN uv pip install future opencv_python pandas scikit-learn scikit-image tensorboard matplotlib scipy tqdm segmentation-models-pytorch==0.3.2
+
+# RUN uv venv --python 3.8
+# RUN uv pip install torch==1.9.1+cu111 torchvision==0.10.1+cu111 torchaudio==0.9.1 -f https://download.pytorch.org/whl/torch_stable.html
+RUN uv pip install /opt/apps/modelargs mlflow psutil /opt/apps/label-studio-ml-backend 
+#protobuf==3.20
+# RUN uv pip install -r requirements.txt

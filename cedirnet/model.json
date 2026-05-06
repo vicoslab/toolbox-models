@@ -1,0 +1,24 @@
+{
+    "title": "CeDiRNet",
+    "description": "Center estimation model",
+    "type": "object",
+    "properties": {
+        "manifest": {
+            "description": "The dataset manifest should be a file containing a JSON object with either a single attribute 'data', or attributes 'train' and 'test', each of which should be a list of objects with properties 'label' (with value being either 'normal' or 'abnormal'), 'image_path' and 'mask_path' (their values should be file paths, relative to the manifest file). Attributes mask_path or label may be omitted, but this will impact which training regime is used. ",
+            "type": "string"
+        },
+        "name": {
+            "description": "Title of experiments.",
+            "type": "string"
+        },
+        "model": {
+            "description": "Path to model checkpoint",
+            "type": "string"
+        },
+        "epochs": {
+            "description": "Number of epochs to train for.",
+            "type": "integer",
+            "default": 10
+        }
+    }
+}
