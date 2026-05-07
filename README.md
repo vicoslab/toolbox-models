@@ -5,12 +5,16 @@ A model is defined by a `model.json` file which should contains a JSON schema of
 ### Training
 A model's training routine should expect a dataset defined by a `manifest.json` file, which contains an object with properties `train` and `test`, each of which is a list containing objects (object property naming conventions are not mandated, but can be something like `label`, `image_path`, `mask_path`).
 
-### Contributing
-Launching a standalone model container can help prevent rebuilds when developing.
+### Inference
+Model inference should support both cli and http (i.e. flask+label-studio) inference. `infer.py` should be structured such that any imports used only for http are in the else clause of the `__main__` guard, which should be the last block of code in the file. This way it is possible to delete the else branch and retain only the minimal inference example.
 ```
-# launch container with persist dir to access weights from model training
-docker run --rm -it --network host --ipc host --device nvidia.com/gpu=all --entrypoint bash --mount type=volume,src=toolbox-persist,dst=/persist toolbox-model-<model-name>
+# running test inference
+uv run infer.py my-input.png -- --weights /path/to/model/weights.pt
 
 # running the inference worker (note: use -- after gunicorn args to pass args to model)
 uv run gunicorn --bind :9090 infer:app -- --weights /path/to/model/weights.pt
 ```
+
+### Contributing
+
+Model installation is not done inside the docker image, but rather by a install script. Installations are done in the `TOOLBOX_CACHE` dir, which may be deleted at any point for any reason. You should fetch publicly accessible sources, where possible.

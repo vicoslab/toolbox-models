@@ -1,3 +1,6 @@
+import os
+import site
+site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/super-simple-net')
 import sys
 import numpy as np
 from model.supersimplenet import SuperSimpleNet

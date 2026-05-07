@@ -1,5 +1,6 @@
 import os
 import site
+site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet')
 site.addsitedir('src')
 
 import collections

@@ -1,6 +1,6 @@
 diff --git a/src/datasets/GenericDataset.py b/src/datasets/GenericDataset.py
 new file mode 100644
-index 0000000..e1256a6
+index 0000000..9446b30
 --- /dev/null
 +++ b/src/datasets/GenericDataset.py
 @@ -0,0 +1,196 @@
@@ -22,9 +22,9 @@ index 0000000..e1256a6
 +from utils import transforms as my_transforms
 +
 +class GenericDataset(Dataset):
-+    
++
 +	def __init__(self, manifest=None, split='train', fixed_bbox_size=15, resize_factor=None, do_segmentation=False, MAX_NUM_CENTERS=1024,
-+			  	transform=None, num_cpu_threads=1, use_normals=False, normals_mode=1,
++				transform=None, num_cpu_threads=1, use_normals=False, normals_mode=1,
 +				check_consistency=True, transform_only_valid_centers=False, transform_per_sample_rng=False, **kwargs):
 +		assert manifest, 'Dataset is missing manifest file'
 +		print('GenericDataset created')
@@ -55,14 +55,14 @@ index 0000000..e1256a6
 +		with open(manifest) as f:
 +			items = json.load(f)[split]
 +		self.root_dir = os.path.dirname(manifest)
-+		
++
 +		for item in items:
 +			filename = item['image_path']
 +			self.image_list.append(filename)
 +			self.annotations[filename] = { 'points': item['points'] }
 +
 +		self.size = len(self.image_list)
-+		print(f'GenericDataset of size {self.size}')        
++		print(f'GenericDataset of size {self.size}')
 +
 +		self.remove_out_of_bounds_centers = True
 +		self.BORDER_MARGIN_FOR_CENTER = 0
@@ -140,7 +140,7 @@ index 0000000..e1256a6
 +			do_transform = True
 +
 +			ii = 0
-+			while do_transform:			
++			while do_transform:
 +				if ii > 10 and ii % 10 == 0:
 +					print(f"WARNING: unable to generate valid transform for {ii} iterations")
 +				new_sample = self.transform(copy.deepcopy(sample), self.rng if not self.transform_per_sample_rng else np.random.default_rng(1337))
@@ -166,8 +166,8 @@ index 0000000..e1256a6
 +							do_transform = False
 +							sample = new_sample
 +					else:
-+						raise Exception("Invalid type of transform_only_valid_centers, allowed types: bool, int, float")				
-+				ii += 1              
++						raise Exception("Invalid type of transform_only_valid_centers, allowed types: bool, int, float")
++				ii += 1
 +
 +		if self.remove_out_of_bounds_centers:
 +			# if instance has out-of-bounds center then ignore it if requested so
@@ -180,7 +180,7 @@ index 0000000..e1256a6
 +				sample['instance'][sample['instance'] == id+1] = 0
 +				sample['orientation'][sample['instance'] == id+1] = 0
 +				sample['center'][id,:] = -1
-+   
++
 +		if self.transform is not None and 'instance' in sample:
 +			# recheck for ignore regions due to changes from augmentation:
 +			#  - mark with ignore any centers/instances that are now outside of image size

@@ -1,5 +1,0 @@
-ADD https://github.com/facebookresearch/sam3.git .
-ADD https://patch-diff.githubusercontent.com/raw/facebookresearch/sam3/pull/403.patch bump-numpy.patch
-
-RUN git apply *.patch && rm *.patch
-ADD ${src}/sam3.pt .
