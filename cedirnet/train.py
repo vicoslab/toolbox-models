@@ -1,4 +1,6 @@
 import os
+import sys
+import signal
 import site
 site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet')
 site.addsitedir('src')
@@ -27,6 +29,7 @@ from criterions.loss_weighting.weight_methods import get_weight_method
 
 import modelargs
 import mlflow
+from mlflow.entities import RunStatus
 from extras import plot_results, load_center_model
 
 class Trainer:
@@ -420,10 +423,14 @@ if __name__ == '__main__':
     
     mlflow.set_tracking_uri('http://localhost:8081')
     mlflow.set_experiment('CeDiRNet')
-    # Enable system metrics logging
-    mlflow.enable_system_metrics_logging()
 
     with mlflow.start_run(run_name=cmd_args.get('name')) as run:
+        def handler(sig, frame):
+            mlflow.end_run(RunStatus.to_string(RunStatus.KILLED))
+            sys.exit(0)
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
         print(f'Experiment {run.info.experiment_id}: Run {run.info.run_id}') # this gets parsed and turned into a link in the frontend
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: '<not serializable>')))
 

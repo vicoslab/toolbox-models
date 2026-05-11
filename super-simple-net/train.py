@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 
 import mlflow
+from mlflow.entities import RunStatus
 
 from tqdm import tqdm
 import numpy as np
@@ -374,9 +375,13 @@ def test(
 def train_and_eval(model, datamodule, config, device):
     mlflow.set_tracking_uri("http://localhost:8081")
     mlflow.set_experiment("SuperSimpleNet")
-    # Enable system metrics logging
-    mlflow.enable_system_metrics_logging()
     with mlflow.start_run(run_name=config.get("name")) as run:
+        def handler(sig, frame):
+            mlflow.end_run(RunStatus.to_string(RunStatus.KILLED))
+            sys.exit(0)
+        signal.signal(signal.SIGINT, handler)
+        signal.signal(signal.SIGTERM, handler)
+
         print(f"Experiment {run.info.experiment_id}: Run {run.info.run_id}")
         mlflow.log_params(config)
         args = {
