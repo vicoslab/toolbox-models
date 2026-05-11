@@ -15,6 +15,10 @@
             "description": "Path to model checkpoint",
             "type": "string"
         },
+        "localisation": {
+            "description": "Path to localisation model checkpoint",
+            "type": "string"
+        },
         "epochs": {
             "description": "Number of epochs to train for.",
             "type": "integer",

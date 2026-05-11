@@ -2,8 +2,7 @@ import os
 import sys
 import signal
 import site
-site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet')
-site.addsitedir('src')
+site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet/src')
 
 import collections
 import json
@@ -179,7 +178,7 @@ class Trainer:
         
         if center_model_path := args.get('pretrained_center_model_path'):
             print('Loading pre-trained center model from {}'.format(center_model_path))
-            state = torch.load(center_model_path)
+            state = torch.load(center_model_path, weights_only=False)
 
             INPUT_WEIGHTS_KEY = 'module.instance_center_estimator.conv_start.0.weight'
             if (checkpoint_input_weights := state['center_model_state_dict'].get(INPUT_WEIGHTS_KEY)) is not None:
@@ -421,6 +420,7 @@ if __name__ == '__main__':
 
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']
+    args['pretrained_center_model_path'] = cmd_args['localisation']
     
     mlflow.set_tracking_uri('http://localhost:8081')
     mlflow.set_experiment('CeDiRNet')

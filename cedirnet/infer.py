@@ -1,7 +1,6 @@
 import os
 import site
-site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet')
-site.addsitedir('src')
+site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet/src')
 
 import sys
 from functools import partial
@@ -38,7 +37,7 @@ model = torch.nn.DataParallel(model).to(DEVICE)
 model.eval()
 
 print(f'Loading from "{args["checkpoint_path"]}"')
-state = torch.load(args['checkpoint_path'])
+state = torch.load(args['checkpoint_path'], weights_only=False)
 if 'model_state_dict' in state:
     if 'module.model.segmentation_head.2.weight' in state['model_state_dict']:
         checkpoint_input_weights = state['model_state_dict']['module.model.segmentation_head.2.weight']
@@ -55,7 +54,7 @@ if 'model_state_dict' in state:
 
 if center_path := args.get('center_checkpoint_path'):
     print(f'Loading center model from "{center_path}"')
-    center_model = load_center_model(args, torch.load(center_path), DEVICE)
+    center_model = load_center_model(args, torch.load(center_path, weights_only=False), DEVICE)
 else:
     print("Loading center model from main model")
     center_model = load_center_model(args, state, DEVICE)
