@@ -12,6 +12,7 @@ import tempfile
 from collections import OrderedDict
 
 import numpy as np
+import pandas as pd
 import torch
 from matplotlib import pyplot as plt
 from tqdm import tqdm
@@ -224,6 +225,7 @@ class Trainer:
         iter=epoch*len(self.train_dataset_it)
 
         all_samples_metrics = {}
+        all_metrics = []
         tqdm_iterator = tqdm(self.train_dataset_it, desc=f'{epoch}/{n_epochs}',dynamic_ncols=True)
 
         for i, sample in enumerate(tqdm_iterator):
@@ -310,17 +312,16 @@ class Trainer:
                     self.center_optimizer.zero_grad()
 
             metrics = OrderedDict(loss=loss.item())
+            loss_dict = self.criterion.module.get_loss_dict(losses)
+            metrics.update({n: l.cpu().item() for n,l in loss_dict['losses_tasks' if 'losses_tasks' in loss_dict else 'losses_groups'].items()})
+            all_metrics.append(metrics)
             if tqdm_iterator is not None:
-                loss_dict = self.criterion.module.get_loss_dict(losses)
-                metrics.update({n: l.cpu().item() for n,l in loss_dict['losses_tasks' if 'losses_tasks' in loss_dict else 'losses_groups'].items()})
-
                 tqdm_iterator.set_postfix(**metrics)
-            
-            mlflow.log_metrics(metrics, epoch)
 
             iter+=1
 
         all_samples_total_loss = {k:v['loss'] for k,v in all_samples_metrics.items()}
+        mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), epoch)
 
         return np.array(list(all_samples_total_loss.values())).mean() * self.dataset_batch
 
