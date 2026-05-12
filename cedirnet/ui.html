@@ -33,11 +33,13 @@
             const im = document.createElement("img");
             im.src = URL.createObjectURL(images[i]);
             im.onload = () => {
-                const { clientWidth: width, clientHeight: height } = im;
+                const { clientWidth: width, naturalWidth, clientHeight: height, naturalHeight } = im;
                 const markerSize = Math.round(Math.max(width, height) * 0.05) + "px";
                 for (let j = 0; j < centers[i].length; j++) {
                     if (scores[i][j] < 0.5) continue;
-                    const [x, y, _] = centers[i][j];
+                    let [x, y, _] = centers[i][j];
+                    x /= naturalWidth * 100;
+                    y /= naturalHeight * 100;
                     wrapper.appendChild(createMarker(markerSize, [x, y], scores[i][j], angles[i][j]));
                 }
             };

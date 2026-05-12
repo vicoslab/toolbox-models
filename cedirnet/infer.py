@@ -73,14 +73,16 @@ def transform(images: List[np.array], size: Tuple[int, int]): # size should be (
 def to_float(x):
     return list(map(float, x))
 
-def predict(images: List[np.array], size: Tuple[int, int]):
-    tensor = transform(images, size)
+def predict(images: List[np.array]):
+    h, w, _ = images[0].shape
+    w, h = int(w // 32 * 32), int(h // 32 * 32)
+    tensor = transform(images, (w, h))
     center_output = center_model(model(tensor), detect_centers=True)
 
     center_pred, angle_pred = map(lambda k: center_output[k].detach().cpu().numpy(), ['center_pred', 'pred_angle'])
 
     def get_result(input):
-        center_pred, angle_pred = input
+        image, center_pred, angle_pred = input
         valid = center_pred[:, 0] == 1
 
         scores = center_pred[valid, 4]
@@ -90,14 +92,14 @@ def predict(images: List[np.array], size: Tuple[int, int]):
         # convert returned coords in image space to relative ([0,1]), because resizing may have
         # occured and people might not be aware they need to rescale results
         for c in centers:
-            c[0] /= size[0]
-            c[1] /= size[1]
+            c[0] = c[0] / w * image.shape[1]
+            c[1] = c[1] / h * image.shape[0]
         scores = to_float(scores[desc_order])
         angles = to_float(angle_pred[valid][desc_order,:].flatten())
 
         return centers, scores, angles
 
-    return zip(*map(get_result, zip(center_pred, angle_pred)))
+    return zip(*map(get_result, zip(images, center_pred, angle_pred)))
 
 def load(src):
     image = Image.open(src)
@@ -108,11 +110,9 @@ def load(src):
 if __name__ == "__main__":
 
     im = load(sys.argv[1])
-    h, w, _ = im.shape
-    w, h = (int(w // 32 * 32), int(h // 32 * 32))
-    centers, scores, angles = predict([im], (w,h))
+    centers, scores, angles = predict([im])
 
-    fig, _ = plot_results(im, np.array(centers[0])*[w,h,0], scores[0], angles[0])
+    fig, _ = plot_results(im, centers[0], scores[0], angles[0])
     fig.savefig('result.png')
 else:
     from label_studio_ml.api import init_app
@@ -128,10 +128,13 @@ else:
     import base64
 
     class CeDiRNet(LabelStudioMLBase):
-        def get_results(self, centers, scores, angles, width, height, from_name, to_name, label, dist = 30):
+        def get_results(self, centers, scores, angles, width, height, from_name, to_name, label, dist = 5):
             results = []
 
             for (x, y, _), score, angle in zip(centers, scores, np.deg2rad(angles)):
+                if score < 0.5:
+                    continue
+                x, y = x / width * 100, y / height * 100
                 dx, dy = np.cos(angle)*dist, np.sin(angle)*dist
 
                 results.append({
@@ -154,10 +157,10 @@ else:
                     'readonly': False
                 })
 
-            return [{
+            return {
                 'result': results,
                 'model_version': 'CeDiRNet',
-            }]
+            }
 
         def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
 
@@ -169,18 +172,20 @@ else:
                     break
             
             images = list(map(lambda task: load(self.get_local_path(task['data'][value], task_id=task['id'])), tasks))
-            h, w, _ = images[0].shape
-            w, h = (int(w // 32 * 32), int(h // 32 * 32))
-            centers, scores, angles = predict(images, (w,h))
-            predictions = self.get_results(
-                centers=centers,
-                scores=scores,
-                angles=angles,
-                width=IMAGE_SIZE[1],
-                height=IMAGE_SIZE[0],
-                from_name=from_name,
-                to_name=to_name,
-                label=labels[0])
+            
+            predictions = []
+
+            for image, centers, scores, angles in zip(images, *predict(images)):
+                h, w, _ = image.shape
+                predictions.append(self.get_results(
+                    centers=centers,
+                    scores=scores,
+                    angles=angles,
+                    width=w,
+                    height=h,
+                    from_name=from_name,
+                    to_name=to_name,
+                    label=labels[0]))
             
             return ModelResponse(predictions=predictions)
 
@@ -192,9 +197,7 @@ else:
             return []
 
         images = list(map(load, request.files.getlist('images')))
-        h, w, _ = images[0].shape
-        w, h = (int(w // 32 * 32), int(h // 32 * 32))
-        centers, scores, angles = predict(images, (w,h))
+        centers, scores, angles = predict(images)
 
         return {
             'centers': centers,
