@@ -121,33 +121,6 @@ class Trainer:
         self.optimizer, self.scheduler = get_optimizer(self.model, args['model'])
         self.center_optimizer, self.center_scheduler = get_optimizer(self.center_model, args['center_model'])
 
-        self.sample_loss_history = {}
-        self.sample_centerdir_loss_history = {}
-        self.sample_hard_neg_selection = {}
-
-        # resume
-        self.start_epoch = 0
-        resume_path = args.get('resume_path')
-        if resume_path and os.path.exists(resume_path):
-            print('Resuming model from {}'.format(resume_path))
-            state = torch.load(resume_path)
-            self.start_epoch = state['epoch'] + 1
-
-            if model_dict := state.get('model_state_dict'):
-                self.model.load_state_dict(model_dict, strict=True)
-            
-            if optim_dict := state.get('optim_state_dict') and self.optimizer:
-                self.optimizer.load_state_dict(optim_dict)
-            
-            if criterion_dict := state.get('criterion_state_dict'):
-                self.criterion.load_state_dict(criterion_dict)
-            
-            if center_model_dict := state.get('center_model_state_dict') and args['center_model'].get('use_learnable_center_estimation'):
-                self.center_model.load_state_dict(center_model_dict, strict=True)
-            
-            if center_optim_dict := state.get('center_optim_state_dict') and self.center_optimizer:
-                self.center_optimizer.load_state_dict(center_optim_dict)
-
         pretrained_model_path = args.get('pretrained_model_path')
         if pretrained_model_path and os.path.exists(pretrained_model_path):
             print('Loading pre-trained model from {}'.format(pretrained_model_path))
@@ -375,14 +348,14 @@ class Trainer:
     def run(self):
         args = self.args
 
-        for epoch in range(self.start_epoch, args['n_epochs']):
+        for epoch in range(args['n_epochs']):
 
             train_loss = self.train(epoch)
 
             if self.scheduler: self.scheduler.step()
             if self.center_scheduler: self.center_scheduler.step()
 
-            if args['display'] and epoch % args['display_it'] == 0:
+            if args['display'] and (epoch + 1) % args['display_it'] == 0:
                 with torch.no_grad():
                     for sample in tqdm(self.train_dataset_it, desc='visualise', dynamic_ncols=True):
 
@@ -397,7 +370,7 @@ class Trainer:
                             mlflow.log_figure(fig, name)
                             plt.close(fig)
 
-            if args['save'] and (epoch % args.get('save_interval',10) == 0 or epoch + 1 == args['n_epochs']):
+            if args['save'] and ((epoch + 1) % args.get('save_interval',10) == 0 or epoch + 1 == args['n_epochs']):
                 print('Saving checkpoint', flush=True)
                 state = {
                     'epoch': epoch,
@@ -422,6 +395,7 @@ if __name__ == '__main__':
 
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']
+    args['pretrained_model_path'] = cmd_args['model']
     args['pretrained_center_model_path'] = cmd_args['localisation']
     args['display_it'] = cmd_args['display_interval']
     args['save_interval'] = cmd_args['save_interval']
