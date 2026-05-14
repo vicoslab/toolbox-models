@@ -414,13 +414,17 @@ class Trainer:
                     mlflow.log_artifact(filename)
 
 if __name__ == '__main__':
-    from base_config import args
 
     cmd_args = modelargs.parse('./model.json')
+
+    from base_config import get_args
+    args = get_args(cmd_args['width'], cmd_args['height'])
 
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']
     args['pretrained_center_model_path'] = cmd_args['localisation']
+    args['display_it'] = cmd_args['display_interval']
+    args['save_interval'] = cmd_args['save_interval']
     
     mlflow.set_tracking_uri('http://localhost:8081')
     mlflow.set_experiment('CeDiRNet')

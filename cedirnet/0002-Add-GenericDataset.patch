@@ -1,9 +1,20 @@
+From ff4407a9d17f2dccc3a8bce79c5c60347eb6d0b1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andra=C5=BE=20Andol=C5=A1ek=20Peklaj?= <andraz.ap@pm.me>
+Date: Mon, 4 May 2026 09:39:21 +0200
+Subject: [PATCH 2/4] Add GenericDataset
+
+---
+ src/datasets/GenericDataset.py | 209 +++++++++++++++++++++++++++++++++
+ src/datasets/__init__.py       |   4 +-
+ 2 files changed, 212 insertions(+), 1 deletion(-)
+ create mode 100644 src/datasets/GenericDataset.py
+
 diff --git a/src/datasets/GenericDataset.py b/src/datasets/GenericDataset.py
 new file mode 100644
-index 0000000..9446b30
+index 0000000..8d5d92b
 --- /dev/null
 +++ b/src/datasets/GenericDataset.py
-@@ -0,0 +1,196 @@
+@@ -0,0 +1,209 @@
 +import glob
 +import os, cv2
 +
@@ -53,15 +64,27 @@ index 0000000..9446b30
 +		self.annotations = {}
 +
 +		with open(manifest) as f:
-+			items = json.load(f)[split]
++			items = json.load(f)
++			if split in items:
++				items = items[split]
++			elif 'data' in items and split == 'train':
++				items = items['data']
++			else:
++				items = []
 +		self.root_dir = os.path.dirname(manifest)
 +
++		skipped = 0
 +		for item in items:
++			if 'points' not in item:
++				skipped += 1
++				continue
 +			filename = item['image_path']
 +			self.image_list.append(filename)
 +			self.annotations[filename] = { 'points': item['points'] }
 +
 +		self.size = len(self.image_list)
++		if skipped > 0:
++			print(f'Warning: skipped {skipped} items due to missing annotations')
 +		print(f'GenericDataset of size {self.size}')
 +
 +		self.remove_out_of_bounds_centers = True
@@ -73,7 +96,7 @@ index 0000000..9446b30
 +	def __getitem__(self, index):
 +		filename = self.image_list[index]
 +
-+		image = Image.open(os.path.abspath(os.path.join(self.root_dir, filename)))
++		image = Image.open(os.path.abspath(os.path.join(self.root_dir, filename))).convert('RGB')
 +		im_size = image.size
 +		org_im_size = np.array(image.size)
 +
@@ -133,7 +156,8 @@ index 0000000..9446b30
 +		sample['ignore'] = torch.zeros_like(sample['label'], dtype=torch.uint8)
 +		sample['orientation'] = orientation
 +		sample['instance'] = instances.unsqueeze(0)
-+		sample['name'] = filename
++		tmp = os.path.normpath(os.path.join(self.root_dir, filename))
++		sample['name'] = os.path.relpath(tmp, os.path.commonpath([tmp, self.root_dir]))
 +
 +		if self.transform is not None:
 +			import copy
@@ -222,3 +246,6 @@ index 6b5aac8..6c47896 100644
  
      return dataset
  
+-- 
+2.53.0
+

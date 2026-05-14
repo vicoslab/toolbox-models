@@ -23,9 +23,10 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 cmd_args = modelargs.parse("model.json")
 
-from base_config import args
-# with open(cmd_args["config"],'r') as f:
-#     args = json.load(f)
+width, height = map(cmd_args.__getitem__, ["width", "height"])
+
+from base_config import get_args
+args = get_args(width, height)
 
 args['checkpoint_path'] = cmd_args["model"]
 if path := cmd_args.get("localization_model", ""):
@@ -62,10 +63,10 @@ else:
 center_model = torch.nn.DataParallel(center_model).to(DEVICE)
 center_model.eval()
 
-def transform(images: List[np.array], size: Tuple[int, int]): # size should be (w,h)
+def transform(images: List[np.array]) -> torch.tensor:
     transformed = []
     for im in images:
-        im = Image.fromarray(im).resize(size)
+        im = Image.fromarray(im).resize((width, height))
         im = np.array(im).transpose((2,0,1))
         transformed.append(torch.tensor(im))
     return torch.stack(transformed)
@@ -73,33 +74,29 @@ def transform(images: List[np.array], size: Tuple[int, int]): # size should be (
 def to_float(x):
     return list(map(float, x))
 
-def predict(images: List[np.array]):
-    h, w, _ = images[0].shape
-    w, h = int(w // 32 * 32), int(h // 32 * 32)
-    tensor = transform(images, (w, h))
+def predict(tensor: torch.tensor):
     center_output = center_model(model(tensor), detect_centers=True)
 
     center_pred, angle_pred = map(lambda k: center_output[k].detach().cpu().numpy(), ['center_pred', 'pred_angle'])
 
     def get_result(input):
-        image, center_pred, angle_pred = input
+        center_pred, angle_pred = input
         valid = center_pred[:, 0] == 1
 
         scores = center_pred[valid, 4]
         desc_order = np.argsort(scores)[::-1]
 
         centers = list(map(to_float, center_pred[valid][desc_order, 1:4]))
-        # convert returned coords in image space to relative ([0,1]), because resizing may have
-        # occured and people might not be aware they need to rescale results
+        # convert returned coords in image space to relative ([0,1]), because resizing occured
         for c in centers:
-            c[0] = c[0] / w * image.shape[1]
-            c[1] = c[1] / h * image.shape[0]
+            c[0] /= width
+            c[1] /= height
         scores = to_float(scores[desc_order])
         angles = to_float(angle_pred[valid][desc_order,:].flatten())
 
         return centers, scores, angles
 
-    return zip(*map(get_result, zip(images, center_pred, angle_pred)))
+    return zip(*map(get_result, zip(center_pred, angle_pred)))
 
 def load(src):
     image = Image.open(src)
@@ -110,7 +107,7 @@ def load(src):
 if __name__ == "__main__":
 
     im = load(sys.argv[1])
-    centers, scores, angles = predict([im])
+    centers, scores, angles = predict(transform([im]))
 
     fig, _ = plot_results(im, centers[0], scores[0], angles[0])
     fig.savefig('result.png')
@@ -134,7 +131,7 @@ else:
             for (x, y, _), score, angle in zip(centers, scores, np.deg2rad(angles)):
                 if score < 0.5:
                     continue
-                x, y = x / width * 100, y / height * 100
+                x, y = x * 100, y * 100
                 dx, dy = np.cos(angle)*dist, np.sin(angle)*dist
 
                 results.append({
@@ -175,7 +172,7 @@ else:
             
             predictions = []
 
-            for image, centers, scores, angles in zip(images, *predict(images)):
+            for image, centers, scores, angles in zip(images, *predict(transform(images))):
                 h, w, _ = image.shape
                 predictions.append(self.get_results(
                     centers=centers,
@@ -197,7 +194,7 @@ else:
             return []
 
         images = list(map(load, request.files.getlist('images')))
-        centers, scores, angles = predict(images)
+        centers, scores, angles = predict(transform(images))
 
         return {
             'centers': centers,

@@ -4,7 +4,7 @@
     "type": "object",
     "properties": {
         "manifest": {
-            "description": "The dataset manifest should be a file containing a JSON object with either a single attribute 'data', or attributes 'train' and 'test', each of which should be a list of objects with properties 'label' (with value being either 'normal' or 'abnormal'), 'image_path' and 'mask_path' (their values should be file paths, relative to the manifest file). Attributes mask_path or label may be omitted, but this will impact which training regime is used. ",
+            "description": "The dataset manifest should be a file containing a JSON object with attributes 'train' and 'test', each of which should be a list of objects with properties 'points' (list of [x1,y1,x2,y2], containing integer representations of starting point and second point which signifies direction) and 'image_path' (relative to the manifest file).",
             "type": "string"
         },
         "name": {
@@ -12,12 +12,32 @@
             "type": "string"
         },
         "model": {
-            "description": "Path to model checkpoint",
+            "description": "Path to model checkpoint.",
             "type": "string"
         },
         "localisation": {
-            "description": "Path to localisation model checkpoint",
+            "description": "Path to localisation model checkpoint.",
             "type": "string"
+        },
+        "save_interval": {
+            "description": "Epoch count between checkpoints.",
+            "type": "integer",
+            "default": 4
+        },
+        "display_interval": {
+            "description": "Epoch count between visualisations.",
+            "type": "integer",
+            "default": 4
+        },
+        "width": {
+            "description": "Width to transform image to (should be divisible by 32).",
+            "type": "integer",
+            "default": 640
+        },
+        "height": {
+            "description": "Height to transform image to (should be divisible by 32).",
+            "type": "integer",
+            "default": 480
         },
         "epochs": {
             "description": "Number of epochs to train for.",

@@ -1,3 +1,13 @@
+From a1b744ede901182174447f4e1fea86d84775171e Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andra=C5=BE=20Andol=C5=A1ek=20Peklaj?= <andraz.ap@pm.me>
+Date: Wed, 6 May 2026 11:56:57 +0200
+Subject: [PATCH 3/4] Fix runtime warnings
+
+---
+ src/models/center_estimator.py | 3 +--
+ src/utils/utils.py             | 2 +-
+ 2 files changed, 2 insertions(+), 3 deletions(-)
+
 diff --git a/src/models/center_estimator.py b/src/models/center_estimator.py
 index 479e790..ddae7b0 100644
 --- a/src/models/center_estimator.py
@@ -13,7 +23,7 @@ index 479e790..ddae7b0 100644
          # convert center prediction list to tensor of fixed size so that it can be merger from parallel GPU processings
          center_pred = self._pack_center_predictions(center_pred, batch_size=len(input))
 diff --git a/src/utils/utils.py b/src/utils/utils.py
-index d7659d7..b02ea39 100644
+index db3a3b7..00879f0 100644
 --- a/src/utils/utils.py
 +++ b/src/utils/utils.py
 @@ -8,7 +8,7 @@ import torch
@@ -25,3 +35,6 @@ index d7659d7..b02ea39 100644
  import torch.nn as nn
  
  class AverageMeter(object):
+-- 
+2.53.0
+

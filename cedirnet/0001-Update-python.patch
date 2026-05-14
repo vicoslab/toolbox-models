@@ -1,3 +1,13 @@
+From 28052583d74c24b97a84a81025bd5b9d0a9d5edc Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andra=C5=BE=20Andol=C5=A1ek=20Peklaj?= <andraz.ap@pm.me>
+Date: Wed, 13 May 2026 10:09:16 +0200
+Subject: [PATCH 1/4] Update python
+
+---
+ src/utils/transforms.py | 34 +++++++++++++++++-----------------
+ src/utils/utils.py      |  2 +-
+ 2 files changed, 18 insertions(+), 18 deletions(-)
+
 diff --git a/src/utils/transforms.py b/src/utils/transforms.py
 index c96db77..bd9a207 100644
 --- a/src/utils/transforms.py
@@ -135,7 +145,7 @@ index c96db77..bd9a207 100644
  
              sample[k] = (sample[k]  - m.reshape(sh) ) / s.reshape(sh)
 diff --git a/src/utils/utils.py b/src/utils/utils.py
-index b02ea39..00879f0 100644
+index d7659d7..db3a3b7 100644
 --- a/src/utils/utils.py
 +++ b/src/utils/utils.py
 @@ -156,7 +156,7 @@ def variable_len_collate(batch, batch_first=True, padding_value=0):
@@ -147,3 +157,6 @@ index b02ea39..00879f0 100644
              out = elem.new(storage)
          return torch.stack(batch, 0, out=out) if np.all(numel[0] == numel) else pad_sequence(batch,
                                                                                               batch_first=batch_first,
+-- 
+2.53.0
+
