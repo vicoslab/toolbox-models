@@ -126,27 +126,27 @@ class Trainer:
             print('Loading pre-trained model from {}'.format(pretrained_model_path))
             state = torch.load(pretrained_model_path)
 
-            if 'model_state_dict' in state:
+            if model_dict := state.get('model_state_dict'):
                 INPUT_WEIGHTS_KEY = 'module.model.encoder.model.stem_0.weight'
-                if checkpoint_input_weights := state['model_state_dict'].get(INPUT_WEIGHTS_KEY):
+                if (checkpoint_input_weights := model_dict.get(INPUT_WEIGHTS_KEY)) is not None:
                     model_input_weights = self.model.module.model.encoder.model.stem_0.weight
                     if checkpoint_input_weights.shape[1] < model_input_weights.shape[1]:
                         weights = torch.zeros_like(model_input_weights)
                         weights[:, :checkpoint_input_weights.shape[1], :, :] = checkpoint_input_weights
-                        state['model_state_dict'][INPUT_WEIGHTS_KEY] = weights
+                        model_dict[INPUT_WEIGHTS_KEY] = weights
 
                         print('WARNING: #####################################################################################################')
                         print(f'WARNING: pretrained model input shape mismatch - will load weights for only the first {checkpoint_input_weights.shape[1]} channels, is this correct ?!!!')
                         print('WARNING: #####################################################################################################')
 
-                missing, unexpected = model.load_state_dict(state['model_state_dict'], strict=False)
+                missing, unexpected = self.model.load_state_dict(model_dict, strict=False)
                 if len(missing) > 0 or len(unexpected) > 0:
                     print('WARNING: #####################################################################################################')
                     print('WARNING: Current model differs from the pretrained one, loading weights using strict=False')
                     print('WARNING: #####################################################################################################')
 
-            if 'center_model_state_dict' in state and args['center_model'].get('use_learnable_center_estimation'):
-                self.center_model.load_state_dict(state['center_model_state_dict'], strict=True)
+            if center_dict := state.get('center_model_state_dict'):
+                self.center_model.load_state_dict(center_dict, strict=True)
 
         
         if center_model_path := args.get('pretrained_center_model_path'):
