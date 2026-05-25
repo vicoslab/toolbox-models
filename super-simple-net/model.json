@@ -55,6 +55,14 @@
             "type": "number",
             "default": 0.6
         },
+        "flips": {
+            "type": "boolean",
+            "default": true
+        },
+        "dilate": {
+            "type": "integer",
+            "default": null
+        },
         "no_anomaly": {
             "enum": [
                 "full",
@@ -80,7 +88,7 @@
         "epochs": {
             "description": "Duration of training (1 epoch == 1 pass through the dataset).",
             "type": "integer",
-            "default": 300
+            "default": 10
         },
         "seg_lr": {
             "description": "Learning rate for segmentation head.",

@@ -1,22 +1,17 @@
 diff --git a/datamodules/base/datamodule.py b/datamodules/base/datamodule.py
-index 56453a7..ab45b7c 100644
+index 56453a7..ee9b9c9 100644
 --- a/datamodules/base/datamodule.py
 +++ b/datamodules/base/datamodule.py
-@@ -2,17 +2,20 @@ from abc import ABC
- from enum import Enum
- from pathlib import Path
+@@ -4,8 +4,6 @@ from pathlib import Path
  
--import albumentations as A
--from albumentations.pytorch import ToTensorV2
+ import albumentations as A
+ from albumentations.pytorch import ToTensorV2
 -from anomalib.data.base.datamodule import collate_fn
 -from anomalib.data.utils import InputNormalizationMethod
-+from torchvision.transforms.v2 import Compose, Resize, Normalize, ToDtype, ToImage
-+from anomalib.data import ImageBatch
  from pytorch_lightning import LightningDataModule
  from pytorch_lightning.utilities.types import TRAIN_DATALOADERS, EVAL_DATALOADERS
  from torch.utils.data import DataLoader
-+import torch
- 
+@@ -13,6 +11,10 @@ from torch.utils.data import DataLoader
  from datamodules.base import Supervision
  from datamodules.base.dataset import SSNDataset
  
@@ -27,105 +22,31 @@ index 56453a7..ab45b7c 100644
  
  class SSNDataModule(LightningDataModule, ABC):
      """
-@@ -64,30 +67,19 @@ class SSNDataModule(LightningDataModule, ABC):
-             )
+@@ -82,11 +84,13 @@ class SSNDataModule(LightningDataModule, ABC):
+         self.transform_train = A.Compose(
+             base_transforms,
+             additional_targets={"loss_mask": "mask"},
++            is_check_shapes=False,
+         )
  
-         base_transforms = [
--            A.Resize(height=image_size[0], width=image_size[1], always_apply=True)
-+            ToImage(),
-+            Resize(size=image_size),
-+            ToDtype(torch.float32, scale=True),
-         ]
- 
-         # add normalize transform
-         if normalization == InputNormalizationMethod.IMAGENET:
--            base_transforms.append(
--                A.Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225))
--            )
--        elif normalization == InputNormalizationMethod.NONE:
--            base_transforms.append(A.ToFloat(max_value=255))
-+            base_transforms.append(Normalize(mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)))
-         else:
-             raise ValueError(f"Unknown normalization method: {normalization}")
- 
--        base_transforms.append(ToTensorV2())
--
--        self.transform_train = A.Compose(
--            base_transforms,
--            additional_targets={"loss_mask": "mask"},
--        )
--
--        self.transform_eval = A.Compose(
--            base_transforms,
--            additional_targets={"loss_mask": "mask"},
--        )
-+        self.transform_train = Compose(base_transforms)
-+        self.transform_eval = Compose(base_transforms)
+         self.transform_eval = A.Compose(
+             base_transforms,
+             additional_targets={"loss_mask": "mask"},
++            is_check_shapes=False,
+         )
  
      @property
-     def is_setup(self) -> bool:
-@@ -151,5 +143,5 @@ class SSNDataModule(LightningDataModule, ABC):
+@@ -151,5 +155,4 @@ class SSNDataModule(LightningDataModule, ABC):
              shuffle=False,
              batch_size=self.eval_batch_size,
              num_workers=self.num_workers,
 -            collate_fn=collate_fn,
-+            #collate_fn=ImageBatch.collate,
          )
 diff --git a/datamodules/base/dataset.py b/datamodules/base/dataset.py
-index d5e80fd..82bb04d 100644
+index d5e80fd..534a5c5 100644
 --- a/datamodules/base/dataset.py
 +++ b/datamodules/base/dataset.py
-@@ -1,14 +1,16 @@
- from pathlib import Path
- 
--import albumentations as A
- import cv2
- import matplotlib.pyplot as plt
- import numpy as np
-+from torchvision.transforms.v2 import Compose, RandomHorizontalFlip, RandomVerticalFlip, RandomRotation, RandomApply
-+from torchvision.tv_tensors import Mask
- from anomalib.data.utils import Split, read_image
- from pandas import DataFrame
- from scipy.ndimage import distance_transform_edt
- from torch import Tensor
- from torch.utils.data import Dataset
-+from PIL import Image, ImageOps
- 
- from datamodules.base import Supervision
- 
-@@ -33,7 +35,7 @@ class SSNDataset(Dataset):
-         self,
-         root: Path,
-         supervision: Supervision,
--        transform: A.Compose,
-+        transform: Compose,
-         split: Split,
-         flips: bool,
-         normal_flips: bool,
-@@ -63,15 +65,15 @@ class SSNDataset(Dataset):
-         self.num_pos: int
-         self.num_neg: int
- 
--        self.vflip = A.VerticalFlip(always_apply=True)
--        self.hflip = A.HorizontalFlip(always_apply=True)
--        self.rotate = A.Rotate(limit=(180, 180), always_apply=True)
-+        self.vflip = RandomVerticalFlip(p=1.0)
-+        self.hflip = RandomHorizontalFlip(p=1.0)
-+        self.rotate = RandomRotation(degrees=(180, 180))
- 
--        self.random_normal_rotate = A.Compose(
-+        self.random_normal_rotate = Compose(
-             [
--                A.VerticalFlip(p=0.3),
--                A.HorizontalFlip(p=0.3),
--                A.Rotate(limit=90, p=0.3),
-+                RandomVerticalFlip(p=0.3),
-+                RandomHorizontalFlip(p=0.3),
-+                RandomApply([RandomRotation(degrees=90)], p=0.3),
-             ]
-         )
- 
-@@ -197,16 +199,14 @@ class SSNDataset(Dataset):
+@@ -197,16 +197,14 @@ class SSNDataset(Dataset):
                  image_path = self._normal_samples.iloc[ix].image_path
                  mask_path = self._normal_samples.iloc[ix].mask_path
                  label_index = self._normal_samples.iloc[ix].label_index
@@ -144,7 +65,7 @@ index d5e80fd..82bb04d 100644
          # test
          else:
              if index < self.num_neg:
-@@ -214,20 +214,18 @@ class SSNDataset(Dataset):
+@@ -214,16 +212,14 @@ class SSNDataset(Dataset):
                  image_path = self._normal_samples.iloc[ix].image_path
                  mask_path = self._normal_samples.iloc[ix].mask_path
                  label_index = self._normal_samples.iloc[ix].label_index
@@ -163,75 +84,29 @@ index d5e80fd..82bb04d 100644
  
          return image_path, mask_path, label_index, is_segmented
  
--    def get_flip_augmentation(self, index) -> A.DualTransform | None | A.Compose:
-+    def get_flip_augmentation(self, index):
-         """
-         Get specified flip augmentation for current image if flips is true.
- 
-@@ -317,7 +315,10 @@ class SSNDataset(Dataset):
+@@ -317,7 +313,8 @@ class SSNDataset(Dataset):
  
          image_path, mask_path, label_index, is_segmented = self.get_sample_data(index)
  
 -        image = read_image(image_path)
-+        image = Image.open(image_path)
-+        image = ImageOps.exif_transpose(image)
-+        image = np.array(image.convert("RGB")) / 255.0
-+
++        image = cv2.imread(image_path)
++        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
          item = dict(
              image_path=image_path,
              label=label_index,
-@@ -328,7 +329,9 @@ class SSNDataset(Dataset):
-             # normal or not segmented are all zero
-             mask = np.zeros(shape=image.shape[:2])
-         else:
--            mask = cv2.imread(mask_path, flags=0) / 255.0
-+            mask = Image.open(mask_path)
-+            mask = ImageOps.exif_transpose(mask)
-+            mask = np.array(mask.convert("L")) / 255.0
- 
-             if self.dilate is not None and self.split == Split.TRAIN:
-                 mask = cv2.dilate(mask, np.ones((self.dilate, self.dilate)))
-@@ -337,9 +340,7 @@ class SSNDataset(Dataset):
-             # if current image is selected to be flip augmented
-             flip_augmentation = self.get_flip_augmentation(index)
-             if flip_augmentation is not None:
--                flip_transformed = flip_augmentation(image=image, mask=mask)
--                image = flip_transformed["image"]
--                mask = flip_transformed["mask"]
-+                image, mask = flip_augmentation(image, Mask(mask))
- 
-         if self.dt is not None:
-             # apply distance transform
-@@ -350,14 +351,11 @@ class SSNDataset(Dataset):
-             else:
-                 loss_mask = self.distance_transform(mask, wp, p)
- 
--            transformed = self.transform(image=image, mask=mask, loss_mask=loss_mask)
--            item["loss_mask"] = transformed["loss_mask"]
--        else:
--            transformed = self.transform(image=image, mask=mask)
-+            item["loss_mask"] = self.transform(Mask(Tensor(oss_mask)))
- 
--        item["image"] = transformed["image"]
-+        item["image"] = self.transform(Tensor(image.transpose(2,0,1)))
-         item["mask_path"] = mask_path
--        item["mask"] = transformed["mask"]
-+        item["mask"] = self.transform(Mask(Tensor(mask)))
- 
-         self.counter = self.counter + 1
- 
 diff --git a/model/feature_extractor.py b/model/feature_extractor.py
-index 4ee752e..d40f84b 100644
+index 4ee752e..28531cb 100644
 --- a/model/feature_extractor.py
 +++ b/model/feature_extractor.py
-@@ -6,12 +6,14 @@ from torch import Tensor
- from torchvision.models.feature_extraction import create_feature_extractor
- 
- from importlib import import_module
+@@ -1,6 +1,7 @@
+ import torch
+ import torch.nn as nn
+ import torch.nn.functional as F
 +import os
  
- 
- class FeatureExtractor(nn.Module):
+ from torch import Tensor
+ from torchvision.models.feature_extraction import create_feature_extractor
+@@ -12,6 +13,7 @@ class FeatureExtractor(nn.Module):
      def __init__(
          self,
          backbone: str,
@@ -239,11 +114,10 @@ index 4ee752e..d40f84b 100644
          layers: list[str],
          patch_size: int,
          image_size: tuple[int, int],
-@@ -23,7 +25,11 @@ class FeatureExtractor(nn.Module):
-         try:
+@@ -24,6 +26,11 @@ class FeatureExtractor(nn.Module):
              models = import_module("torchvision.models")
              backbone_class = getattr(models, backbone)
--            model = backbone_class(weights="IMAGENET1K_V1")
+             model = backbone_class(weights="IMAGENET1K_V1")
 +            if os.path.exists(weights):
 +                model = backbone_class()
 +                model.load_state_dict(torch.load(weights))

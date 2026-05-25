@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import copy
 import json
 from pathlib import Path
+import signal
 
 import mlflow
 from mlflow.entities import RunStatus
@@ -15,6 +16,7 @@ from mlflow.entities import RunStatus
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
+from sklearn.model_selection import train_test_split
 
 import torch
 import torch.nn.functional as F
@@ -48,6 +50,8 @@ class GenericDataset(SSNDataset):
         split: Split,
         flips: bool,
         normal_flips: bool,
+        dilate: int | None = None,
+        dt: tuple[int, int] | None = None,
         debug: bool = False,
     ) -> None:
         super().__init__(
@@ -89,6 +93,8 @@ class Generic(SSNDataModule):
         seed: int | None = None,
         flips: bool = False,
         normal_flips: bool = False,
+        dilate: int | None = None,
+        dt: tuple[int, int] | None = None,
         debug: bool = False,
     ) -> None:
 
@@ -112,6 +118,8 @@ class Generic(SSNDataModule):
             flips=flips,
             normal_flips=normal_flips,
             supervision=supervision,
+            dilate=dilate,
+            dt=dt,
             debug=debug,
         )
         self.test_data = GenericDataset(
@@ -135,6 +143,9 @@ class Results:
     label: list[float]
     image_path: list[str]
     mask_path: list[str]
+
+    def __getitem__(self, k):
+        return getattr(self, k)
 
 
 def train(
@@ -228,18 +239,18 @@ def train(
                 prog_bar.set_postfix(**output)
                 prog_bar.update(1)
 
-            if (epoch + 1) % eval_step_size == 0:
-                results = test(
-                    model=model,
-                    datamodule=datamodule,
-                    device=device,
-                    image_metrics=image_metrics,
-                    pixel_metrics=pixel_metrics,
-                    normalize=True,
-                )
-                mlflow.log_metrics({**results, **output}, epoch)
-            else:
-                mlflow.log_metrics(output, epoch)
+        if (epoch + 1) % eval_step_size == 0:
+            results = test(
+                model=model,
+                datamodule=datamodule,
+                device=device,
+                image_metrics=image_metrics,
+                pixel_metrics=pixel_metrics,
+                normalize=True,
+            )
+            mlflow.log_metrics({**results, **output}, epoch)
+        else:
+            mlflow.log_metrics(output, epoch)
         scheduler.step()
 
 
@@ -423,31 +434,27 @@ if __name__ == "__main__":
     
     if not ("train" in manifest and "test" in manifest):
         if "data" in manifest:
-            gen = np.random.default_rng(seed=3999924951)
-            data = gen.permutation(manifest["data"])
-            pivot = round(0.7*len(data))
+            data_train, data_test = train_test_split(manifest["data"], train_size=0.7, stratify=[x.get("label", "") for x in manifest["data"]])
             manifest = {
-                "train": data[:pivot],
-                "test": data[pivot:],
+                "train": data_train,
+                "test": data_test,
             }
         else:
             raise ValueError("Passed manifest.json does not contain 'data' or 'train'/'test' attributes.")
     
-    implicit_normal = False
     fully_supervised = True
     weakly_supervised = True
     for split in ["train", "test"]:
+        old_len = len(manifest[split])
+        manifest[split] = [x for x in manifest[split] if "label" in x]
+        if len(manifest[split]) != old_len:
+            print(f"Warning: dropped {old_len - len(manifest[split])} items in split '{split}' due to missing label")
+
         for i,item in enumerate(manifest[split]):
-            if "label" not in item:
-                implicit_normal = True
-                manifest[split][i]["label"] = "normal"
             if "mask_path" in item:
                 weakly_supervised = False
             elif item["label"] != "normal":
                 fully_supervised = False
-    
-    if implicit_normal:
-        print("Warning: used 'normal' as label for image because no image-level annotation was supplied")
 
     if fully_supervised:
         supervision = Supervision.FULLY_SUPERVISED
@@ -461,7 +468,6 @@ if __name__ == "__main__":
             **base_config,
             "num_workers": 8,
             "overlap": True,  # makes no difference, just faster if false to avoid computation
-            "flips": False,  # makes no difference, just faster if false to avoid computation
             "stop_grad": True,
             "clip_grad": False,
             "layers": [ "layer2", "layer3" ],
@@ -472,7 +478,6 @@ if __name__ == "__main__":
             "num_workers": 1,
             "overlap": False,
             "perlin_thr": 0.6,
-            "flips": True,
             "stop_grad": False,
             "clip_grad": True,
             "layers": [ "layer2", "layer3" ],

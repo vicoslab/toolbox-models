@@ -1,21 +1,19 @@
 diff --git a/requirements.txt b/requirements.txt
-index 78ac94b..5d64f86 100644
+index 78ac94b..cb1f337 100644
 --- a/requirements.txt
 +++ b/requirements.txt
-@@ -1,10 +1,10 @@
+@@ -1,10 +1,4 @@
  tqdm
 -numpy==1.26.0
 -anomalib==0.7
-+numpy
-+anomalib
- 
- # optional
- #wandb
- 
- --extra-index-url https://download.pytorch.org/whl/cu118
+-
+-# optional
+-#wandb
+-
+---extra-index-url https://download.pytorch.org/whl/cu118
 -torch==2.1.0+cu118
 -torchvision==0.16.0+cu118
 \ No newline at end of file
-+torch==2.7.0+cu118
-+torchvision==0.22.0+cu118
-\ No newline at end of file
++numpy
++anomalib
++albumentations

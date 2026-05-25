@@ -1,5 +1,5 @@
 diff --git a/common/visualizer.py b/common/visualizer.py
-index 9682500..4cad428 100644
+index 9682500..54c32cd 100644
 --- a/common/visualizer.py
 +++ b/common/visualizer.py
 @@ -2,10 +2,11 @@ from pathlib import Path
@@ -49,7 +49,15 @@ index 9682500..4cad428 100644
              else:
                  gt_mask = np.zeros_like(anomaly_map)
              # images are normed to [0, 1] so we cut off at 0.5
-@@ -45,7 +49,7 @@ class Visualizer:
+@@ -38,14 +42,14 @@ class Visualizer:
+             gt_label = "Anomalous" if label.item() else "Normal"
+ 
+             # adjust height and width as 256 as baseline
+-            fig_h = h / 256 * 2
++            fig_h = h / 256 * 4
+             fig_w = w / 256 * 12
+ 
+             fig, plots = plt.subplots(1, 5, figsize=(fig_w, fig_h))
              for s_plt in plots:
                  s_plt.axis("off")
  
