@@ -5,7 +5,8 @@ _ = modelargs.parse("./model.json")
 import os
 os.chdir("../sam")
 import site
-site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/sam-ls-backend')
+CACHE = os.environ["TOOLBOX_CACHE"]
+site.addsitedir(f'{CACHE}/sam-ls-backend')
 
 import torch
 import numpy as np
@@ -17,7 +18,7 @@ sys.path.insert(0, ROOT_DIR)
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 
-MODEL_CHECKPOINT = os.getenv('MODEL_CHECKPOINT', 'sam3.pt')
+MODEL_CHECKPOINT = f'{CACHE}/sam/sam3.pt'
 
 if torch.cuda.is_available():
     # use bfloat16 for the entire notebook
@@ -39,10 +40,7 @@ def encode(img):
     pil_img.save(buff, format="WebP")
     return base64.b64encode(buff.getvalue()).decode("utf-8")
 
-# build path to the model checkpoint
-checkpoint = str(os.path.join(ROOT_DIR, MODEL_CHECKPOINT))
-
-model = build_sam3_image_model(checkpoint_path=checkpoint)
+model = build_sam3_image_model(checkpoint_path=MODEL_CHECKPOINT)
 processor = Sam3Processor(model, confidence_threshold=0.5)
 
 if __name__ == "__main__":
