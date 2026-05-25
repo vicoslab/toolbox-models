@@ -1,20 +1,20 @@
-From ff4407a9d17f2dccc3a8bce79c5c60347eb6d0b1 Mon Sep 17 00:00:00 2001
+From fd4a7741f7dcbd5f73d7e1d45f7bcbe2816d92b5 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Andra=C5=BE=20Andol=C5=A1ek=20Peklaj?= <andraz.ap@pm.me>
 Date: Mon, 4 May 2026 09:39:21 +0200
 Subject: [PATCH 2/4] Add GenericDataset
 
 ---
- src/datasets/GenericDataset.py | 209 +++++++++++++++++++++++++++++++++
+ src/datasets/GenericDataset.py | 215 +++++++++++++++++++++++++++++++++
  src/datasets/__init__.py       |   4 +-
- 2 files changed, 212 insertions(+), 1 deletion(-)
+ 2 files changed, 218 insertions(+), 1 deletion(-)
  create mode 100644 src/datasets/GenericDataset.py
 
 diff --git a/src/datasets/GenericDataset.py b/src/datasets/GenericDataset.py
 new file mode 100644
-index 0000000..8d5d92b
+index 0000000..fe62c53
 --- /dev/null
 +++ b/src/datasets/GenericDataset.py
-@@ -0,0 +1,209 @@
+@@ -0,0 +1,215 @@
 +import glob
 +import os, cv2
 +
@@ -33,6 +33,12 @@ index 0000000..8d5d92b
 +from utils import transforms as my_transforms
 +
 +class GenericDataset(Dataset):
++	IGNORE_LABEL = "ignore-region"
++    
++	IGNORE_FLAG = 1
++	IGNORE_TRUNCATED_FLAG = 2
++	IGNORE_OVERLAP_BORDER_FLAG = 4
++	IGNORE_DIFFICULT_FLAG = 8
 +
 +	def __init__(self, manifest=None, split='train', fixed_bbox_size=15, resize_factor=None, do_segmentation=False, MAX_NUM_CENTERS=1024,
 +				transform=None, num_cpu_threads=1, use_normals=False, normals_mode=1,

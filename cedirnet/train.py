@@ -381,10 +381,14 @@ class Trainer:
                     # 'center_optim_state_dict': self.center_optimizer and self.center_optimizer.state_dict(),
                 }
 
-                with tempfile.TemporaryDirectory() as d:
-                    filename = os.path.join(d, "checkpoint.pth")
+                if (ARTIFACTS := os.getenv("MLFLOW_ARTIFACTS_DESTINATION")) and (run := mlflow.active_run()):
+                    filename = os.path.join(ARTIFACTS, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
                     torch.save(state, filename)
-                    mlflow.log_artifact(filename)
+                else:
+                    with tempfile.TemporaryDirectory() as d:
+                        filename = os.path.join(d, "checkpoint.pth")
+                        torch.save(state, filename)
+                        mlflow.log_artifact(filename)
 
 if __name__ == '__main__':
 

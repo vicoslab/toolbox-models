@@ -1,10 +1,11 @@
 import os
 
+import numpy as np
 import torch
 from utils import transforms as my_transforms
 from torchvision.transforms import InterpolationMode
 
-def get_args(width, height, enable_6dof=False, enable_symmetries=False):
+def get_args(width, height, enable_6dof=False, enable_symmetries=False, use_depth=False):
 	num_fields = 3 + (6 if enable_6dof else 2)
 	args = dict(
 
@@ -33,99 +34,56 @@ def get_args(width, height, enable_6dof=False, enable_symmetries=False):
 				'categories': [8], # driller
 
 				'transform': my_transforms.get_transform([
-					# for training without augmentation (same as testing)
-
-					{
-						'name': 'Resize',
-						'opts': {
-							# 'keys': ('image', 'instance', 'label', 'difficult'),
-							# 'interpolation': (InterpolationMode.BILINEAR, InterpolationMode.NEAREST, InterpolationMode.NEAREST, InterpolationMode.NEAREST),
-							'keys': ('image', 'instance', 'label', 'ignore', 'orientation', 'mask'),
-							'interpolation': (InterpolationMode.BILINEAR, InterpolationMode.NEAREST, InterpolationMode.NEAREST, InterpolationMode.NEAREST, InterpolationMode.BILINEAR, InterpolationMode.NEAREST),
-							'keys_bbox': ('center',),
-
-							'size': (height, width),
-						}
-					},
-					# {
-					# 	'name': 'Background',
-					# 	'opts': {
-					# 		# 'p' : 0.5
-					# 		'p' : 0.0,
-					# 		# 'p' : 1.0
-					# 		'bg_dir': os.path.join(STORAGE_DIR, 'datasets/PASCAL/VOC2012/JPEGImages/'),
-					# 		'bg_images': os.path.join(STORAGE_DIR, 'datasets/PASCAL/VOC2012/ImageSets/Main/diningtable_trainval.txt'),
-
-					# 	}
-					# },
-					# for training with random augmentation
-					# {
-					#     'name': 'RandomGaussianBlur',
-					#     'opts': {
-					#         'keys': ('image',),
-					#         'rate': 0.5, 'sigma': [0.5, 2]
-					#     }
-					# },
-					# {
-					# 	'name': 'RandomHorizontalFlip',
-					# 	'opts': {
-					# 		'keys': ('image', 'instance', 'label', 'ignore', 'orientation'), 'keys_bbox': ('center',),
-					# 		'p': 0.5,
-					# 	}
-					# },
-					# {
-					# 	'name': 'RandomVerticalFlip',
-					# 	'opts': {
-					# 		'keys': ('image', 'instance', 'label', 'ignore', 'orientation'), 'keys_bbox': ('center',),
-					# 		'p': 0.5,
-					# 	}
-					# },
-					
-					# {
-					# 'name': 'RandomRotation',
-					# 'opts': {
-					# 	# 'keys': ('image'),
-					# 	'keys': ('image', 'instance', 'label', 'ignore', 'center'),
-					# 	# 'rng': None,
-					# 	# 'degrees' : 180
-					# 	# 'degrees' : (0,30)
-					# 	# 'degrees' : (30,60)
-					# 	'degrees' : (0,180)
-					# }
-					# },
-					# {
-					#     'name': 'RandomResize',
-					#     'opts': {
-					#         'keys': ('image', 'instance', 'label', 'ignore'), 'keys_bbox': ('center',),
-					#         'interpolation': (InterpolationMode.BILINEAR, InterpolationMode.NEAREST, InterpolationMode.NEAREST, InterpolationMode.NEAREST),
-					#         'scale_range': [0.5,1.5]
-					#     }
-					# },
-					# {
-					#     'name': 'RandomCrop',
-					#     'opts': {
-					#         'keys': ('image', 'instance', 'label', 'ignore'), 'keys_bbox': ('center',),
-					#         # 'size': (256,256),
-					#         # 'size': (128,128),
-					#         'size': (512,512),
-					#         # 'size': (1024,1024),
-					#         'pad_if_needed': True
-					#     }
-					# },
-					# {
-					# 	'name': 'ColorJitter',
-					# 	'opts': {
-					# 		'keys': ('image',), 'p': 0.5,
-					# 		'saturation': 0.2, 'hue': 0.2, 'brightness': 0.2, 'contrast':0.2
-					# 	}
-					# },
 					{
 						'name': 'ToTensor',
 						'opts': {
-							# 'keys': ('image', 'instance', 'label', 'ignore'),
-							# 'type': (torch.FloatTensor, torch.ShortTensor, torch.ByteTensor, torch.ByteTensor),
 							'keys': ('image', 'instance', 'label', 'ignore', 'orientation', 'mask'),
 							'type': (torch.FloatTensor, torch.ShortTensor, torch.ByteTensor, torch.ByteTensor, torch.FloatTensor, torch.ByteTensor),
+						}
+					},
+					{
+						'name': 'Resize',
+						'opts': {
+							'keys': ('image', 'instance', 'label', 'ignore', 'orientation', 'mask'),
+							'interpolation': (InterpolationMode.BILINEAR, InterpolationMode.NEAREST, InterpolationMode.NEAREST, InterpolationMode.NEAREST, InterpolationMode.BILINEAR, InterpolationMode.NEAREST),
+							'keys_bbox': ('center',),
+							'size': (height, width),
+						}
+					},
+					{
+						'name': 'RandomHorizontalFlip',
+						'opts': {
+							'keys': ('image', 'instance', 'label', 'ignore', 'orientation', 'mask') + (('depth',) if use_depth else ()), 'keys_bbox': ('center',),
+							'keys_custom_fn' : { 'orientation': lambda x: (np.pi - x + np.pi) % (2 * np.pi) - np.pi},
+							# 'keys_custom_fn' : { 'orientation': lambda x: np.atan2(np.sin(x), -np.cos(x))},
+							'p': 0.25,
+						}
+					},
+					{
+						'name': 'RandomVerticalFlip',
+						'opts': {
+							'keys': ('image', 'instance', 'label', 'ignore', 'orientation', 'mask') + (('depth',) if use_depth else ()), 'keys_bbox': ('center',),
+							'keys_custom_fn' : { 'orientation': lambda x: (2*np.pi - x + np.pi) % (2 * np.pi) - np.pi},
+							# 'keys_custom_fn' : { 'orientation': lambda x: np.atan2(-np.sin(x), np.cos(x))},
+							'p': 0.25,
+						}
+					},
+					{
+						'name': 'RandomCustomRotation',
+						'opts': {
+							'keys': ('image', 'instance', 'label', 'ignore', 'orientation', 'mask') + (('depth',) if use_depth else ()), 'keys_bbox': ('center',),
+							'keys_custom_fn' : { 'orientation': lambda x,angle: (x - np.deg2rad(angle) + np.pi) % (2 * np.pi) - np.pi}, # we subtract angle here because rotations go clockwise, but angles go anti-clockwise
+							'resample': (InterpolationMode.BILINEAR, InterpolationMode.NEAREST, InterpolationMode.NEAREST,
+												InterpolationMode.NEAREST, InterpolationMode.NEAREST, InterpolationMode.NEAREST)  + ((InterpolationMode.BILINEAR, ) if use_depth else ()),
+							'angles': list(range(0, 360, 10)),
+							'rate':0.25,
+						}
+					},
+					{
+						'name': 'ColorJitter',
+						'opts': {
+							'keys': ('image',), 'p': 0.25,
+							'saturation': 0.3, 'hue': 0.3, 'brightness': 0.3, 'contrast':0.3
 						}
 					},
 				]),

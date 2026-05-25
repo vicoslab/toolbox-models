@@ -1,4 +1,4 @@
-From 8d7367f502fb62c0cfcb32f6d745e404db963e80 Mon Sep 17 00:00:00 2001
+From 311194b42bcd2814bb3f2bdc4d24ebd6d31ca374 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Andra=C5=BE=20Andol=C5=A1ek=20Peklaj?= <andraz.ap@pm.me>
 Date: Wed, 13 May 2026 09:59:02 +0200
 Subject: [PATCH 4/4] Fix orientations
@@ -9,10 +9,10 @@ Subject: [PATCH 4/4] Fix orientations
  2 files changed, 3 insertions(+), 3 deletions(-)
 
 diff --git a/src/datasets/GenericDataset.py b/src/datasets/GenericDataset.py
-index 8d5d92b..d0a6bdd 100644
+index fe62c53..9827c82 100644
 --- a/src/datasets/GenericDataset.py
 +++ b/src/datasets/GenericDataset.py
-@@ -119,8 +119,8 @@ class GenericDataset(Dataset):
+@@ -125,8 +125,8 @@ class GenericDataset(Dataset):
  					pt1 = pt1 * self.resize_factor
  					pt2 = pt2 * self.resize_factor
  
