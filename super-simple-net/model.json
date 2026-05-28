@@ -23,6 +23,7 @@
         },
         "weights": {
             "description": "Path to saved model.",
+            "format": "file:weights.pt",
             "type": "string"
         },
         "backbone": {

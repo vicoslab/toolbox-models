@@ -13,6 +13,7 @@
         },
         "model": {
             "description": "Path to model checkpoint.",
+            "format": "file:checkpoint.pth",
             "type": "string"
         },
         "localisation": {
