@@ -34,12 +34,6 @@ def load(src):
     image = ImageOps.exif_transpose(image)
     return image
 
-def encode(img):
-    pil_img = Image.fromarray(img)
-    buff = BytesIO()
-    pil_img.save(buff, format="WebP")
-    return base64.b64encode(buff.getvalue()).decode("utf-8")
-
 model = build_sam3_image_model(checkpoint_path=MODEL_CHECKPOINT)
 processor = Sam3Processor(model, confidence_threshold=0.5)
 
@@ -140,6 +134,12 @@ else:
             return ModelResponse(predictions=predictions)
 
     app = init_app(model_class=SegmentAnything)
+
+    def encode(img):
+        pil_img = Image.fromarray(img)
+        buff = BytesIO()
+        pil_img.save(buff, format="WebP")
+        return base64.b64encode(buff.getvalue()).decode("utf-8")
 
     @app.route('/infer', methods=["POST"])
     def index():

@@ -4,9 +4,9 @@
 
 <script>
     document.getElementById("infer").onInference = function (results, request, response) {
-        const showMasks = document.createElement("show-masks");
-        showMasks.masks = response.masks;
-        showMasks.reference = request.get("image");
-        results.append(showMasks, document.createElement("hr"));
+        const showDetections = document.createElement("show-detections");
+        showDetections.masks = response.masks;
+        showDetections.reference = request.get("image");
+        results.append(showDetections, document.createElement("hr"));
     }
 </script>
