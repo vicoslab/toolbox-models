@@ -6,6 +6,8 @@
     document.getElementById("infer").onInference = function (results, request, response) {
         const showDetections = document.createElement("show-detections");
         showDetections.masks = response.masks;
+        showDetections.scores = response.scores;
+        showDetections.boxes = response.boxes;
         showDetections.reference = request.get("image");
         results.append(showDetections, document.createElement("hr"));
     }
