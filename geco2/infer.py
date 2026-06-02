@@ -168,17 +168,15 @@ else:
                     labels = tag['labels']
                     break
 
-            if not context or not context.get('region'):
+            if not context or not (region := context.get('region')):
                 # if there is no context, no interaction has happened yet
                 return ModelResponse(predictions=[])
-            region = context['region']
             if region['type'] != 'rectangleregion':
                 return ModelResponse(predictions=[])
 
             image = load(self.get_local_path(tasks[0]['data'][value], task_id=tasks[0]['id']))
-            inference_state = processor.set_image(image)
 
-            image_width, image_height = image.size
+            image_height, image_width, _ = image.shape
 
             x, y, box_width, box_height = [region[k] / 100 for k in ['x', 'y', 'width', 'height']]
             # geco2 expects topleft and bottomright corners in absolute
