@@ -14,7 +14,15 @@ import numpy as np
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 args = modelargs.parse('./model.json')
-args['zero_shot'] = True
+args = dict(
+    zero_shot = True,
+    image_size = 1024,
+    num_objects = 3,
+    emb_dim = 256,
+    kernel_dim = 3,
+    reduction = 16,
+    **args,
+)
 model = DataParallel(CNT(**args).to(device))
 model.load_state_dict(torch.load(f'{os.environ["TOOLBOX_CACHE"]}/geco2/CNTQG_multitrain_ca44.pt', weights_only=True)['model'], strict=False)
 model.eval()

@@ -2,35 +2,5 @@
     "title": "GeCo2",
     "description": "Generalized-Scale Object Counting with Gradual Query Aggregation",
     "type": "object",
-    "properties": {
-        "image_size": {
-            "description": "Size to scale image to.",
-            "type": "integer",
-            "default": 1024
-        },
-        "num_objects": {
-            "description": "Maximum number of objects.",
-            "type": "integer",
-            "default": 3
-        },
-        "emb_dim": {
-            "description": "Dimension of embeddings.",
-            "type": "integer",
-            "default": 256
-        },
-        "kernel_dim": {
-            "description": "Size of kernel.",
-            "type": "integer",
-            "default": 3
-        },
-        "reduction": {
-            "description": "Downscaling factor for images (should be 4, 8 or 16).",
-            "enum": [
-                4,
-                8,
-                16
-            ],
-            "default": 16
-        }
-    }
+    "properties": {}
 }
