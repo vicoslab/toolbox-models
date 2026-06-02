@@ -207,16 +207,18 @@ else:
 
     @app.route('/infer', methods=['POST'])
     def index():
-        if 'image' not in request.files or 'bbox' not in request.form:
-            return []
+        if 'image' not in request.files or 'boxes' not in request.form:
+            return { 'boxes': [], 'masks': [], 'scores': [] }
         
         image = load(request.files['image'])
         image_height, image_width, _ = image.shape
 
-        x, y, box_width, box_height = json.loads(request.form['bbox'])
-        box = [x * image_width, y * image_height, (x + box_width) * image_width, (y + box_height) * image_height]
+        exemplars = [
+            (x * image_width, y * image_height, (x + box_width) * image_width, (y + box_height) * image_height)
+            for (x, y, box_width, box_height) in json.loads(request.form['boxes'])
+        ]
 
-        boxes, scores, masks = predict(image, [box], True)
+        boxes, scores, masks = predict(image, exemplars, True)
 
         return {
             'boxes': boxes,

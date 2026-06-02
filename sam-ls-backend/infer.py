@@ -143,13 +143,15 @@ else:
 
     @app.route('/infer', methods=["POST"])
     def index():
-        if 'image' not in request.files or 'bbox' not in request.form:
-            return []
+        if bbox := request.form.get('boxes'):
+            bbox = json.loads(bbox)
+        if 'image' not in request.files or not bbox or len(bbox) != 1:
+            return { 'masks': [], 'scores': [] }
         
         image = load(request.files['image'])
         width, height = image.size
 
-        x, y, box_width, box_height = json.loads(request.form['bbox'])
+        x, y, box_width, box_height = bbox[0]
         box = np.array([x + box_width/2, y + box_height/2, box_width, box_height])
 
         inference_state = processor.set_image(image)

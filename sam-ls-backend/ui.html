@@ -1,11 +1,12 @@
 <infer-image name="image">
-    <infer-bbox id="infer" name="bbox" />
+    <infer-bbox id="infer" name="boxes" />
 </infer-image>
 
 <script>
     document.getElementById("infer").onInference = function (results, request, response) {
         const showDetections = document.createElement("show-detections");
         showDetections.masks = response.masks;
+        showDetections.scores = response.scores;
         showDetections.reference = request.get("image");
         results.append(showDetections, document.createElement("hr"));
     }
