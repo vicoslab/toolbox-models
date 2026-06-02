@@ -133,6 +133,6 @@ else:
         maps, scores = predict(transform(images), [x.shape[:2] for x in images])
 
         return {
-            'anomaly_maps': list(map(encode, maps)),
-            'scores': list(map(float, scores)),
+            'anomaly_maps': list(map(encode, images)),
+            'scores': scores.tolist(),
         }

@@ -71,9 +71,6 @@ def transform(images: List[np.array]) -> torch.tensor:
         transformed.append(torch.tensor(im))
     return torch.stack(transformed)
 
-def to_float(x):
-    return list(map(float, x))
-
 def predict(tensor: torch.tensor):
     center_output = center_model(model(tensor), detect_centers=True)
 
@@ -86,13 +83,13 @@ def predict(tensor: torch.tensor):
         scores = center_pred[valid, 4]
         desc_order = np.argsort(scores)[::-1]
 
-        centers = list(map(to_float, center_pred[valid][desc_order, 1:4]))
+        centers = center_pred[valid][desc_order, 1:4].tolist()
         # convert returned coords in image space to relative ([0,1]), because resizing occured
         for c in centers:
             c[0] /= width
             c[1] /= height
-        scores = to_float(scores[desc_order])
-        angles = to_float(angle_pred[valid][desc_order,:].flatten())
+        scores = scores[desc_order].tolist()
+        angles = angle_pred[valid][desc_order,:].flatten().tolist()
 
         return centers, scores, angles
 
