@@ -29,6 +29,7 @@
         for (let i = 0; i < images.length; i++) {
             const wrapper = document.createElement("div");
             wrapper.style.position = "relative";
+            wrapper.style.width = "fit-content";
 
             const im = document.createElement("img");
             im.src = URL.createObjectURL(images[i]);
