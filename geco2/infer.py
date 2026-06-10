@@ -1,6 +1,7 @@
 import os
 import site
 site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/geco2')
+import activate
 import sys
 import torch
 from torch.nn import DataParallel
