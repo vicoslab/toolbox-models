@@ -60,6 +60,6 @@ jobs:
           push: true
           build-args: |
             REF=${{ github.ref_name }}
-            MODELS=https://github.com/vicoslab/toolbox-models.git
+            MODELS=https://github.com/vicoslab/toolbox-models.git#${{ github.ref_name }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
