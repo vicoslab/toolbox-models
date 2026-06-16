@@ -21,7 +21,7 @@
         marker.dataset.score = score;
         return marker;
     }
-    document.getElementById("infer").onInference = function (results, request, response) {
+    document.getElementById("infer").onInference = function (request, response) {
         const group = document.createElement("div");
         group.classList.add("group");
         const images = request.getAll("images");
@@ -45,6 +45,6 @@
             wrapper.appendChild(im);
             group.appendChild(wrapper);
         }
-        results.append(group, document.createElement("hr"));
+        return group;
     }
 </script>
