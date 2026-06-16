@@ -1,12 +1,53 @@
-<infer-image id="infer" name="images" multiple />
+<infer-image id="infer" name="images" multiple></infer-image>
 
 <script>
-    document.getElementById("infer").onInference = function (results, request, response) {
-        let s = "";
-        let n = response?.anomaly_maps?.length || 0;
-        for (let i = 0; i < n; i++) {
-            s += `<div><center>${response.scores[i].toFixed(3)}</center><img src="data:image/webp;base64,${response.anomaly_maps[i]}"></div>`;
+    document.getElementById("infer").onInference = function (request, response) {
+        if (!response.anomaly_maps || response.anomaly_maps.length === 0) {
+            return;
         }
-        results.innerHTML += "<div class=group>" + s + "</div><hr>";
+
+        const images = request.getAll("images");
+        const { anomaly_maps, scores } = response;
+        return scores.map((score, i) => {
+            const wrapper = document.createElement("div");
+            wrapper.className = "activation-wrapper";
+
+            const reference = document.createElement("img");
+            reference.src = URL.createObjectURL(images[i]);
+
+            const showActivation = document.createElement("show-activation");
+            showActivation.map = anomaly_maps[i];
+            showActivation.className = "activation";
+            if (score < showActivation.high) {
+                showActivation.style += "opacity: 0;";
+            }
+
+            const title = document.createElement("span");
+            title.innerText = response.scores[i].toFixed(3) < showActivation.high ? "✓" : "⨯";
+            title.style = response.scores[i].toFixed(3) < showActivation.high ? "color: rgb(0,255,0);" : "color: rgb(214,0,0);";
+            title.className = "title";
+
+            const style = document.createElement("style");
+            style.innerText = `
+                .activation-wrapper {
+                    display: inline-grid;
+                    margin: 0 0.5rem;
+                    grid-template-areas: "all";
+                    width: fit-content;
+
+                    .activation, .title, img {
+                        grid-area: all;
+                    }
+                    .title {
+                        margin: auto;
+                        font-size: 15rem;
+                        filter: drop-shadow(0 0 5px rgb(214,214,214));
+                    }
+                }
+            `;
+
+            wrapper.append(reference, showActivation, title, style);
+            return wrapper;
+        });
     }
 </script>
