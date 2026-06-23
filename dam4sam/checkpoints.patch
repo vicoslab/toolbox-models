@@ -1,0 +1,56 @@
+diff --git a/utils/utils.py b/utils/utils.py
+index 478f133..cad5868 100644
+--- a/utils/utils.py
++++ b/utils/utils.py
+@@ -3,6 +3,7 @@ import cv2
+ import numpy as np
+ from vot.region import RegionType
+ from vot.region.raster import calculate_overlaps
++from huggingface_hub import hf_hub_download, try_to_load_from_cache, _CACHED_NO_EXIST
+ 
+ 
+ def keep_largest_component(mask):
+@@ -27,29 +28,35 @@ def keep_largest_component(mask):
+ def determine_tracker(tracker_name):
+     path_ = os.path.abspath(os.path.dirname(__file__))
+     if tracker_name == "sam21pp-L":
+-        checkpoint = os.path.join(path_, "../checkpoints/sam2.1_hiera_large.pt")
++        args=dict(repo_id="facebook/sam2.1-hiera-large", filename="sam2.1_hiera_large.pt")
+         model_cfg = "sam21pp_hiera_l.yaml"
+     elif tracker_name == "sam21pp-B":
+-        checkpoint = os.path.join(path_, "../checkpoints/sam2.1_hiera_base_plus.pt")
++        args=dict(repo_id="facebook/sam2.1-hiera-base-plus", filename="sam2.1_hiera_base_plus.pt")
+         model_cfg = "sam21pp_hiera_b+.yaml"
+     elif tracker_name == "sam21pp-S":
+-        checkpoint = os.path.join(path_, "../sam2.1_hiera_small.pt")
++        args=dict(repo_id="facebook/sam2.1-hiera-small", filename="sam2.1_hiera_small.pt")
+         model_cfg = "sam21pp_hiera_s.yaml"
+     elif tracker_name == "sam21pp-T":
+-        checkpoint = os.path.join(path_, "../sam2.1_hiera_tiny.pt")
++        args=dict(repo_id="facebook/sam2.1-hiera-tiny", filename="sam2.1_hiera_tiny.pt")
+         model_cfg = "sam21pp_hiera_t.yaml"
+     elif tracker_name == "sam2pp-L":
+-        checkpoint = os.path.join(path_, "../sam2_hiera_large.pt")
++        args=dict(repo_id="facebook/sam2-hiera-large", filename="sam2_hiera_large.pt")
+         model_cfg = "sam2pp_hiera_l.yaml"
+     elif tracker_name == "sam2pp-B":
+-        checkpoint = os.path.join(path_, "../sam2_hiera_base_plus.pt")
++        args=dict(repo_id="facebook/sam2-hiera-base-plus", filename="sam2_hiera_base_plus.pt")
+         model_cfg = "sam2pp_hiera_b+.yaml"
+     elif tracker_name == "sam2pp-S":
+-        checkpoint = os.path.join(path_, "../sam2_hiera_small.pt")
++        args=dict(repo_id="facebook/sam2-hiera-small", filename="sam2_hiera_small.pt")
+         model_cfg = "sam2pp_hiera_s.yaml"
+     elif tracker_name == "sam2pp-T":
+-        checkpoint = os.path.join(path_, "../sam2_hiera_tiny.pt")
++        args=dict(repo_id="facebook/sam2-hiera-tiny", filename="sam2_hiera_tiny.pt")
+         model_cfg = "sam2pp_hiera_t.yaml"
++
++    checkpoint = try_to_load_from_cache(cache_dir=os.environ.get("HUGGINGFACE_HUB_CACHE"), **args)
++    if checkpoint is _CACHED_NO_EXIST:
++        raise "Invalid sam2 configuration"
++    if not isinstance(checkpoint, str):
++        checkpoint = hf_hub_download(**args)
+     return checkpoint, model_cfg
+ 
+ def get_seq_names(dataset_path):

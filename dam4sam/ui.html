@@ -1,0 +1,139 @@
+<infer-video name="image">
+    <!-- <button id="infer">Start tracking</button> -->
+    <input type="hidden" id="uuid" name="id">
+    <infer-bbox name="box" id="infer"></infer-bbox>
+    <div id="results"></div>
+</infer-video>
+<style>
+    .dotted .maybeDotted {
+        stroke-dasharray: 2;
+        stroke-width: 1px;
+    }
+</style>
+
+<script>
+    const bbox = document.querySelector("infer-bbox");
+    bbox.style.display = "none";
+
+    const toggleBbox = document.createElement("button");
+    toggleBbox.addEventListener("click", (e) => {
+        e.preventDefault();
+        bbox.style.display = bbox.style.display ? "" : "none"
+    });
+    toggleBbox.title = "Toggle bounding box drawing mode";
+    toggleBbox.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" fill="none" stroke-width="1.5px" stroke="currentColor"><path d="M 13 20 H 4 V 4 H 20 V 13 M 17 20 H 23 M 20 23 V 17"/></svg>`;
+
+    const toggleLive = document.createElement("button");
+    toggleLive.addEventListener("click", (e) => {
+        e.preventDefault();
+        toggleLive.value = toggleLive.classList.toggle("dotted", !(toggleLive.value === "true"));
+    });
+    toggleLive.title = "Toggle live mode";
+    toggleLive.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" fill="none" stroke-width="1.5px" stroke="currentColor">
+        <path d="M 22 22 V 11 H 11 V 22 H 22"/>
+        <path class="maybeDotted" d="M 19 11 V 8 H 8 V 19 H 11"/>
+        <path class="maybeDotted" d="M 16 8 V 5 H 5 V 16 H 8"/>
+        <path d="M 13 5 V 2 H 2 V 13 H 5"/>
+        </svg>`;
+
+
+    window.onload = () => {
+        // internals attach later so we need to do it here
+        const form = bbox.internals_.form;
+        form.addEventListener("reset", () => {
+            toggleBbox.style.display = "";
+            toggleLive.style.display = "";
+            uuid.value = null;
+        });
+        form.addEventListener("infer", () => toggleBbox.style.display = "none");
+        document.querySelector(".toolbar").append(toggleBbox, toggleLive);
+    };
+
+    const uuid = document.getElementById("uuid");
+    const video = document.querySelector("infer-video");
+    function b64(text) {
+        return `data: image/webp; base64, ${text}`
+    }
+    document.getElementById("infer").onInference = (request, response) => {
+        toggleBbox.style.display = "none";
+        toggleLive.style.display = "none";
+        video.video.style.display = "none";
+
+        let showDetections;
+        if (toggleLive.value === "true") {
+            video.play((request, response) => {
+                uuid.value = response.id;
+                if (showDetections) {
+                    showDetections.update({ reference: URL.createObjectURL(request.get("image")), masks: [b64(response.mask)] });
+                    return null;
+                } else {
+                    showDetections = document.createElement("show-detections");
+                    showDetections.masks = [b64(response.mask)];
+                    showDetections.reference = URL.createObjectURL(request.get("image"));
+                    return showDetections;
+                }
+            });
+            return null;
+        } else {
+            const showDetections = document.createElement("show-detections");
+            showDetections.masks = [b64(response.mask)];
+            showDetections.reference = b64(response.reference);
+            const id = response.id;
+            (async () => {
+                while (true) {
+                    const response = await fetch("/infer/dam4sam", {
+                        method: "POST",
+                        body: JSON.stringify({ id }),
+                        headers: { "Content-Type": "application/json" },
+                    });
+                    if (response.headers.get("content-type") == "application/json") {
+                        const { reference, mask } = await response.json();
+                        showDetections.update({ reference: b64(reference), masks: [b64(mask)] });
+                    } else {
+                        const reference = document.createElement("video");
+                        const start = request.get("image-timestamp");
+                        reference.src = URL.createObjectURL(request.get("image"));
+                        reference.controls = true;
+                        reference.controlsList = "nofullscreen";
+                        reference.disablePictureInPicture;
+                        reference.currentTime = start;
+                        reference.style.width = "100%";
+
+                        const mask = document.createElement("video");
+                        mask.src = URL.createObjectURL(await response.blob());
+                        mask.controls = false;
+                        mask.style.mixBlendMode = "multiply";
+                        mask.style.width = "100%";
+                        reference.addEventListener("play", () => mask.play());
+                        reference.addEventListener("pause", () => mask.pause());
+                        reference.addEventListener("seeked", () => mask.currentTime = reference.currentTime - start);
+                        reference.addEventListener("seeking", () => { if (start - reference.currentTime > 0) reference.currentTime = start; });
+
+                        const color = document.createElement("div");
+                        color.style.backgroundColor = "rgb(255,0,0)";
+                        color.style.position = "absolute";
+                        color.style.inset = 0;
+                        color.style.pointerEvents = "none";
+                        color.style.mixBlendMode = "lighten";
+                        color.style.opacity = 0.6;
+                        color.append(mask);
+
+                        const wrapper = document.createElement("div");
+                        wrapper.style.position = "relative";
+                        wrapper.style.width = "fit-content";
+                        wrapper.append(reference, color);
+
+                        const download = document.createElement("a");
+                        download.href = mask.src;
+                        download.download = "mask";
+                        download.innerText = "Download mask";
+
+                        document.getElementById("results").replaceChildren(wrapper, download);
+                        break;
+                    }
+                }
+            })();
+            return showDetections;
+        }
+    };
+</script>

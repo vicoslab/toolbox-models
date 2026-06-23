@@ -1,0 +1,16 @@
+{
+    "title": "DAM4SAM",
+    "description": "Distractor-aware memory-based visual object tracking",
+    "type": "object",
+    "properties": {
+        "tracker_name": {
+            "enum": [
+                "sam21pp-L",
+                "sam21pp-B",
+                "sam21pp-S",
+                "sam21pp-T"
+            ],
+            "default": "sam21pp-B"
+        }
+    }
+}
