@@ -53,7 +53,7 @@ def transform(f):
         
         pred_boxes, pred_scores, masks = f(img, boxes, enable_mask)
         masks = T.Resize((int(args['image_size'] / scale),)*2, interpolation=T.InterpolationMode.NEAREST)(masks)[:, :image.shape[0], :image.shape[1]]
-        return resize_bboxes(pred_boxes), pred_scores.tolist(), np.array(masks)
+        return resize_bboxes(pred_boxes), pred_scores.tolist(), list(np.array(masks)) # we want list of ndarrays
     return wrapped
 
 @transform
@@ -217,6 +217,9 @@ else:
         ]
 
         boxes, scores, masks = predict(image, exemplars, True)
+        for i in range(len(boxes)):
+            x1, y1, x2, y2 = map(int, boxes[i])
+            masks[i] = masks[i][y1:y2, x1:x2]
 
         return {
             'boxes': boxes,

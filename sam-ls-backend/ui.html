@@ -7,6 +7,7 @@
 <script>
     document.getElementById("infer").onInference = function (request, response) {
         const showDetections = document.createElement("show-detections");
+        showDetections.boxes = response.boxes;
         showDetections.masks = response.masks.map(x => `data: image/webp; base64, ${x}`);
         showDetections.scores = response.scores;
         showDetections.settings = true;

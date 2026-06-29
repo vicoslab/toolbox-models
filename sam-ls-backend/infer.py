@@ -50,6 +50,7 @@ else:
     import base64
     from label_studio_ml.api import init_app
     from flask import request
+    from sam3.model.sam3_tracker_utils import mask_to_box
 
     class SegmentAnything(LabelStudioMLBase):
         """Custom ML Backend model
@@ -160,10 +161,14 @@ else:
         
         inference_state['scores'] = inference_state['scores'].detach().cpu().type(torch.float32).numpy()
         sorted_ind = np.argsort(inference_state['scores'])[::-1]
-        masks = (inference_state['masks'].detach().cpu().squeeze(1).numpy()*255).astype(np.uint8)[sorted_ind]
+        boxes = mask_to_box(inference_state['masks'].detach()).cpu().squeeze(1).numpy()[sorted_ind]
+        masks = list((inference_state['masks'].detach().cpu().squeeze(1).numpy()*255).astype(np.uint8)[sorted_ind])
+        for i, (x1, y1, x2, y2) in enumerate(boxes):
+            masks[i] = masks[i][y1:y2, x1:x2]
         scores = inference_state['scores'][sorted_ind]
 
         return {
+            'boxes': boxes.tolist(),
             'masks': list(map(encode, masks)),
-            'scores': list(map(float, scores)),
+            'scores': scores.tolist(),
         }
