@@ -7,10 +7,11 @@
 <script>
     document.getElementById("infer").onInference = function (request, response) {
         const showDetections = document.createElement("show-detections");
-        showDetections.masks = response.masks;
+        showDetections.masks = response.masks.map(x => `data: image/webp; base64, ${x}`);
         showDetections.scores = response.scores;
         showDetections.boxes = response.boxes;
-        showDetections.reference = request.get("image");
+        showDetections.settings = true;
+        showDetections.reference = URL.createObjectURL(request.get("image"));
         return showDetections;
     }
 </script>
