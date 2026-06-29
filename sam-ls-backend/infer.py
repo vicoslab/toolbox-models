@@ -161,14 +161,15 @@ else:
         
         inference_state['scores'] = inference_state['scores'].detach().cpu().type(torch.float32).numpy()
         sorted_ind = np.argsort(inference_state['scores'])[::-1]
-        boxes = mask_to_box(inference_state['masks'].detach()).cpu().squeeze(1).numpy()[sorted_ind]
+        boxes = list(mask_to_box(inference_state['masks'].detach()).cpu().squeeze(1).numpy()[sorted_ind])
         masks = list((inference_state['masks'].detach().cpu().squeeze(1).numpy()*255).astype(np.uint8)[sorted_ind])
         for i, (x1, y1, x2, y2) in enumerate(boxes):
             masks[i] = masks[i][y1:y2, x1:x2]
+            boxes[i] = [x1/width, y1/height, (x2-x1)/width, (y2-y1)/height]
         scores = inference_state['scores'][sorted_ind]
 
         return {
-            'boxes': boxes.tolist(),
+            'boxes': boxes,
             'masks': list(map(encode, masks)),
             'scores': scores.tolist(),
         }

@@ -220,6 +220,7 @@ else:
         for i in range(len(boxes)):
             x1, y1, x2, y2 = map(int, boxes[i])
             masks[i] = masks[i][y1:y2, x1:x2]
+            boxes[i] = [x1/image_width, y1/image_height, (x2-x1)/image_width, (y2-y1)/image_height]
 
         return {
             'boxes': boxes,

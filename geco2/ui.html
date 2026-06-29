@@ -10,6 +10,7 @@
         showDetections.masks = response.masks.map(x => `data: image/webp; base64, ${x}`);
         showDetections.scores = response.scores;
         showDetections.boxes = response.boxes;
+        showDetections.exemplars = JSON.parse(request.get("boxes"));
         showDetections.settings = true;
         showDetections.reference = URL.createObjectURL(request.get("image"));
         return showDetections;
