@@ -124,12 +124,14 @@ else:
                 reader = (ffmpeg
                     .input(filename, ss=float(data.get("image-timestamp", 0)))
                     .output('pipe:', format='rawvideo', pix_fmt='rgb24')
+                    .global_args('-nostats') # prevent stderr from clogging up, if there are still issues with hang-ups we might need to pipe, peek and read stderr manually
                     .run_async(pipe_stdout=True, quiet=True))
 
                 encoder = (ffmpeg
                     .input('pipe:', format='rawvideo', pix_fmt='gray', s='{}x{}'.format(image_width, image_height), r=str(fps))
                     .output(filename.replace('.mp4', '.output.mp4'), pix_fmt='yuv420p')
                     .overwrite_output()
+                    .global_args('-nostats') # same as above
                     .run_async(pipe_stdin=True, quiet=True))
 
                 tracker = DAM4SAMTracker(config['tracker_name'])
