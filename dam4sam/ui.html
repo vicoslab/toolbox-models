@@ -1,5 +1,5 @@
+<soft-reset></soft-reset>
 <infer-video name="image">
-    <!-- <button id="infer">Start tracking</button> -->
     <input type="hidden" id="uuid" name="id">
     <infer-bbox name="box" id="infer"></infer-bbox>
     <div id="results"></div>
@@ -36,33 +36,41 @@
         <path d="M 13 5 V 2 H 2 V 13 H 5"/>
         </svg>`;
 
-
+    let canSend = true;
+    const uuid = document.getElementById("uuid");
     window.onload = () => {
         // internals attach later so we need to do it here
         const form = bbox.internals_.form;
-        form.addEventListener("reset", () => {
+        const reset = () => {
             toggleBbox.style.display = "";
             toggleLive.style.display = "";
             uuid.value = null;
+            canSend = false;
+        };
+        form.addEventListener("reset", reset);
+        form.addEventListener("softreset", reset);
+        form.addEventListener("infer", () => {
+            toggleBbox.style.display = "none";
+            toggleLive.style.display = "none";
+            canSend = true;
         });
-        form.addEventListener("infer", () => toggleBbox.style.display = "none");
-        document.querySelector(".toolbar").append(toggleBbox, toggleLive);
+        document.querySelector(".toolbar-right").append(toggleBbox, toggleLive);
     };
 
-    const uuid = document.getElementById("uuid");
     const video = document.querySelector("infer-video");
     function b64(text) {
         return `data: image/webp; base64, ${text}`
     }
     document.getElementById("infer").onInference = (request, response) => {
-        toggleBbox.style.display = "none";
-        toggleLive.style.display = "none";
-        video.video.style.display = "none";
-
         let showDetections;
         if (toggleLive.value === "true") {
+            let first = true;
             video.play((request, response) => {
-                uuid.value = response.id;
+                // only set id on first iteration, so there isn't any race condition issues with id getting set after form reset
+                if (first) {
+                    uuid.value = response.id;
+                    first = false;
+                }
                 if (showDetections) {
                     showDetections.update({ reference: URL.createObjectURL(request.get("image")), masks: [b64(response.mask)] });
                     return null;
@@ -75,12 +83,13 @@
             });
             return null;
         } else {
+            uuid.value = null;
             const showDetections = document.createElement("show-detections");
             showDetections.masks = [b64(response.mask)];
             showDetections.reference = b64(response.reference);
             const id = response.id;
             (async () => {
-                while (true) {
+                while (canSend) {
                     const response = await fetch("/infer/dam4sam", {
                         method: "POST",
                         body: JSON.stringify({ id }),
