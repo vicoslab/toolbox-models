@@ -95,7 +95,9 @@
                         body: JSON.stringify({ id }),
                         headers: { "Content-Type": "application/json" },
                     });
-                    if (response.headers.get("content-type") == "application/json") {
+                    if (response.status !== 200) {
+                        break;
+                    } else if (response.headers.get("content-type") == "application/json") {
                         const { reference, mask } = await response.json();
                         showDetections.update({ reference: b64(reference), masks: [b64(mask)] });
                     } else {
