@@ -69,6 +69,7 @@ else:
     import base64
     import subprocess
     import ffmpeg
+    import numpy as np
 
     tmproot = Path("/tmp/dam4sam")
     tmproot.mkdir(exist_ok=True)
@@ -78,11 +79,15 @@ else:
     app = Flask(__name__)
 
     def get_video_info(filename):
-        probe = ffmpeg.probe(filename)
+        probe = ffmpeg.probe(filename, show_packets=None, show_entries="packet=pts_time")
         video_info = next(s for s in probe['streams'] if s['codec_type'] == 'video')
         width = int(video_info['width'])
         height = int(video_info['height'])
-        fps = int(video_info['nb_frames']) / float(video_info['duration'])
+        if filename.endswith('webm'):
+            frame_deltas = np.ediff1d(np.vectorize(lambda x: float(x['pts_time']))(probe['packets']))
+            fps = 1 / np.median(frame_deltas)
+        else:
+            fps = int(video_info['nb_frames']) / float(video_info['duration'])
         return width, height, fps
 
     def encode(img):
@@ -117,8 +122,9 @@ else:
 
                 outputs = tracker.initialize(image, None, bbox=[x * image_width, y * image_height, (x + box_width) * image_width, (y + box_height) * image_height])
                 return { 'mask': encode((outputs['pred_mask'] * 255).astype(np.uint8)), 'id': uuid }
-            elif file_type == 'video/mp4':
-                filename = str(tmproot / uuid) + '.mp4'
+            elif file_type in ['video/mp4', 'video/webm']:
+                _, ext = file_type.split('/')
+                filename = f'{tmproot / uuid}.{ext}'
                 file.save(filename)
                 image_width, image_height, fps = get_video_info(filename)
                 reader = (ffmpeg
@@ -129,13 +135,13 @@ else:
 
                 encoder = (ffmpeg
                     .input('pipe:', format='rawvideo', pix_fmt='gray', s='{}x{}'.format(image_width, image_height), r=str(fps))
-                    .output(filename.replace('.mp4', '.output.mp4'), pix_fmt='yuv420p')
+                    .output(filename.replace(f'.{ext}', f'.output.{ext}'), pix_fmt='yuv420p')
                     .overwrite_output()
                     .global_args('-nostats') # same as above
                     .run_async(pipe_stdin=True, quiet=True))
 
                 tracker = DAM4SAMTracker(config['tracker_name'])
-                instances[uuid] = tracker, (reader, encoder, (image_width, image_height))
+                instances[uuid] = tracker, (reader, encoder, (image_width, image_height), ext)
                 image = Image.frombytes('RGB', (image_width, image_height), reader.stdout.read(image_width * image_height * 3))
                 outputs = tracker.initialize(image, None, bbox=[x * image_width, y * image_height, (x + box_width) * image_width, (y + box_height) * image_height])
                 frame = (outputs['pred_mask'] * 255).astype(np.uint8)
@@ -146,13 +152,13 @@ else:
         elif instance := instances.get(uuid):
             tracker, pipeline = instance
             if pipeline:
-                reader, encoder, size = pipeline
+                reader, encoder, size, ext = pipeline
                 in_bytes = reader.stdout.read(size[0] * size[1] * 3)
                 if 'finish' in data or not in_bytes:
                     encoder.stdin.close()
                     reader.wait()
                     encoder.wait()
-                    return send_file(f'/tmp/dam4sam/{uuid}.output.mp4')
+                    return send_file(f'/tmp/dam4sam/{uuid}.output.{ext}')
                 else:
                     image = Image.frombytes('RGB', size, in_bytes)
                     outputs = tracker.track(image)
