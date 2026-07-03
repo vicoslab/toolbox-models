@@ -16,6 +16,7 @@
     bbox.style.display = "none";
 
     const toggleBbox = document.createElement("button");
+    toggleBbox.style.display = "none";
     toggleBbox.addEventListener("click", (e) => {
         e.preventDefault();
         bbox.style.display = bbox.style.display ? "" : "none"
@@ -24,6 +25,7 @@
     toggleBbox.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" stroke-linecap="round" fill="none" stroke-width="1.5px" stroke="currentColor"><path d="M 13 20 H 4 V 4 H 20 V 13 M 17 20 H 23 M 20 23 V 17"/></svg>`;
 
     const toggleLive = document.createElement("button");
+    toggleLive.style.display = "none";
     toggleLive.addEventListener("click", (e) => {
         e.preventDefault();
         toggleLive.value = toggleLive.classList.toggle("dotted", !(toggleLive.value === "true"));
@@ -38,22 +40,22 @@
 
     let canSend = true;
     const uuid = document.getElementById("uuid");
+    const setVisible = visible => {
+        toggleBbox.style.display = visible ? "" : "none";
+        toggleLive.style.display = visible ? "" : "none";
+    };
     window.onload = () => {
         // internals attach later so we need to do it here
         const form = bbox.internals_.form;
         const reset = () => {
-            toggleBbox.style.display = "";
-            toggleLive.style.display = "";
+            bbox.style.display = "none";
             uuid.value = null;
             canSend = false;
         };
-        form.addEventListener("reset", reset);
-        form.addEventListener("softreset", reset);
-        form.addEventListener("infer", () => {
-            toggleBbox.style.display = "none";
-            toggleLive.style.display = "none";
-            canSend = true;
-        });
+        form.addEventListener("reset", () => { setVisible(false); reset(); });
+        form.addEventListener("softreset", () => { setVisible(true); reset(); });
+        form.addEventListener("infer", () => { setVisible(false); canSend = true; });
+        form.addEventListener("input", () => setVisible(true));
         document.querySelector(".toolbar-right").append(toggleBbox, toggleLive);
     };
 
