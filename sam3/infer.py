@@ -3,10 +3,9 @@ import modelargs
 _ = modelargs.parse("./model.json")
 
 import os
-os.chdir("../sam")
 import site
 CACHE = os.environ["TOOLBOX_CACHE"]
-site.addsitedir(f'{CACHE}/sam-ls-backend')
+os.chdir(f'{CACHE}/sam')
 
 import torch
 import numpy as np
