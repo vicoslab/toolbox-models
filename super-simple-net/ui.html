@@ -28,6 +28,7 @@
             title.innerText = response.scores[i].toFixed(3) < showActivation.high ? "✓" : "⨯";
             title.style = response.scores[i].toFixed(3) < showActivation.high ? "color: rgb(0,255,0);" : "color: rgb(214,0,0);";
             title.className = "title";
+            reference.addEventListener("load", () => title.style.fontSize = Math.ceil((reference.naturalWidth + reference.naturalHeight) / 2 / 4) + "px");
 
             const style = document.createElement("style");
             style.innerText = `
@@ -42,7 +43,6 @@
                     }
                     .title {
                         margin: auto;
-                        font-size: 15rem;
                         filter: drop-shadow(0 0 5px rgb(214,214,214));
                     }
                 }
