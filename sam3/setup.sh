@@ -9,4 +9,4 @@ curl -L https://www.modelscope.cn/models/facebook/sam3/resolve/master/sam3.pt -o
 echo "SHA256 (sam3.pt) = 9999e2341ceef5e136daa386eecb55cb414446a00ac2b55eb2dfd2f7c3cf8c9e" | cksum -c
 
 uv venv --python 3.12
-uv pip install /opt/apps/label-studio-ml-backend /opt/apps/modelargs . gunicorn einops pycocotools psutil
+uv pip install /opt/apps/label-studio-ml-backend /opt/apps/modelargs . gunicorn einops pycocotools psutil setuptools==79.0.0
