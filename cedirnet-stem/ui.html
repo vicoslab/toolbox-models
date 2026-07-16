@@ -1,0 +1,45 @@
+<infer-image id="infer" name="images" multiple placeholder="Select pairs of STEM images (first BF, then HAADF)">
+  <div id="results"></div>
+</infer-image>
+
+<script>
+  function createCircle(center, radius, score, image) {
+    const circle = document.createElement("div");
+    const displayRadius = radius * image.clientWidth / image.naturalWidth;
+    circle.style.position = "absolute";
+    circle.style.left = `${center[0] * image.clientWidth - displayRadius}px`;
+    circle.style.top = `${center[1] * image.clientHeight - displayRadius}px`;
+    circle.style.width = `${2 * displayRadius}px`;
+    circle.style.height = `${2 * displayRadius}px`;
+    circle.style.border = "2px solid limegreen";
+    circle.style.borderRadius = "50%";
+    circle.style.boxSizing = "border-box";
+    circle.style.pointerEvents = "none";
+    circle.title = `confidence ${score.toFixed(3)}, radius ${radius.toFixed(1)} px`;
+    return circle;
+  }
+
+  document.getElementById("infer").onInference = function (request, response) {
+    const group = document.createElement("div");
+    group.classList.add("group");
+    const images = request.getAll("images");
+    const { centers, scores, radii } = response;
+
+    for (let i = 0; i < images.length / 2; i++) {
+      const wrapper = document.createElement("div");
+      wrapper.style.position = "relative";
+      wrapper.style.width = "fit-content";
+
+      const image = document.createElement("img");
+      image.src = URL.createObjectURL(images[2 * i]);
+      image.onload = () => {
+        for (let j = 0; j < centers[i].length; j++) {
+          wrapper.appendChild(createCircle(centers[i][j], radii[i][j], scores[i][j], image));
+        }
+      };
+      wrapper.appendChild(image);
+      group.appendChild(wrapper);
+    }
+    return group;
+  };
+</script>
