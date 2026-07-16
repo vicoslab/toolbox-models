@@ -8,10 +8,11 @@ site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet-stem/src')
 import modelargs
 import numpy as np
 import torch
-from PIL import Image, ImageDraw, ImageOps
+from PIL import Image, ImageDraw
 
 from models import get_center_model, get_model
 
+from annotations import load_stem_image
 from base_config import NUM_VECTOR_FIELDS, get_args
 from checkpoint import load_compatible_model_state, safe_torch_load
 from results import label_studio_vector_result, restore_prediction
@@ -78,10 +79,8 @@ MODEL.eval()
 CENTER_MODEL.eval()
 
 
-def load(src):
-    image = Image.open(src)
-    image = ImageOps.exif_transpose(image)
-    return np.asarray(image.convert("RGB"))
+def load(bf_source, haadf_source=None):
+    return np.asarray(load_stem_image(bf_source, haadf_source))
 
 
 def transform(images: Sequence[np.ndarray]):
@@ -140,9 +139,11 @@ def predict(images: List[np.ndarray]):
 
 
 if __name__ == "__main__":
-    image = load(sys.argv[1])
+    haadf_source = sys.argv[2] if len(sys.argv) > 2 else None
+    image = load(sys.argv[1], haadf_source)
     centers, scores, radii = predict([image])
-    canvas = Image.fromarray(image)
+    display_image = np.repeat(image[:, :, 1:2], 3, axis=2)
+    canvas = Image.fromarray(display_image)
     draw = ImageDraw.Draw(canvas)
     for center, score, radius in zip(centers[0], scores[0], radii[0]):
         x = center[0] * canvas.width
@@ -227,8 +228,15 @@ else:
 
     @app.route("/infer", methods=["POST"])
     def infer():
-        if "images" not in request.files:
-            return {"centers": [], "scores": [], "radii": []}
-        images = [load(image) for image in request.files.getlist("images")]
+        if "images" not in request.files or "haadf_images" not in request.files:
+            return {"centers": [], "scores": [], "radii": []}, 400
+        bf_images = request.files.getlist("images")
+        haadf_images = request.files.getlist("haadf_images")
+        if len(bf_images) != len(haadf_images):
+            return {"error": "BF and HAADF image counts must match"}, 400
+        images = [
+            load(bf_image, haadf_image)
+            for bf_image, haadf_image in zip(bf_images, haadf_images)
+        ]
         centers, scores, radii = predict(images)
         return {"centers": centers, "scores": scores, "radii": radii}

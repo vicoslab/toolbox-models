@@ -4,7 +4,7 @@
     "type": "object",
     "properties": {
         "manifest": {
-            "description": "Training manifest containing 'train' and optionally 'test' lists. Each item has 'image_path' and 'points'. A point-radius annotation is [x, y, radius]. Toolbox Vector exports [x, y, radius_x, radius_y], where the distance from the center to the second vertex is used as radius.",
+            "description": "Training manifest containing 'train' and optionally 'test' lists. Each item has 'image_path' (the BF image), 'points', and optionally 'haadf_image_path'. If 'haadf_image_path' is omitted, the HAADF image is resolved by replacing '_BF.' with '_HAADF.' in the BF filename; both files are required. Inputs are combined exactly as upstream CeDiRNet-STEM expects: BF grayscale, HAADF grayscale, and a zero third channel. A point-radius annotation is [x, y, radius]. Toolbox Vector exports [x, y, radius_x, radius_y], where the distance from the center to the second vertex is used as radius.",
             "type": "string"
         },
         "name": {

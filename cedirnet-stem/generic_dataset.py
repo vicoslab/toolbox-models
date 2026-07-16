@@ -7,10 +7,9 @@ import os
 
 import numpy as np
 import torch
-from PIL import Image
 from torch.utils.data import Dataset
 
-from .annotations import build_targets
+from .annotations import build_targets, load_stem_image
 from utils import transforms as my_transforms
 
 
@@ -65,7 +64,13 @@ class GenericPointRadiusDataset(Dataset):
         item = self.items[index]
         relative_path = item["image_path"]
         image_path = os.path.abspath(os.path.join(self.root_dir, relative_path))
-        image = Image.open(image_path).convert("RGB")
+        haadf_relative_path = item.get("haadf_image_path")
+        haadf_path = (
+            os.path.abspath(os.path.join(self.root_dir, haadf_relative_path))
+            if haadf_relative_path
+            else None
+        )
+        image = load_stem_image(image_path, haadf_path)
         width, height = image.size
 
         targets = build_targets(

@@ -4,6 +4,7 @@ group: Counting
 image:
 details: |
   <h1>Annotate particle centers and radii in STEM images</h1>
+  <p>Each sample requires matching BF and HAADF images. Annotate the BF image; the model combines BF grayscale, HAADF grayscale, and a zero third channel.</p>
   <p>Draw each vector from the particle center to its circumference. The first point is the center and the vector length is the radius.</p>
   <dl>
     <dt>Industry Applications</dt>

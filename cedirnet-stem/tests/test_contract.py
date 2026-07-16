@@ -1,7 +1,10 @@
 import importlib.util
 import json
 import pathlib
+import tempfile
 import unittest
+
+from PIL import Image
 
 
 MODEL_DIR = pathlib.Path(__file__).resolve().parents[1]
@@ -49,6 +52,36 @@ class AnnotationContractTest(unittest.TestCase):
         self.assertEqual(int(targets["instance"][6, 8]), 1)
         self.assertAlmostEqual(float(targets["shape_coef"][0, 6, 8]), 4.0)
         self.assertEqual(int(targets["label"][6, 8]), 1)
+
+    def test_stem_channels_are_bf_haadf_and_zero(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            bf_path = root / "particle_BF.png"
+            haadf_path = root / "particle_HAADF.png"
+            Image.new("L", (3, 2), color=17).save(bf_path)
+            Image.new("L", (3, 2), color=91).save(haadf_path)
+
+            image = self.annotations.load_stem_image(bf_path)
+            self.assertEqual(image.mode, "RGB")
+            self.assertEqual(image.getpixel((1, 1)), (17, 91, 0))
+
+    def test_missing_haadf_pair_is_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            bf_path = pathlib.Path(directory) / "particle_BF.png"
+            Image.new("L", (3, 2), color=17).save(bf_path)
+            with self.assertRaisesRegex(FileNotFoundError, "HAADF"):
+                self.annotations.load_stem_image(bf_path)
+
+    def test_haadf_primary_still_composes_bf_then_haadf(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            bf_path = root / "particle_BF.png"
+            haadf_path = root / "particle_HAADF.png"
+            Image.new("L", (3, 2), color=17).save(bf_path)
+            Image.new("L", (3, 2), color=91).save(haadf_path)
+
+            image = self.annotations.load_stem_image(haadf_path)
+            self.assertEqual(image.getpixel((1, 1)), (17, 91, 0))
 
 
 class InferenceContractTest(unittest.TestCase):
@@ -160,6 +193,8 @@ class PreparedModelFilesTest(unittest.TestCase):
         description = schema["properties"]["manifest"]["description"]
         self.assertIn("[x, y, radius]", description)
         self.assertIn("[x, y, radius_x, radius_y]", description)
+        self.assertIn("BF", description)
+        self.assertIn("HAADF", description)
 
     def test_label_config_uses_vector_radius_handle(self):
         config = (MODEL_DIR / "config.yml").read_text()
@@ -190,6 +225,7 @@ class PreparedModelFilesTest(unittest.TestCase):
         self.assertIn('"radii"', infer)
         self.assertIn("label_studio_vector_result", infer)
         self.assertIn("pred_attributes", infer)
+        self.assertIn("load_stem_image", infer)
         self.assertIn('ARGS["model"]["kwargs"]["pretrained"] = False', infer)
 
     def test_browser_ui_draws_radius_circles(self):
