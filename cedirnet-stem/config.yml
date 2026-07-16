@@ -1,0 +1,21 @@
+title: STEM Particle Center and Radius
+type: community
+group: Counting
+image:
+details: |
+  <h1>Annotate particle centers and radii in STEM images</h1>
+  <p>Draw each vector from the particle center to its circumference. The first point is the center and the vector length is the radius.</p>
+  <dl>
+    <dt>Industry Applications</dt>
+    <dd>Nanoparticle detection and size estimation</dd>
+    <dt>Annotation</dt>
+    <dd>Center point + radius</dd>
+  </dl>
+config: |
+  <View>
+    <Labels name="labels" toName="image">
+      <Label value="Particle" background="rgba(20, 200, 80, 0.7)" />
+    </Labels>
+    <Image name="image" value="$image" zoom="true" />
+    <Vector name="radius" toName="image" smart="true" />
+  </View>

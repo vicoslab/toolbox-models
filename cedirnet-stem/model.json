@@ -1,0 +1,68 @@
+{
+    "title": "CeDiRNet-STEM",
+    "description": "Center and particle-radius estimation for STEM images",
+    "type": "object",
+    "properties": {
+        "manifest": {
+            "description": "Training manifest containing 'train' and optionally 'test' lists. Each item has 'image_path' and 'points'. A point-radius annotation is [x, y, radius]. Toolbox Vector exports [x, y, radius_x, radius_y], where the distance from the center to the second vertex is used as radius.",
+            "type": "string"
+        },
+        "name": {
+            "description": "Title of the training experiment.",
+            "type": "string"
+        },
+        "model": {
+            "description": "Path to a CeDiRNet-STEM model checkpoint. The stock upstream radius+circularity checkpoint is accepted; its shared center-direction and radius tensors are loaded while the circularity-only head is ignored. For training, this is an optional initialization checkpoint.",
+            "format": "file:checkpoint.pth",
+            "type": "string"
+        },
+        "localisation": {
+            "description": "Optional path to a pretrained CeDiRNet localisation-head checkpoint.",
+            "format": "file:checkpoint.pth",
+            "type": "string"
+        },
+        "score_threshold": {
+            "description": "Minimum center confidence returned during inference.",
+            "type": "number",
+            "default": 0.5,
+            "minimum": 0,
+            "maximum": 1
+        },
+        "save_interval": {
+            "description": "Number of epochs between checkpoints.",
+            "type": "integer",
+            "default": 10,
+            "minimum": 1
+        },
+        "width": {
+            "description": "Network input width; must be divisible by 32.",
+            "type": "integer",
+            "default": 512,
+            "multipleOf": 32
+        },
+        "height": {
+            "description": "Network input height; must be divisible by 32.",
+            "type": "integer",
+            "default": 512,
+            "multipleOf": 32
+        },
+        "epochs": {
+            "description": "Number of training epochs.",
+            "type": "integer",
+            "default": 100,
+            "minimum": 1
+        },
+        "batch_size": {
+            "description": "Training batch size.",
+            "type": "integer",
+            "default": 2,
+            "minimum": 1
+        },
+        "workers": {
+            "description": "Number of data-loader worker processes.",
+            "type": "integer",
+            "default": 2,
+            "minimum": 0
+        }
+    }
+}

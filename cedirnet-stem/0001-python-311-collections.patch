@@ -1,0 +1,10 @@
+diff --git a/src/utils/transforms.py b/src/utils/transforms.py
+index 1e97e20..70edb33 100644
+--- a/src/utils/transforms.py
++++ b/src/utils/transforms.py
+@@ -1,3 +1,5 @@
+ ﻿import collections
++from collections.abc import Iterable
++collections.Iterable = Iterable
+ import random
+ import os
