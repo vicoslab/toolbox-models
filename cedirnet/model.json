@@ -4,43 +4,52 @@
     "type": "object",
     "properties": {
         "manifest": {
+            "title": "Dataset manifest",
             "description": "The dataset manifest should be a file containing a JSON object with attributes 'train' and 'test', each of which should be a list of objects with properties 'points' (list of [x1,y1,x2,y2], containing integer representations of starting point and second point which signifies direction) and 'image_path' (relative to the manifest file).",
             "type": "string"
         },
         "name": {
+            "title": "Experiment name",
             "description": "Title of experiments.",
             "type": "string"
         },
         "model": {
+            "title": "Weights",
             "description": "Path to model checkpoint.",
             "format": "file:checkpoint.pth",
             "type": "string"
         },
         "localisation": {
+            "title": "Localisation weights",
             "description": "Path to localisation model checkpoint.",
             "type": "string"
         },
         "save_interval": {
+            "title": "Weights save interval",
             "description": "Epoch count between checkpoints.",
             "type": "integer",
             "default": 4
         },
         "display_interval": {
+            "title": "Visualisation interval",
             "description": "Epoch count between visualisations.",
             "type": "integer",
             "default": 4
         },
         "width": {
+            "title": "Image width",
             "description": "Width to transform image to (should be divisible by 32).",
             "type": "integer",
             "default": 640
         },
         "height": {
+            "title": "Image height",
             "description": "Height to transform image to (should be divisible by 32).",
             "type": "integer",
             "default": 480
         },
         "epochs": {
+            "title": "Training duration",
             "description": "Number of epochs to train for.",
             "type": "integer",
             "default": 10

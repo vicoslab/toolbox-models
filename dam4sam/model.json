@@ -4,6 +4,8 @@
     "type": "object",
     "properties": {
         "tracker_name": {
+            "title": "Tracker name",
+            "description": "Codename of tracker to use.",
             "enum": [
                 "sam21pp-L",
                 "sam21pp-B",

@@ -4,67 +4,83 @@
     "type": "object",
     "properties": {
         "manifest": {
+            "title": "Dataset manifest",
             "description": "The dataset manifest should be a file containing a JSON object with either a single attribute 'data', or attributes 'train' and 'test', each of which should be a list of objects with properties 'label' (with value being either 'normal' or 'abnormal'), 'image_path' and 'mask_path' (their values should be file paths, relative to the manifest file). Attributes mask_path or label may be omitted, but this will impact which training regime is used. ",
             "type": "string"
         },
         "name": {
+            "title": "Experiment name",
             "description": "Title of experiments.",
             "type": "string"
         },
         "width": {
+            "title": "Image width",
             "description": "Width to scale image to.",
             "type": "integer",
             "default": 256
         },
         "height": {
+            "title": "Image height",
             "description": "Height to scale image to.",
             "type": "integer",
             "default": 256
         },
         "weights": {
+            "title": "Weights",
             "description": "Path to saved model.",
             "format": "file:weights.pt",
             "type": "string"
         },
         "backbone": {
-            "description": "Model used for feature extraction.",
+            "title": "Feature extractor",
+            "description": "Model backbone used for feature extraction.",
             "type": "string",
             "default": "wide_resnet50_2"
         },
         "backbone_weights": {
+            "title": "Backbone weights",
             "description": "Weights used for backbone. Note: if using different weights, make sure to use _V1 version.",
             "type": "string",
             "default": "IMAGENET1K_V1"
         },
         "patch_size": {
+            "title": "Patch size",
             "type": "integer",
             "default": 3
         },
         "noise": {
+            "title": "Noise",
             "type": "boolean",
             "default": true
         },
         "noise_std": {
+            "title": "Noise standard deviation",
             "type": "number",
             "default": 0.015
         },
         "perlin": {
+            "title": "Perlin noise",
             "type": "boolean",
             "default": true
         },
         "perlin_thr": {
+            "title": "Perlin threshold",
             "type": "number",
             "default": 0.6
         },
         "flips": {
+            "title": "Flip augmentation",
             "type": "boolean",
             "default": true
         },
         "dilate": {
+            "title": "Mask dilation",
             "type": "integer",
             "default": null
         },
         "no_anomaly": {
+            "title": "Mask generation",
+            "description": "When only image-level annotations are available for an image set mask to 'full' or 'empty'.",
             "enum": [
                 "full",
                 "empty"
@@ -72,46 +88,55 @@
             "default": "empty"
         },
         "bad": {
-            "description": "Whether to add noise to already anomalous regions",
+            "title": "Overlay anomalies",
+            "description": "Whether to add noise to already anomalous regions.",
             "type": "boolean",
             "default": true
         },
         "seed": {
+            "title": "Random seed",
             "description": "Seed for random number generation.",
             "type": "integer",
             "default": 42
         },
         "batch": {
-            "description": "Batch size.",
+            "title": "Batch size",
+            "description": "Number of images to use each training step.",
             "type": "integer",
             "default": 32
         },
         "epochs": {
-            "description": "Duration of training (1 epoch == 1 pass through the dataset).",
+            "title": "Training duration",
+            "description": "Number of epochs to train for (1 epoch == 1 pass through the dataset).",
             "type": "integer",
             "default": 10
         },
         "seg_lr": {
+            "title": "Segmentation LR",
             "description": "Learning rate for segmentation head.",
             "type": "number",
             "default": 0.0002
         },
         "dec_lr": {
+            "title": "Decision LR",
             "description": "Learning rate for decision head.",
             "type": "number",
             "default": 0.0002
         },
         "adapt_lr": {
+            "title": "Feature adaptor LR",
             "description": "Learning rate for feature adaptor.",
             "type": "number",
             "default": 0.0001
         },
         "gamma": {
+            "title": "LR decay",
             "description": "Parameter for learning rate decay (MultiStepLR - for each milestone, multiply lr with gamma).",
             "type": "number",
             "default": 0.4
         },
         "eval_step_size": {
+            "title": "Evaluation interval",
             "description": "Number of steps beween each evaluation.",
             "type": "integer",
             "default": 4
