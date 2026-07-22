@@ -17,6 +17,11 @@ curl --fail --location --retry 3 \
     --output "$model_dir/localization_checkpoint.pth" \
     https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth
 
+curl --fail --location --retry 3 \
+    --output "$model_dir/stem_checkpoint.pt" \
+    https://data.vicos.si/skokec/STEM/checkpoint.pth
+echo "SHA256 (stem_checkpoint.pt) = b77a30d6346309aeb64a7646d851db74d974758bf7d8e5f2cfcfd9f081637980" | cksum -c
+
 cd "$model_dir"
 uv venv --python 3.11
 uv pip install torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128

@@ -25,7 +25,16 @@
     const images = request.getAll("images");
     const { centers, scores, radii } = response;
 
+    const results = [];
     for (let i = 0; i < images.length / 2; i++) {
+      const result = {};
+      result["image-BF"] = images[2 * i].name;
+      result["image-HAADF"] = images[2 * i + 1].name;
+      result.centers = centers[i];
+      result.scores = scores[i];
+      result.radii = radii[i];
+      results.push(result);
+
       const wrapper = document.createElement("div");
       wrapper.style.position = "relative";
       wrapper.style.width = "fit-content";
@@ -40,6 +49,13 @@
       wrapper.appendChild(image);
       group.appendChild(wrapper);
     }
-    return group;
+
+    const download = document.createElement("a");
+    download.href = URL.createObjectURL(new Blob([JSON.stringify(results)], { type: "text/plain" }));
+    download.download = "results-cedirnet.json";
+    download.innerText = "Download results";
+    download.style.pointerEvents = "auto";
+
+    return [download, group];
   };
 </script>
