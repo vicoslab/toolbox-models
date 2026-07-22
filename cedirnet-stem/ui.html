@@ -3,6 +3,21 @@
 </infer-image>
 
 <script>
+  const ZIP_UTF8_FLAG = 0x0800;
+  const ZIP16_MAX = 0xffff;
+  const ZIP32_MAX = 0xffffffff;
+  const CRC32_TABLE = (() => {
+    const table = new Uint32Array(256);
+    for (let n = 0; n < table.length; n++) {
+      let value = n;
+      for (let bit = 0; bit < 8; bit++) {
+        value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
+      }
+      table[n] = value >>> 0;
+    }
+    return table;
+  })();
+
   function createCircle(center, radius, score, image) {
     const circle = document.createElement("div");
     const displayRadius = radius * image.clientWidth / image.naturalWidth;
@@ -17,6 +32,160 @@
     circle.style.pointerEvents = "none";
     circle.title = `confidence ${score.toFixed(3)}, radius ${radius.toFixed(1)} px`;
     return circle;
+  }
+
+  function loadBrowserImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(image);
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error(`Could not decode image: ${file.name}`));
+      };
+      image.src = url;
+    });
+  }
+
+  function canvasToBlob(canvas) {
+    return new Promise((resolve, reject) => {
+      canvas.toBlob((blob) => {
+        if (blob) resolve(blob);
+        else reject(new Error("Could not rasterize inference plot"));
+      }, "image/png");
+    });
+  }
+
+  async function renderAnnotatedPng(file, centers, scores, radii) {
+    const image = await loadBrowserImage(file);
+    const canvas = document.createElement("canvas");
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Canvas rendering is unavailable");
+
+    context.drawImage(image, 0, 0);
+    context.strokeStyle = "limegreen";
+    context.lineWidth = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) / 512 * 2));
+
+    for (let i = 0; i < centers.length; i++) {
+      const x = centers[i][0] * canvas.width;
+      const y = centers[i][1] * canvas.height;
+      const radius = radii[i];
+      context.beginPath();
+      context.arc(x, y, radius, 0, 2 * Math.PI);
+      context.stroke();
+    }
+
+    return canvasToBlob(canvas);
+  }
+
+  function crc32(bytes) {
+    let crc = 0xffffffff;
+    for (const byte of bytes) {
+      crc = CRC32_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+    }
+    return (crc ^ 0xffffffff) >>> 0;
+  }
+
+  function zipTimestamp(date) {
+    const year = Math.max(1980, date.getFullYear());
+    return {
+      time: (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2),
+      date: ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate(),
+    };
+  }
+
+  function assertClassicZipLimit(value, bits, label) {
+    const maximum = bits === 16 ? ZIP16_MAX : ZIP32_MAX;
+    if (!Number.isSafeInteger(value) || value < 0 || value > maximum) {
+      throw new Error(`${label} exceeds the classic ZIP ${bits}-bit limit`);
+    }
+  }
+
+  function writeZipHeader(size, fields) {
+    const bytes = new Uint8Array(size);
+    const view = new DataView(bytes.buffer);
+    for (const [offset, width, value] of fields) {
+      if (width === 2) view.setUint16(offset, value, true);
+      else view.setUint32(offset, value, true);
+    }
+    return bytes;
+  }
+
+  async function buildZip(entries) {
+    assertClassicZipLimit(entries.length, 16, "ZIP entry count");
+    const encoder = new TextEncoder();
+    const localParts = [];
+    const centralParts = [];
+    let localOffset = 0;
+    let centralSize = 0;
+
+    for (const entry of entries) {
+      const name = encoder.encode(entry.name);
+      assertClassicZipLimit(name.length, 16, "ZIP filename length");
+      const data = new Uint8Array(await entry.blob.arrayBuffer());
+      assertClassicZipLimit(data.length, 32, "ZIP file size");
+      assertClassicZipLimit(localOffset, 32, "ZIP local-header offset");
+      const checksum = crc32(data);
+      const timestamp = zipTimestamp(new Date());
+      const localHeader = writeZipHeader(30 + name.length, [
+        [0, 4, 0x04034b50], [4, 2, 20], [6, 2, ZIP_UTF8_FLAG], [8, 2, 0],
+        [10, 2, timestamp.time], [12, 2, timestamp.date], [14, 4, checksum],
+        [18, 4, data.length], [22, 4, data.length], [26, 2, name.length], [28, 2, 0],
+      ]);
+      localHeader.set(name, 30);
+
+      const centralHeader = writeZipHeader(46 + name.length, [
+        [0, 4, 0x02014b50], [4, 2, 20], [6, 2, 20], [8, 2, ZIP_UTF8_FLAG],
+        [10, 2, 0], [12, 2, timestamp.time], [14, 2, timestamp.date],
+        [16, 4, checksum], [20, 4, data.length], [24, 4, data.length],
+        [28, 2, name.length], [30, 2, 0], [32, 2, 0], [34, 2, 0],
+        [36, 2, 0], [38, 4, 0], [42, 4, localOffset],
+      ]);
+      centralHeader.set(name, 46);
+
+      localParts.push(localHeader, data);
+      centralParts.push(centralHeader);
+      const nextLocalOffset = localOffset + localHeader.length + data.length;
+      const nextCentralSize = centralSize + centralHeader.length;
+      assertClassicZipLimit(nextLocalOffset, 32, "ZIP local-data size");
+      assertClassicZipLimit(nextCentralSize, 32, "ZIP central-directory size");
+      localOffset = nextLocalOffset;
+      centralSize = nextCentralSize;
+    }
+
+    assertClassicZipLimit(
+      localOffset + centralSize + 22,
+      32,
+      "ZIP archive size",
+    );
+    const end = writeZipHeader(22, [
+      [0, 4, 0x06054b50], [4, 2, 0], [6, 2, 0],
+      [8, 2, entries.length], [10, 2, entries.length],
+      [12, 4, centralSize], [16, 4, localOffset], [20, 2, 0],
+    ]);
+    return new Blob([...localParts, ...centralParts, end], { type: "application/zip" });
+  }
+
+  function annotatedFilename(file, index) {
+    const base = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]+/g, "-");
+    return `${String(index + 1).padStart(3, "0")}-${base}-cedirnet.png`;
+  }
+
+  function downloadBlob(blob, filename) {
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    link.download = filename;
+    link.style.display = "none";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   document.getElementById("infer").onInference = function (request, response) {
@@ -50,12 +219,51 @@
       group.appendChild(wrapper);
     }
 
-    const download = document.createElement("a");
-    download.href = URL.createObjectURL(new Blob([JSON.stringify(results)], { type: "text/plain" }));
-    download.download = "results-cedirnet.json";
-    download.innerText = "Download results";
-    download.style.pointerEvents = "auto";
+    const actions = document.createElement("div");
+    actions.style.display = "flex";
+    actions.style.gap = "0.75rem";
+    actions.style.alignItems = "center";
+    actions.style.marginBottom = "0.75rem";
+    actions.style.pointerEvents = "auto";
 
-    return [download, group];
+    const jsonDownload = document.createElement("button");
+    jsonDownload.type = "button";
+    jsonDownload.innerText = "Download JSON";
+    jsonDownload.addEventListener("click", () => {
+      downloadBlob(
+        new Blob([JSON.stringify(results, null, 2)], { type: "application/json" }),
+        "results-cedirnet.json",
+      );
+    });
+
+    const imageDownload = document.createElement("button");
+    imageDownload.type = "button";
+    imageDownload.innerText = "Download images (.zip)";
+    imageDownload.addEventListener("click", async () => {
+      imageDownload.disabled = true;
+      imageDownload.innerText = "Preparing images…";
+      try {
+        const entries = [];
+        for (let i = 0; i < images.length / 2; i++) {
+          const png = await renderAnnotatedPng(
+            images[2 * i],
+            centers[i] || [],
+            scores[i] || [],
+            radii[i] || [],
+          );
+          entries.push({ name: annotatedFilename(images[2 * i], i), blob: png });
+        }
+        downloadBlob(await buildZip(entries), "results-cedirnet-images.zip");
+      } catch (error) {
+        console.error("Could not prepare annotated images", error);
+        window.alert(`Could not prepare annotated images: ${error.message}`);
+      } finally {
+        imageDownload.disabled = false;
+        imageDownload.innerText = "Download images (.zip)";
+      }
+    });
+
+    actions.append(jsonDownload, imageDownload);
+    return [actions, group];
   };
 </script>
