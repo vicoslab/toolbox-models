@@ -229,7 +229,7 @@ else:
 
     @app.route("/infer", methods=["POST"])
     def infer():
-        if "images" not in request.files or "haadf_images" not in request.files:
+        if "images" not in request.files:
             return {"centers": [], "scores": [], "radii": []}, 400
         images = request.files.getlist("images")
         if len(images) % 2 != 0:
