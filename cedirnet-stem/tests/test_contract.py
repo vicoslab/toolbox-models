@@ -233,6 +233,14 @@ class PreparedModelFilesTest(unittest.TestCase):
         self.assertIn("radii", ui)
         self.assertIn("borderRadius", ui)
 
+    def test_browser_ui_downloads_json_and_rasterized_images(self):
+        ui = (MODEL_DIR / "ui.html").read_text()
+        self.assertIn("Download JSON", ui)
+        self.assertIn("Download images (.zip)", ui)
+        self.assertIn("canvas.toBlob", ui)
+        self.assertIn('type: "application/zip"', ui)
+        self.assertIn("renderAnnotatedPng", ui)
+
 
 if __name__ == "__main__":
     unittest.main()
