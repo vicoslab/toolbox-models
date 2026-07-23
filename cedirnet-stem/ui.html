@@ -256,7 +256,8 @@
         downloadBlob(await buildZip(entries), "results-cedirnet-images.zip");
       } catch (error) {
         console.error("Could not prepare annotated images", error);
-        window.alert(`Could not prepare annotated images: ${error.message}`);
+        const message = error instanceof Error ? error.message : String(error);
+        window.alert(`Could not prepare annotated images: ${message}`);
       } finally {
         imageDownload.disabled = false;
         imageDownload.innerText = "Download images (.zip)";
