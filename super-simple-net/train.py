@@ -393,7 +393,8 @@ def train_and_eval(model, datamodule, config, device):
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
 
-        print(f"Experiment {run.info.experiment_id}: Run {run.info.run_id}")
+        print("Experiment:", run.info.experiment_id)
+        print("Run:", run.info.run_id)
         mlflow.log_params(config)
         args = {
             "model": model,
@@ -421,6 +422,7 @@ def train_and_eval(model, datamodule, config, device):
             p = Path(d)
             model.save_model(p)
             mlflow.log_artifact(p / "weights.pt")
+            print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/weights.pt")
         
         test(**args, normalize=True)
 

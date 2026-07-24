@@ -187,9 +187,11 @@ class Trainer:
             torch.save(state, filename)
         else:
             with tempfile.TemporaryDirectory() as directory:
-                filename = os.path.join(directory, "checkpoint.pth")
+                filename = os.path.join(directory, "checkpoint.pt")
                 torch.save(state, filename)
                 mlflow.log_artifact(filename)
+                info = mlflow.active_run().info
+                print("Weights:", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pt")
 
     def run(self):
         for epoch in range(self.args["n_epochs"]):
@@ -234,7 +236,8 @@ def main():
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
-        print(f"Experiment {run.info.experiment_id}: Run {run.info.run_id}")
+        print("Experiment:", run.info.experiment_id)
+        print("Run:", run.info.run_id)
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: "<callable>")))
 
         trainer = Trainer(args)

@@ -6,6 +6,7 @@
         "manifest": {
             "title": "Dataset manifest",
             "description": "The dataset manifest should be a file containing a JSON object with attributes 'train' and 'test', each of which should be a list of objects with properties 'points' (list of [x1,y1,x2,y2], containing integer representations of starting point and second point which signifies direction) and 'image_path' (relative to the manifest file).",
+            "format": "file:manifest.json",
             "type": "string"
         },
         "name": {

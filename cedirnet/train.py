@@ -389,6 +389,8 @@ class Trainer:
                         filename = os.path.join(d, "checkpoint.pth")
                         torch.save(state, filename)
                         mlflow.log_artifact(filename)
+                        info = mlflow.active_run().info
+                        print("Weights:", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pth")
 
 if __name__ == '__main__':
 
@@ -414,7 +416,9 @@ if __name__ == '__main__':
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
 
-        print(f'Experiment {run.info.experiment_id}: Run {run.info.run_id}') # this gets parsed and turned into a link in the frontend
+        # this gets parsed and turned into a link in the frontend
+        print('Experiment:', run.info.experiment_id)
+        print('Run:', run.info.run_id)
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: '<not serializable>')))
 
         trainer = Trainer(args)
