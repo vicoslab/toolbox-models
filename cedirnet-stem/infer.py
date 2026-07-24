@@ -24,14 +24,12 @@ WIDTH = CMD_ARGS["width"]
 HEIGHT = CMD_ARGS["height"]
 SCORE_THRESHOLD = CMD_ARGS["score_threshold"]
 
-if not CMD_ARGS.get("model"):
-    raise ValueError("CeDiRNet-STEM inference requires a model checkpoint")
-
 ARGS = get_args(width=WIDTH, height=HEIGHT)
 ARGS["model"]["kwargs"]["pretrained"] = False
 MODEL = get_model(ARGS["model"]["name"], ARGS["model"]["kwargs"])
 MODEL.init_output(NUM_VECTOR_FIELDS)
 MODEL = torch.nn.DataParallel(MODEL.to(DEVICE), device_ids=[0])
+WEIGHTS = CMD_ARGS["model"] or f'{os.environ["TOOLBOX_CACHE"]}/cedirnet-stem/stem_checkpoint.pt'
 
 CENTER_MODEL = get_center_model(
     ARGS["center_model"]["name"],
@@ -57,8 +55,8 @@ def _load_center_state(center_model, state):
     center_model.load_state_dict(center_state, strict=False)
 
 
-print(f'Loading CeDiRNet-STEM model from "{CMD_ARGS["model"]}"')
-STATE = safe_torch_load(CMD_ARGS["model"], map_location=DEVICE)
+print(f'Loading CeDiRNet-STEM model from "{WEIGHTS}"')
+STATE = safe_torch_load(WEIGHTS, map_location=DEVICE)
 SKIPPED_MODEL_TENSORS = load_compatible_model_state(MODEL, STATE)
 if SKIPPED_MODEL_TENSORS:
     print(
