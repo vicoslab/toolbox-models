@@ -71,12 +71,29 @@ else:
     import ffmpeg
     import numpy as np
 
-    tmproot = Path("/tmp/dam4sam")
-    tmproot.mkdir(exist_ok=True)
-
+    tmproot = Path(os.getenv("TOOLBOX_TEMPDIR", "/tmp/toolbox")) / "dam4sam"
+    tmproot.mkdir(exist_ok=True, parents=True)
+    
     # todo: delete inactive instances
     instances = {}
     app = Flask(__name__)
+
+    # debug mode is singlethreaded so it would hang
+    if not app.debug:
+        from threading import Thread
+        from datetime import datetime, timedelta
+        import time
+        lifetime = timedelta(days=7)
+        period = 60 * 60 * 24 # 24hours
+        def clean_tempfiles():
+            while True:
+                now = datetime.now()
+                for file in tmproot.iterdir():
+                    stat = os.stat(file)
+                    if now - datetime.fromtimestamp(stat.st_atime) > lifetime:
+                        file.unlink()
+                time.sleep(period)
+        Thread(target=clean_tempfiles, daemon=True).start()
 
     def get_video_info(filename):
         probe = ffmpeg.probe(filename, show_packets=None, show_entries="packet=pts_time")
@@ -158,7 +175,7 @@ else:
                     encoder.stdin.close()
                     reader.wait()
                     encoder.wait()
-                    return send_file(f'/tmp/dam4sam/{uuid}.output.{ext}')
+                    return send_file(tmproot / f'{uuid}.output.{ext}')
                 else:
                     image = Image.frombytes('RGB', size, in_bytes)
                     outputs = tracker.track(image)
