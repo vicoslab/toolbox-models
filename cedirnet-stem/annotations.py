@@ -9,44 +9,12 @@ from typing import Iterable, Sequence
 import numpy as np
 from PIL import Image, ImageOps
 
-
-def infer_haadf_path(bf_path: str | Path) -> Path:
-    """Resolve the conventional ``*_HAADF`` sibling of a ``*_BF`` image."""
-    bf_path = Path(bf_path)
-    marker = "_BF."
-    if marker not in bf_path.name:
-        raise ValueError(
-            "paired STEM image path must contain '_BF.' or '_HAADF.'"
-        )
-    return bf_path.with_name(bf_path.name.replace(marker, "_HAADF.", 1))
-
-
-def infer_bf_path(haadf_path: str | Path) -> Path:
-    """Resolve the conventional ``*_BF`` sibling of a ``*_HAADF`` image."""
-    haadf_path = Path(haadf_path)
-    marker = "_HAADF."
-    if marker not in haadf_path.name:
-        raise ValueError(
-            "paired STEM image path must contain '_BF.' or '_HAADF.'"
-        )
-    return haadf_path.with_name(haadf_path.name.replace(marker, "_BF.", 1))
-
-
-def load_stem_image(bf_source, haadf_source=None) -> Image.Image:
+def load_stem_image(bf_source, haadf_source) -> Image.Image:
     """Compose the upstream STEM input as BF, HAADF, and a zero channel."""
-    if haadf_source is None:
-        if not isinstance(bf_source, (str, Path)):
-            raise ValueError("HAADF source is required for uploaded BF images")
-        primary_source = Path(bf_source)
-        if "_HAADF." in primary_source.name:
-            haadf_source = primary_source
-            bf_source = infer_bf_path(primary_source)
-        else:
-            haadf_source = infer_haadf_path(primary_source)
-
-    for channel_name, source in (("BF", bf_source), ("HAADF", haadf_source)):
-        if isinstance(source, (str, Path)) and not Path(source).is_file():
-            raise FileNotFoundError(f"{channel_name} image does not exist: {source}")
+    if isinstance(bf_source, (str, Path)) and isinstance(haadf_source, (str, Path)):
+        bf_lower, haadf_lower = str(bf_source).lower(), str(haadf_source).lower()
+        if "bf" not in bf_lower and "haadf" in bf_lower and "haadf" not in haadf_lower and "bf" in haadf_lower:
+            raise ValueError("Input images are swapped")
 
     with Image.open(bf_source) as bf_image:
         bf = np.asarray(ImageOps.exif_transpose(bf_image).convert("L"))

@@ -11,8 +11,6 @@ git clone --depth 1 "$repository" "$model_dir"
 cd "$model_dir"
 git apply "$dir"/*.patch
 
-install -m 0644 "$dir/annotations.py" "$model_dir/src/datasets/annotations.py"
-install -m 0644 "$dir/generic_dataset.py" "$model_dir/src/datasets/GenericPointRadiusDataset.py"
 curl --fail --location --retry 3 \
     --output "$model_dir/localization_checkpoint.pth" \
     https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth

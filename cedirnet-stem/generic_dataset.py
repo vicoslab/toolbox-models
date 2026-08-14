@@ -35,6 +35,8 @@ class GenericPointRadiusDataset(Dataset):
 
         with open(manifest, encoding="utf-8") as stream:
             manifest_data = json.load(stream)
+        if manifest_data.get('version', 0) < 2:
+            raise ValueError("Version of loaded manifest is too low")
         if split in manifest_data:
             items = manifest_data[split]
         elif split == "train" and "data" in manifest_data:
@@ -62,14 +64,9 @@ class GenericPointRadiusDataset(Dataset):
 
     def __getitem__(self, index):
         item = self.items[index]
-        relative_path = item["image_path"]
+        relative_path, haadf_relative_path = item["images"]
         image_path = os.path.abspath(os.path.join(self.root_dir, relative_path))
-        haadf_relative_path = item.get("haadf_image_path")
-        haadf_path = (
-            os.path.abspath(os.path.join(self.root_dir, haadf_relative_path))
-            if haadf_relative_path
-            else None
-        )
+        haadf_path = os.path.abspath(os.path.join(self.root_dir, haadf_relative_path))
         image = load_stem_image(image_path, haadf_path)
         width, height = image.size
 

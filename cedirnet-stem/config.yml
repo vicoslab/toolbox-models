@@ -17,6 +17,6 @@ config: |
     <Labels name="labels" toName="image">
       <Label value="Particle" background="rgba(20, 200, 80, 0.7)" />
     </Labels>
-    <Image name="image" value="$image" zoom="true" />
+    <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
     <Vector name="radius" toName="image" smart="true" />
   </View>
