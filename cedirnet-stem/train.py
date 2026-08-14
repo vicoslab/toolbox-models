@@ -173,18 +173,11 @@ class Trainer:
             "model_state_dict": self.model.state_dict(),
             "center_model_state_dict": self.center_model.state_dict(),
         }
-        artifacts = os.getenv("MLFLOW_ARTIFACTS_DESTINATION")
-        run = mlflow.active_run()
-        if artifacts and run:
-            filename = os.path.join(
-                artifacts,
-                run.info.experiment_id,
-                run.info.run_id,
-                "artifacts",
-                "checkpoint.pth",
-            )
+        if (artifacts := os.getenv("MLFLOW_ARTIFACTS_DESTINATION")) and (run := mlflow.active_run()):
+            filename = os.path.join(artifacts, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
             os.makedirs(os.path.dirname(filename), exist_ok=True)
             torch.save(state, filename)
+            print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
         else:
             with tempfile.TemporaryDirectory() as directory:
                 filename = os.path.join(directory, "checkpoint.pt")

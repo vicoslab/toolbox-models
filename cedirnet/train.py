@@ -384,6 +384,7 @@ class Trainer:
                 if (ARTIFACTS := os.getenv("MLFLOW_ARTIFACTS_DESTINATION")) and (run := mlflow.active_run()):
                     filename = os.path.join(ARTIFACTS, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
                     torch.save(state, filename)
+                    print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
                 else:
                     with tempfile.TemporaryDirectory() as d:
                         filename = os.path.join(d, "checkpoint.pth")
