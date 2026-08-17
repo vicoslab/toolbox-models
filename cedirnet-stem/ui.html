@@ -209,7 +209,11 @@
       wrapper.style.width = "fit-content";
 
       const image = document.createElement("img");
-      image.src = URL.createObjectURL(images[2 * i]);
+      if (result["image-BF"].endsWith(".tif") || result["image-BF"].endsWith(".tiff")) {
+        images[2 * i].arrayBuffer().then(buf => image.src = UTIF.bufferToURI(buf));
+      } else {
+        image.src = URL.createObjectURL(images[2 * i]);
+      }
       image.onload = () => {
         for (let j = 0; j < centers[i].length; j++) {
           wrapper.appendChild(createCircle(centers[i][j], radii[i][j], scores[i][j], image));
