@@ -77,7 +77,7 @@ MODEL.eval()
 CENTER_MODEL.eval()
 
 
-def load(bf_source, haadf_source=None):
+def load(bf_source, haadf_source):
     return np.asarray(load_stem_image(bf_source, haadf_source))
 
 
@@ -137,8 +137,7 @@ def predict(images: List[np.ndarray]):
 
 
 if __name__ == "__main__":
-    haadf_source = sys.argv[2] if len(sys.argv) > 2 else None
-    image = load(sys.argv[1], haadf_source)
+    image = load(sys.argv[1], sys.argv[2])
     centers, scores, radii = predict([image])
     display_image = np.repeat(image[:, :, 1:2], 3, axis=2)
     canvas = Image.fromarray(display_image)
@@ -198,9 +197,8 @@ else:
                 ),
                 ["Particle"],
             )
-            # todo: fix this
             images = [
-                load(self.get_local_path(task["data"][value], task_id=task["id"]))
+                load(*[self.get_local_path(v, task_id=task["id"]) for v in task["data"][value]])
                 for task in tasks
             ]
             centers, scores, radii = predict(images)
