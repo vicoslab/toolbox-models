@@ -75,8 +75,10 @@ class GenericDataset(SSNDataset):
             **(dict(mask_path=str(self.root / f["mask_path"]), is_segmented=True) if "mask_path" in f else dict(mask_path="", is_segmented=False))
         } for f in self.manifest[self.split.value]]
 
-        return pd.DataFrame([x for x in samples if x["label_index"] == LabelName.NORMAL]), \
-               pd.DataFrame([x for x in samples if x["label_index"] == LabelName.ABNORMAL])
+        normal = [x for x in samples if x["label_index"] == LabelName.NORMAL]
+        if len(normal) == 0:
+            raise ValueError("Cannot start training without any normal samples")
+        return pd.DataFrame(normal), pd.DataFrame([x for x in samples if x["label_index"] == LabelName.ABNORMAL])
 
 class Generic(SSNDataModule):
 
@@ -443,9 +445,10 @@ if __name__ == "__main__":
             }
         else:
             raise ValueError("Passed manifest.json does not contain 'data' or 'train'/'test' attributes.")
-    
-    fully_supervised = True
+
+    unsupervised = True
     weakly_supervised = True
+    fully_supervised = True
     for split in ["train", "test"]:
         old_len = len(manifest[split])
         manifest[split] = [x for x in manifest[split] if "label" in x]
@@ -455,17 +458,22 @@ if __name__ == "__main__":
         for i,item in enumerate(manifest[split]):
             if "mask_path" in item:
                 weakly_supervised = False
-            elif item["label"] != "normal":
-                fully_supervised = False
+            if item["label"] != "normal":
+                unsupervised = False
+                if "mask_path" not in item:
+                    fully_supervised = False
 
-    if fully_supervised:
-        supervision = Supervision.FULLY_SUPERVISED
+    if unsupervised:
+        supervision = Supervision.UNSUPERVISED
     elif weakly_supervised:
         supervision = Supervision.WEAKLY_SUPERVISED
+    elif fully_supervised:
+        supervision = Supervision.FULLY_SUPERVISED
     else:
         supervision = Supervision.MIXED_SUPERVISION
 
-    if supervision != Supervision.FULLY_SUPERVISED:
+    print("Using", supervision, flush=True)
+    if supervision == Supervision.UNSUPERVISED:
         config = {
             **base_config,
             "num_workers": 8,
