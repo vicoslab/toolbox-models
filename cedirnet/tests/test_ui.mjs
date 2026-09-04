@@ -23,10 +23,15 @@ test("threshold slider supports model scores above one", () => {
     assert.equal(thresholdSliderMaximum([[]]), 1.0);
 });
 
-test("UI exposes a realtime confidence threshold slider", () => {
+test("UI exposes confidence threshold through the Toolbox settings dialog", () => {
     assert.match(html, /thresholdInput\.type = "range"/);
     assert.match(html, /thresholdInput\.addEventListener\("input"/);
     assert.match(html, /Confidence threshold/);
+    assert.match(html, /settings\(SETTINGS_KEY\)/);
+    assert.match(html, /\.toolbar-right/);
+    assert.match(html, /addEventListener\("infer", removeSettings/);
+    assert.match(html, /addEventListener\("reset", removeSettings/);
+    assert.doesNotMatch(html, /return \[controls, group\]/);
 });
 
 test("inference callback rerenders markers immediately when threshold changes", () => {
@@ -60,19 +65,33 @@ test("inference callback rerenders markers immediately when threshold changes", 
 
     const templateElement = { content: { children: [new Element("svg")] } };
     const inferElement = {};
+    const toolbar = new Element("toolbar");
+    let settingsDialog;
+    const local = new Map();
     const fakeDocument = {
-        getElementById: id => id === "template-marker" ? templateElement : inferElement,
+        getElementById: id => id === "template-marker" ? templateElement : id === "infer" ? inferElement : null,
         createElement: tag => new Element(tag),
         importNode: () => new Element("svg"),
+        querySelector: selector => selector === ".toolbar-right" ? toolbar : null,
     };
     const context = vm.createContext({
         document: fakeDocument,
         URL: { createObjectURL: () => "blob:test", revokeObjectURL: () => {} },
+        localStorage: {
+            getItem: key => local.get(key) || null,
+            setItem: (key, value) => local.set(key, value),
+        },
+        settings: () => {
+            const button = new Element("button");
+            const dialog = new Element("dialog");
+            settingsDialog = dialog;
+            return { button, dialog };
+        },
         Number,
         Math,
     });
     vm.runInContext(script, context);
-    const [controls, group] = inferElement.onInference(
+    const group = inferElement.onInference(
         { getAll: () => [{ name: "test.png" }] },
         {
             centers: [[[0.2, 0.2, 1], [0.5, 0.5, 1], [0.8, 0.8, 1]]],
@@ -84,9 +103,10 @@ test("inference callback rerenders markers immediately when threshold changes", 
     image.onload();
     assert.equal(group.querySelectorAll(".cedirnet-marker").length, 2);
 
-    const slider = controls.children[1];
+    const slider = settingsDialog.children[0].children.find(child => child.tag === "input");
     slider.value = "0.8";
     slider.dispatchEvent({ type: "input" });
     assert.equal(group.querySelectorAll(".cedirnet-marker").length, 1);
-    assert.equal(controls.children[2].value, "0.80");
+    assert.equal(settingsDialog.children[0].children[0].textContent, "Confidence threshold: 0.80");
+    assert.equal(toolbar.children.length, 2);
 });

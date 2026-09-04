@@ -47,13 +47,15 @@ def localization_probability_map(localization_response):
     return np.clip(response, 0.0, 1.0)
 
 
-def training_artifact_path(epoch, sample_name):
+def training_artifact_path(epoch, sample_name, subset):
     """Build a traversal-safe, epoch-scoped MLflow artifact path."""
+    if subset not in {"training", "validation"}:
+        raise ValueError("subset must be 'training' or 'validation'")
     normalized = str(sample_name).replace("\\", "/")
     parts = [part for part in PurePosixPath(normalized).parts if part not in {".", "..", "/"}]
     stem_parts = [PurePosixPath(part).stem if index == len(parts) - 1 else part for index, part in enumerate(parts)]
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", "_".join(stem_parts)).strip("._-") or "sample"
-    return f"training/epoch-{epoch + 1:04d}/{safe}-diagnostics.png"
+    return f"{subset}/epoch-{epoch + 1:04d}/{safe}-diagnostics.png"
 
 
 def _draw_detections(axis, centers, scores, angles, *, distance=30):

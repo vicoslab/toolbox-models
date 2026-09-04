@@ -38,8 +38,8 @@
             "default": 4
         },
         "visualization_samples": {
-            "title": "Training samples to visualise",
-            "description": "Maximum number of augmented training samples saved with detections, center-direction maps, and localisation maps at each visualisation step.",
+            "title": "Samples to visualise per split",
+            "description": "Maximum number of training samples and validation/test samples saved separately with detections, center-direction maps, and localisation maps at each visualisation step.",
             "type": "integer",
             "default": 4,
             "minimum": 1,

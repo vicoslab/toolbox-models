@@ -40,8 +40,16 @@ class DiagnosticMapsTest(unittest.TestCase):
         np.testing.assert_allclose(actual, [[0.0, 0.25], [0.8, 1.0]])
 
     def test_artifact_path_is_nested_and_sanitized(self):
-        actual = self.module.training_artifact_path(3, "../board/tile.jpg")
+        actual = self.module.training_artifact_path(3, "../board/tile.jpg", "training")
         self.assertEqual(actual, "training/epoch-0004/board_tile-diagnostics.png")
+
+    def test_validation_artifact_path_uses_separate_subfolder(self):
+        actual = self.module.training_artifact_path(3, "../board/tile.jpg", "validation")
+        self.assertEqual(actual, "validation/epoch-0004/board_tile-diagnostics.png")
+
+    def test_artifact_path_rejects_unknown_subset(self):
+        with self.assertRaisesRegex(ValueError, "subset"):
+            self.module.training_artifact_path(3, "tile.jpg", "testing")
 
     def test_diagnostic_figure_contains_four_named_panels_and_jet_direction_map(self):
         image = np.zeros((16, 24, 3), dtype=np.uint8)
@@ -75,6 +83,13 @@ class PreparedModelContractTest(unittest.TestCase):
         self.assertIn("training_artifact_path", train)
         self.assertIn("visualization_samples", train)
         self.assertIn("visualized >=", train)
+
+    def test_training_visualizes_train_and_validation_loaders_separately(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("self.validation_dataset_it", train)
+        self.assertIn("validation_kwargs['split'] = 'test'", train)
+        self.assertIn("self.visualize(self.train_dataset_it, epoch, 'training')", train)
+        self.assertIn("self.visualize(self.validation_dataset_it, epoch, 'validation')", train)
 
     def test_checkpoints_are_stored_under_checkpoint_subfolder(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")

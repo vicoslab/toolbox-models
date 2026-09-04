@@ -76,6 +76,30 @@ class Trainer:
                                                     num_workers=dataset_workers, pin_memory=True if args['cuda'] else False,
                                                     collate_fn=variable_len_collate)
 
+        validation_kwargs = dict(args['train_dataset']['kwargs'])
+        validation_kwargs['split'] = 'test'
+        validation_transform = validation_kwargs.get('transform')
+        validation_transforms = getattr(validation_transform, 'transforms', None)
+        if validation_transforms is not None:
+            deterministic = [
+                transform for transform in validation_transforms
+                if type(transform).__name__ in {'ToTensor', 'Resize', 'Normalize'}
+            ]
+            validation_kwargs['transform'] = my_transforms.Compose(deterministic)
+        validation_dataset, _ = get_centerdir_dataset(
+            '', validation_kwargs, args['train_dataset'].get('centerdir_gt_opts'),
+            centerdir_groundtruth_op=self.centerdir_groundtruth_op,
+        )
+        self.validation_dataset_it = torch.utils.data.DataLoader(
+            validation_dataset,
+            batch_size=self.dataset_batch,
+            shuffle=False,
+            drop_last=False,
+            num_workers=dataset_workers,
+            pin_memory=True if args['cuda'] else False,
+            collate_fn=variable_len_collate,
+        ) if len(validation_dataset) > 0 else None
+
         self.model = get_model(args['model']['name'], args['model']['kwargs'])
         self.model.init_output(args['loss_opts']['num_vector_fields'])
 
@@ -346,6 +370,45 @@ class Trainer:
 
         return stored_results
 
+    def visualize(self, loader, epoch, subset):
+        if loader is None:
+            return
+
+        visualized = 0
+        with torch.no_grad():
+            for sample in tqdm(loader, desc=f'visualise {subset}', dynamic_ncols=True):
+                center_output = self.center_model(self.model(sample['image']), **sample)
+                direction_maps, center_pred, center_heatmap, angle_pred = map(
+                    lambda k: center_output[k].detach().cpu().numpy(),
+                    ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
+                )
+
+                for name, im, centers, angles, dirs, heatmap, ground_truth in zip(
+                        sample['name'], sample['image'], center_pred, angle_pred,
+                        direction_maps, center_heatmap, sample['center']):
+                    valid = centers[:, 0] == 1
+                    scores = centers[valid, -1]
+
+                    fig = plot_training_diagnostics(
+                        image=im,
+                        centers=centers[valid, 1:-1],
+                        scores=scores,
+                        angles=angles[valid],
+                        direction_output=dirs,
+                        localization_response=heatmap,
+                        ground_truth_centers=ground_truth,
+                    )
+                    mlflow.log_figure(
+                        fig,
+                        artifact_file=training_artifact_path(epoch, name, subset),
+                    )
+                    plt.close(fig)
+                    visualized += 1
+                    if visualized >= self.args['visualization_samples']:
+                        break
+                if visualized >= self.args['visualization_samples']:
+                    break
+
     def run(self):
         args = self.args
 
@@ -359,38 +422,8 @@ class Trainer:
             if args['display'] and (epoch + 1) % args['display_it'] == 0:
                 self.model.eval()
                 self.center_model.eval()
-                visualized = 0
-                with torch.no_grad():
-                    for sample in tqdm(self.train_dataset_it, desc='visualise', dynamic_ncols=True):
-
-                        center_output = self.center_model(self.model(sample['image']), **sample)
-                        direction_maps, center_pred, center_heatmap, angle_pred = map(lambda k: center_output[k].detach().cpu().numpy(), ['output', 'center_pred', 'center_heatmap', 'pred_angle'])
-
-                        for name, im, centers, angles, dirs, heatmap, ground_truth in zip(
-                                sample['name'], sample['image'], center_pred, angle_pred,
-                                direction_maps, center_heatmap, sample['center']):
-                            valid = centers[:, 0] == 1
-                            scores = centers[valid, -1]
-
-                            fig = plot_training_diagnostics(
-                                image=im,
-                                centers=centers[valid, 1:-1],
-                                scores=scores,
-                                angles=angles[valid],
-                                direction_output=dirs,
-                                localization_response=heatmap,
-                                ground_truth_centers=ground_truth,
-                            )
-                            mlflow.log_figure(
-                                fig,
-                                artifact_file=training_artifact_path(epoch, name),
-                            )
-                            plt.close(fig)
-                            visualized += 1
-                            if visualized >= args['visualization_samples']:
-                                break
-                        if visualized >= args['visualization_samples']:
-                            break
+                self.visualize(self.train_dataset_it, epoch, 'training')
+                self.visualize(self.validation_dataset_it, epoch, 'validation')
 
             if args['save'] and ((epoch + 1) % args.get('save_interval',10) == 0 or epoch + 1 == args['n_epochs']):
                 print('Saving checkpoint', flush=True)
