@@ -172,18 +172,26 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("def validate(self, epoch):", train)
         self.assertIn("ValidationMetrics(", train)
-        self.assertIn("mlflow.log_metrics(validation_metrics, step=epoch)", train)
+        self.assertIn("mlflow.log_metrics(validation_metrics, step=epoch + 1)", train)
+        self.assertIn("mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), step=epoch + 1)", train)
         self.assertIn("self.visualize_sample(", train)
-        self.assertIn("subset='validation'", train)
+        self.assertIn("self.visualize_validation_samples(epoch)", train)
         self.assertNotIn("self.visualize(self.validation_dataset_it", train)
         self.assertIn("should_validate(", train)
+        validate_call = train.index("self.validate(epoch)")
+        train_visualization_call = train.index("self.visualize_training_samples(epoch)")
+        validation_visualization_call = train.index("self.visualize_validation_samples(epoch)")
+        self.assertLess(validate_call, train_visualization_call)
+        self.assertLess(train_visualization_call, validation_visualization_call)
 
     def test_train_visualization_remains_limited(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("self.visualize_training_samples(epoch)", train)
-        self.assertIn("visualized >= self.args['visualization_samples']", train)
+        self.assertIn("limit=self.args['visualization_samples']", train)
         self.assertIn("self.training_visualization_dataset_it", train)
+        self.assertIn("self.validation_visualization_dataset_it", train)
         self.assertIn("num_workers=0", train)
+        self.assertNotIn("num_workers=dataset_workers,\n            pin_memory=True if args['cuda'] else False,\n            collate_fn=variable_len_collate,\n        ) if len(validation_dataset)", train)
         self.assertNotIn("for sample in tqdm(self.train_dataset_it, desc='visualise training'", train)
 
     def test_five_hundred_epoch_run_schedules_all_ten_validations(self):
@@ -195,6 +203,18 @@ class ValidationIntegrationContractTest(unittest.TestCase):
             if scheduling.should_validate(epoch, 500, 50)
         ]
         self.assertEqual(triggered, list(range(50, 501, 50)))
+
+    def test_figure_logging_uses_local_artifact_store_when_available(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("def log_figure_artifact(fig, artifact_file):", train)
+        self.assertIn("MLFLOW_ARTIFACTS_DESTINATION", train)
+        self.assertIn("fig.savefig(destination)", train)
+        self.assertIn("mlflow.log_figure(fig, artifact_file=artifact_file)", train)
+
+    def test_visualization_progress_is_counted_per_image(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("tqdm(total=total, desc=f'visualise {subset}'", train)
+        self.assertIn("progress.update()", train)
 
     def test_validation_metric_options_are_exposed(self):
         schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))

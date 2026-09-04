@@ -9,6 +9,7 @@ import json
 import shutil
 import tempfile
 from collections import OrderedDict
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -35,6 +36,24 @@ from extras import load_center_model
 from localization_checkpoint import ensure_localization_checkpoint
 from scheduling import should_validate
 from validation_metrics import POINT_MATCH_DISTANCE_PX, ValidationMetrics, extract_ground_truth
+
+
+def log_figure_artifact(fig, artifact_file):
+    """Write directly to a local MLflow artifact store, or use its API."""
+    run = mlflow.active_run()
+    artifacts = os.getenv("MLFLOW_ARTIFACTS_DESTINATION")
+    if artifacts and run:
+        destination = (
+            Path(artifacts)
+            / run.info.experiment_id
+            / run.info.run_id
+            / "artifacts"
+            / artifact_file
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(destination)
+    else:
+        mlflow.log_figure(fig, artifact_file=artifact_file)
 
 class Trainer:
     def __init__(self, args):
@@ -116,8 +135,17 @@ class Trainer:
             batch_size=self.dataset_batch,
             shuffle=False,
             drop_last=False,
-            num_workers=dataset_workers,
-            pin_memory=True if args['cuda'] else False,
+            num_workers=0,
+            pin_memory=False,
+            collate_fn=variable_len_collate,
+        ) if len(validation_dataset) > 0 else None
+        self.validation_visualization_dataset_it = torch.utils.data.DataLoader(
+            validation_dataset,
+            batch_size=self.dataset_batch,
+            shuffle=False,
+            drop_last=False,
+            num_workers=0,
+            pin_memory=False,
             collate_fn=variable_len_collate,
         ) if len(validation_dataset) > 0 else None
 
@@ -339,7 +367,7 @@ class Trainer:
             iter+=1
 
         all_samples_total_loss = {k:v['loss'] for k,v in all_samples_metrics.items()}
-        mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), epoch)
+        mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), step=epoch + 1)
 
         return np.array(list(all_samples_total_loss.values())).mean() * self.dataset_batch
 
@@ -407,16 +435,21 @@ class Trainer:
             localization_response=localization_response,
             ground_truth_centers=ground_truth_centers,
         )
-        mlflow.log_figure(
-            fig,
-            artifact_file=training_artifact_path(epoch, name, subset),
-        )
-        plt.close(fig)
+        try:
+            log_figure_artifact(fig, training_artifact_path(epoch, name, subset))
+        finally:
+            plt.close(fig)
 
-    def visualize_training_samples(self, epoch):
+    def visualize_samples(self, loader, epoch, subset, limit=None,
+                          detection_score_threshold=None):
+        if loader is None:
+            return
+
+        total = len(loader.dataset) if limit is None else min(limit, len(loader.dataset))
         visualized = 0
-        with torch.no_grad():
-            for sample in tqdm(self.training_visualization_dataset_it, desc='visualise training', dynamic_ncols=True):
+        progress = tqdm(total=total, desc=f'visualise {subset}', dynamic_ncols=True)
+        try:
+            for sample in loader:
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
                     lambda key: center_output[key].detach().cpu().numpy(),
@@ -425,12 +458,36 @@ class Trainer:
                 for values in zip(
                         sample['name'], sample['image'], center_pred, angle_pred,
                         direction_maps, center_heatmap, sample['center']):
-                    self.visualize_sample(epoch, 'training', *values)
+                    self.visualize_sample(
+                        epoch, subset, *values,
+                        detection_score_threshold=detection_score_threshold,
+                    )
                     visualized += 1
-                    if visualized >= self.args['visualization_samples']:
+                    progress.update()
+                    if visualized >= total:
                         break
-                if visualized >= self.args['visualization_samples']:
+                if visualized >= total:
                     break
+        finally:
+            progress.close()
+
+    def visualize_training_samples(self, epoch):
+        with torch.no_grad():
+            self.visualize_samples(
+                self.training_visualization_dataset_it,
+                epoch,
+                'training',
+                limit=self.args['visualization_samples'],
+            )
+
+    def visualize_validation_samples(self, epoch):
+        with torch.no_grad():
+            self.visualize_samples(
+                self.validation_visualization_dataset_it,
+                epoch,
+                'validation',
+                detection_score_threshold=self.args['validation_score_threshold'],
+            )
 
     def validate(self, epoch):
         if self.validation_dataset_it is None:
@@ -470,23 +527,11 @@ class Trainer:
                         ground_truth_centers=ground_truth_centers,
                         ground_truth_angles_deg=ground_truth_angles,
                     )
-                    self.visualize_sample(
-                        epoch=epoch,
-                        subset='validation',
-                        name=name,
-                        image=image,
-                        centers=centers,
-                        angles=angles,
-                        direction_map=direction_map,
-                        localization_response=heatmap,
-                        ground_truth_centers=ground_truth,
-                        detection_score_threshold=self.args['validation_score_threshold'],
-                    )
 
         validation_metrics = {
             f"validation/{name}": value for name, value in metrics.compute().items()
         }
-        mlflow.log_metrics(validation_metrics, step=epoch)
+        mlflow.log_metrics(validation_metrics, step=epoch + 1)
         print(
             "Validation: "
             f"F1@20px={validation_metrics['validation/point_f1_at_20px']:.4f}, "
@@ -514,8 +559,9 @@ class Trainer:
                 )
                 self.model.eval()
                 self.center_model.eval()
-                self.visualize_training_samples(epoch)
                 self.validate(epoch)
+                self.visualize_training_samples(epoch)
+                self.visualize_validation_samples(epoch)
                 print(
                     f"Validation step {epoch + 1}/{args['n_epochs']} completed",
                     flush=True,
