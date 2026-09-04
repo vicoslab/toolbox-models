@@ -84,6 +84,9 @@ class PreparedModelContractTest(unittest.TestCase):
         self.assertIn("https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth", setup)
         self.assertIn("cffcfde184a22c03a67ecc741f3943d0325d4aabe812cb1787796f236403df84", setup)
         self.assertIn("sha256sum --check --status", setup)
+        self.assertIn("localization_checkpoint.pth.part", setup)
+        self.assertIn("mv --", setup)
+        self.assertIn("trap", setup)
 
     def test_training_uses_default_localization_checkpoint_when_not_provided(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
