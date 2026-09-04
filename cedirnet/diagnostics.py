@@ -55,7 +55,7 @@ def training_artifact_path(epoch, sample_name, subset):
     parts = [part for part in PurePosixPath(normalized).parts if part not in {".", "..", "/"}]
     stem_parts = [PurePosixPath(part).stem if index == len(parts) - 1 else part for index, part in enumerate(parts)]
     safe = re.sub(r"[^A-Za-z0-9._-]+", "_", "_".join(stem_parts)).strip("._-") or "sample"
-    return f"{subset}/epoch-{epoch + 1:04d}/{safe}-diagnostics.png"
+    return f"visualizations/epoch_{epoch + 1:04d}/{subset}/{safe}-diagnostics.png"
 
 
 def _draw_detections(axis, centers, scores, angles, *, distance=30):

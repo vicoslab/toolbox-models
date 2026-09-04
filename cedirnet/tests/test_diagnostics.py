@@ -41,11 +41,11 @@ class DiagnosticMapsTest(unittest.TestCase):
 
     def test_artifact_path_is_nested_and_sanitized(self):
         actual = self.module.training_artifact_path(3, "../board/tile.jpg", "training")
-        self.assertEqual(actual, "training/epoch-0004/board_tile-diagnostics.png")
+        self.assertEqual(actual, "visualizations/epoch_0004/training/board_tile-diagnostics.png")
 
     def test_validation_artifact_path_uses_separate_subfolder(self):
         actual = self.module.training_artifact_path(3, "../board/tile.jpg", "validation")
-        self.assertEqual(actual, "validation/epoch-0004/board_tile-diagnostics.png")
+        self.assertEqual(actual, "visualizations/epoch_0004/validation/board_tile-diagnostics.png")
 
     def test_artifact_path_rejects_unknown_subset(self):
         with self.assertRaisesRegex(ValueError, "subset"):
