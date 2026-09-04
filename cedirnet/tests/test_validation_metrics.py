@@ -30,6 +30,16 @@ def load_module():
     return module
 
 
+def load_scheduling_module():
+    path = MODEL_DIR / "scheduling.py"
+    spec = importlib.util.spec_from_file_location("cedirnet_scheduling", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load scheduling.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class ValidationMetricsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -166,12 +176,25 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertIn("self.visualize_sample(", train)
         self.assertIn("subset='validation'", train)
         self.assertNotIn("self.visualize(self.validation_dataset_it", train)
-        self.assertIn("or epoch + 1 == args['n_epochs']", train)
+        self.assertIn("should_validate(", train)
 
     def test_train_visualization_remains_limited(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("self.visualize_training_samples(epoch)", train)
         self.assertIn("visualized >= self.args['visualization_samples']", train)
+        self.assertIn("self.training_visualization_dataset_it", train)
+        self.assertIn("num_workers=0", train)
+        self.assertNotIn("for sample in tqdm(self.train_dataset_it, desc='visualise training'", train)
+
+    def test_five_hundred_epoch_run_schedules_all_ten_validations(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("from scheduling import should_validate", train)
+        scheduling = load_scheduling_module()
+        triggered = [
+            epoch + 1 for epoch in range(500)
+            if scheduling.should_validate(epoch, 500, 50)
+        ]
+        self.assertEqual(triggered, list(range(50, 501, 50)))
 
     def test_validation_metric_options_are_exposed(self):
         schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))

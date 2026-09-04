@@ -33,6 +33,7 @@ from mlflow.entities import RunStatus
 from diagnostics import plot_training_diagnostics, training_artifact_path
 from extras import load_center_model
 from localization_checkpoint import ensure_localization_checkpoint
+from scheduling import should_validate
 from validation_metrics import POINT_MATCH_DISTANCE_PX, ValidationMetrics, extract_ground_truth
 
 class Trainer:
@@ -78,16 +79,34 @@ class Trainer:
                                                     num_workers=dataset_workers, pin_memory=True if args['cuda'] else False,
                                                     collate_fn=variable_len_collate)
 
-        validation_kwargs = dict(args['train_dataset']['kwargs'])
-        validation_kwargs['split'] = 'test'
-        validation_transform = validation_kwargs.get('transform')
+        visualization_kwargs = dict(args['train_dataset']['kwargs'])
+        validation_transform = visualization_kwargs.get('transform')
         validation_transforms = getattr(validation_transform, 'transforms', None)
         if validation_transforms is not None:
             deterministic = [
                 transform for transform in validation_transforms
                 if type(transform).__name__ in {'ToTensor', 'Resize', 'Normalize'}
             ]
-            validation_kwargs['transform'] = my_transforms.Compose(deterministic)
+            visualization_kwargs['transform'] = my_transforms.Compose(deterministic)
+
+        training_visualization_kwargs = dict(visualization_kwargs)
+        training_visualization_kwargs['split'] = 'train'
+        training_visualization_dataset, _ = get_centerdir_dataset(
+            '', training_visualization_kwargs, args['train_dataset'].get('centerdir_gt_opts'),
+            centerdir_groundtruth_op=self.centerdir_groundtruth_op,
+        )
+        self.training_visualization_dataset_it = torch.utils.data.DataLoader(
+            training_visualization_dataset,
+            batch_size=self.dataset_batch,
+            shuffle=False,
+            drop_last=False,
+            num_workers=0,
+            pin_memory=False,
+            collate_fn=variable_len_collate,
+        )
+
+        validation_kwargs = dict(visualization_kwargs)
+        validation_kwargs['split'] = 'test'
         validation_dataset, _ = get_centerdir_dataset(
             '', validation_kwargs, args['train_dataset'].get('centerdir_gt_opts'),
             centerdir_groundtruth_op=self.centerdir_groundtruth_op,
@@ -397,7 +416,7 @@ class Trainer:
     def visualize_training_samples(self, epoch):
         visualized = 0
         with torch.no_grad():
-            for sample in tqdm(self.train_dataset_it, desc='visualise training', dynamic_ncols=True):
+            for sample in tqdm(self.training_visualization_dataset_it, desc='visualise training', dynamic_ncols=True):
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
                     lambda key: center_output[key].detach().cpu().numpy(),
@@ -487,13 +506,20 @@ class Trainer:
             if self.scheduler: self.scheduler.step()
             if self.center_scheduler: self.center_scheduler.step()
 
-            if args['display'] and (
-                    (epoch + 1) % args['display_it'] == 0
-                    or epoch + 1 == args['n_epochs']):
+            if args['display'] and should_validate(
+                    epoch, args['n_epochs'], args['display_it']):
+                print(
+                    f"Validation step {epoch + 1}/{args['n_epochs']} started",
+                    flush=True,
+                )
                 self.model.eval()
                 self.center_model.eval()
                 self.visualize_training_samples(epoch)
                 self.validate(epoch)
+                print(
+                    f"Validation step {epoch + 1}/{args['n_epochs']} completed",
+                    flush=True,
+                )
 
             if args['save'] and ((epoch + 1) % args.get('save_interval',10) == 0 or epoch + 1 == args['n_epochs']):
                 print('Saving checkpoint', flush=True)
