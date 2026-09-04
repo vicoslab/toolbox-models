@@ -78,6 +78,29 @@ class DiagnosticMapsTest(unittest.TestCase):
 
 
 class PreparedModelContractTest(unittest.TestCase):
+    def test_setup_downloads_default_localization_checkpoint(self):
+        setup = (MODEL_DIR / "setup.sh").read_text(encoding="utf-8")
+        self.assertIn("localization_checkpoint.pth", setup)
+        self.assertIn("https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth", setup)
+        self.assertIn("cffcfde184a22c03a67ecc741f3943d0325d4aabe812cb1787796f236403df84", setup)
+        self.assertIn("sha256sum --check --status", setup)
+
+    def test_training_uses_default_localization_checkpoint_when_not_provided(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("default_localisation_checkpoint", train)
+        self.assertIn("cmd_args.get('localisation') or default_localisation_checkpoint", train)
+
+    def test_inference_uses_default_localization_checkpoint_when_not_provided(self):
+        infer = (MODEL_DIR / "infer.py").read_text(encoding="utf-8")
+        self.assertIn("default_localisation_checkpoint", infer)
+        self.assertIn("cmd_args.get(\"localisation\") or default_localisation_checkpoint", infer)
+
+    def test_localization_option_is_a_checkpoint_file_and_optional(self):
+        schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))
+        option = schema["properties"]["localisation"]
+        self.assertEqual(option["format"], "file:localization_checkpoint.pth")
+        self.assertNotIn("localisation", schema.get("required", []))
+
     def test_training_logs_nested_diagnostics_and_limits_sample_count(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("training_artifact_path", train)

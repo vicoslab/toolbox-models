@@ -29,8 +29,12 @@ from base_config import get_args
 args = get_args(width, height)
 
 args['checkpoint_path'] = cmd_args["model"]
-if path := cmd_args.get("localization_model", ""):
-    args['center_checkpoint_path'] = path
+default_localisation_checkpoint = os.path.join(
+    os.environ["TOOLBOX_CACHE"], "cedirnet", "localization_checkpoint.pth"
+)
+args['center_checkpoint_path'] = (
+    cmd_args.get("localisation") or default_localisation_checkpoint
+)
 
 model = get_model(args['model']['name'], args['model']['kwargs'])
 model.init_output(args['loss_opts']['num_vector_fields'])

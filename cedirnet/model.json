@@ -22,7 +22,8 @@
         },
         "localisation": {
             "title": "Localisation weights",
-            "description": "Path to localisation model checkpoint.",
+            "description": "Optional path to localisation model checkpoint. If omitted, the checkpoint downloaded during model installation is used.",
+            "format": "file:localization_checkpoint.pth",
             "type": "string"
         },
         "save_interval": {

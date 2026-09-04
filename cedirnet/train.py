@@ -459,7 +459,12 @@ if __name__ == '__main__':
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']
     args['pretrained_model_path'] = cmd_args['model']
-    args['pretrained_center_model_path'] = cmd_args['localisation']
+    default_localisation_checkpoint = os.path.join(
+        os.environ['TOOLBOX_CACHE'], 'cedirnet', 'localization_checkpoint.pth'
+    )
+    args['pretrained_center_model_path'] = (
+        cmd_args.get('localisation') or default_localisation_checkpoint
+    )
     args['display_it'] = cmd_args['display_interval']
     args['visualization_samples'] = cmd_args['visualization_samples']
     args['save_interval'] = cmd_args['save_interval']
