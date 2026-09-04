@@ -37,6 +37,14 @@
             "type": "integer",
             "default": 4
         },
+        "visualization_samples": {
+            "title": "Training samples to visualise",
+            "description": "Maximum number of augmented training samples saved with detections, center-direction maps, and localisation maps at each visualisation step.",
+            "type": "integer",
+            "default": 4,
+            "minimum": 1,
+            "maximum": 16
+        },
         "width": {
             "title": "Image width",
             "description": "Width to transform image to (should be divisible by 32).",

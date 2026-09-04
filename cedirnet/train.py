@@ -30,7 +30,8 @@ from criterions.loss_weighting.weight_methods import get_weight_method
 import modelargs
 import mlflow
 from mlflow.entities import RunStatus
-from extras import plot_results, load_center_model
+from diagnostics import plot_training_diagnostics, training_artifact_path
+from extras import load_center_model
 
 class Trainer:
     def __init__(self, args):
@@ -356,19 +357,40 @@ class Trainer:
             if self.center_scheduler: self.center_scheduler.step()
 
             if args['display'] and (epoch + 1) % args['display_it'] == 0:
+                self.model.eval()
+                self.center_model.eval()
+                visualized = 0
                 with torch.no_grad():
                     for sample in tqdm(self.train_dataset_it, desc='visualise', dynamic_ncols=True):
 
                         center_output = self.center_model(self.model(sample['image']), **sample)
                         direction_maps, center_pred, center_heatmap, angle_pred = map(lambda k: center_output[k].detach().cpu().numpy(), ['output', 'center_pred', 'center_heatmap', 'pred_angle'])
-                        
-                        for name, im, centers, angles, dirs in zip(sample['name'], sample['image'], center_pred, angle_pred, direction_maps):
+
+                        for name, im, centers, angles, dirs, heatmap, ground_truth in zip(
+                                sample['name'], sample['image'], center_pred, angle_pred,
+                                direction_maps, center_heatmap, sample['center']):
                             valid = centers[:, 0] == 1
                             scores = centers[valid, -1]
 
-                            fig, _ = plot_results(im.cpu().numpy().transpose((1,2,0)), centers[valid, 1:-1], scores, angles[valid])
-                            mlflow.log_figure(fig, name)
+                            fig = plot_training_diagnostics(
+                                image=im,
+                                centers=centers[valid, 1:-1],
+                                scores=scores,
+                                angles=angles[valid],
+                                direction_output=dirs,
+                                localization_response=heatmap,
+                                ground_truth_centers=ground_truth,
+                            )
+                            mlflow.log_figure(
+                                fig,
+                                artifact_file=training_artifact_path(epoch, name),
+                            )
                             plt.close(fig)
+                            visualized += 1
+                            if visualized >= args['visualization_samples']:
+                                break
+                        if visualized >= args['visualization_samples']:
+                            break
 
             if args['save'] and ((epoch + 1) % args.get('save_interval',10) == 0 or epoch + 1 == args['n_epochs']):
                 print('Saving checkpoint', flush=True)
@@ -382,16 +404,17 @@ class Trainer:
                 }
 
                 if (ARTIFACTS := os.getenv("MLFLOW_ARTIFACTS_DESTINATION")) and (run := mlflow.active_run()):
-                    filename = os.path.join(ARTIFACTS, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
+                    filename = os.path.join(ARTIFACTS, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoints", "checkpoint.pth")
+                    os.makedirs(os.path.dirname(filename), exist_ok=True)
                     torch.save(state, filename)
-                    print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
+                    print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoints/checkpoint.pth")
                 else:
                     with tempfile.TemporaryDirectory() as d:
                         filename = os.path.join(d, "checkpoint.pth")
                         torch.save(state, filename)
-                        mlflow.log_artifact(filename)
+                        mlflow.log_artifact(filename, artifact_path="checkpoints")
                         info = mlflow.active_run().info
-                        print("Weights:", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pth")
+                        print("Weights:", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoints/checkpoint.pth")
 
 if __name__ == '__main__':
 
@@ -405,6 +428,7 @@ if __name__ == '__main__':
     args['pretrained_model_path'] = cmd_args['model']
     args['pretrained_center_model_path'] = cmd_args['localisation']
     args['display_it'] = cmd_args['display_interval']
+    args['visualization_samples'] = cmd_args['visualization_samples']
     args['save_interval'] = cmd_args['save_interval']
     
     mlflow.set_tracking_uri('http://localhost:8081')

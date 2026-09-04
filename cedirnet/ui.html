@@ -11,8 +11,22 @@
 <script>
     const template = document.getElementById("template-marker");
 
+    function filterDetectionIndices(scores, threshold) {
+        const selected = [];
+        for (let index = 0; index < scores.length; index++) {
+            if (Number(scores[index]) >= threshold) selected.push(index);
+        }
+        return selected;
+    }
+
+    function thresholdSliderMaximum(scoreGroups) {
+        const scores = scoreGroups.flat().map(Number).filter(Number.isFinite);
+        return Math.max(1, ...scores);
+    }
+
     function createMarker(markerSize, center, score, angle) {
         const marker = document.importNode(template.content.children[0], true);
+        marker.classList.add("cedirnet-marker");
         marker.style.width = markerSize;
         marker.style.height = markerSize;
         marker.style.left = center[0] * 100 + "%";
@@ -21,32 +35,82 @@
         marker.style.transformOrigin = "left center";
         marker.style.transform = `translateY(-50%) rotate(${Math.round(angle)}deg)`;
         marker.dataset.score = score;
+        marker.title = `confidence ${Number(score).toFixed(3)}`;
         return marker;
     }
+
+    function renderDetections(wrapper, image, centers, scores, angles, threshold) {
+        wrapper.querySelectorAll(".cedirnet-marker").forEach(marker => marker.remove());
+        const markerSize = Math.round(Math.max(image.clientWidth, image.clientHeight) * 0.05) + "px";
+        for (const index of filterDetectionIndices(scores, threshold)) {
+            const [x, y] = centers[index];
+            wrapper.appendChild(createMarker(markerSize, [x, y], scores[index], angles[index]));
+        }
+    }
+
     document.getElementById("infer").onInference = function (request, response) {
         const group = document.createElement("div");
         group.classList.add("group");
         const images = request.getAll("images");
         const { centers, scores, angles } = response;
+        const rendered = [];
+
+        const controls = document.createElement("div");
+        controls.style.display = "flex";
+        controls.style.alignItems = "center";
+        controls.style.gap = "0.75rem";
+        controls.style.marginBottom = "0.75rem";
+        controls.style.pointerEvents = "auto";
+
+        const thresholdLabel = document.createElement("label");
+        thresholdLabel.innerText = "Confidence threshold";
+        const thresholdInput = document.createElement("input");
+        thresholdInput.type = "range";
+        thresholdInput.min = "0";
+        thresholdInput.max = String(thresholdSliderMaximum(scores));
+        thresholdInput.step = "0.01";
+        thresholdInput.value = String(Math.min(0.5, Number(thresholdInput.max)));
+        thresholdInput.style.width = "min(24rem, 50vw)";
+        const thresholdValue = document.createElement("output");
+        thresholdValue.value = Number(thresholdInput.value).toFixed(2);
+        thresholdValue.innerText = thresholdValue.value;
+        thresholdLabel.htmlFor = "cedirnet-threshold";
+        thresholdInput.id = "cedirnet-threshold";
+        controls.append(thresholdLabel, thresholdInput, thresholdValue);
+
+        const renderAll = () => {
+            const threshold = Number(thresholdInput.value);
+            thresholdValue.value = threshold.toFixed(2);
+            thresholdValue.innerText = thresholdValue.value;
+            for (const item of rendered) {
+                renderDetections(
+                    item.wrapper,
+                    item.image,
+                    centers[item.index],
+                    scores[item.index],
+                    angles[item.index],
+                    threshold,
+                );
+            }
+        };
+        thresholdInput.addEventListener("input", renderAll);
+
         for (let i = 0; i < images.length; i++) {
             const wrapper = document.createElement("div");
             wrapper.style.position = "relative";
             wrapper.style.width = "fit-content";
 
-            const im = document.createElement("img");
-            im.src = URL.createObjectURL(images[i]);
-            im.onload = () => {
-                const { clientWidth: width, naturalWidth, clientHeight: height, naturalHeight } = im;
-                const markerSize = Math.round(Math.max(width, height) * 0.05) + "px";
-                for (let j = 0; j < centers[i].length; j++) {
-                    if (scores[i][j] < 0.5) continue;
-                    const [x, y, _] = centers[i][j];
-                    wrapper.appendChild(createMarker(markerSize, [x, y], scores[i][j], angles[i][j]));
-                }
+            const image = document.createElement("img");
+            const imageUrl = URL.createObjectURL(images[i]);
+            image.src = imageUrl;
+            image.onload = () => {
+                rendered.push({ index: i, wrapper, image });
+                renderDetections(wrapper, image, centers[i], scores[i], angles[i], Number(thresholdInput.value));
+                URL.revokeObjectURL(imageUrl);
             };
-            wrapper.appendChild(im);
+            wrapper.appendChild(image);
             group.appendChild(wrapper);
         }
-        return group;
+        return [controls, group];
     }
 </script>
