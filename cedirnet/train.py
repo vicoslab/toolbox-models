@@ -8,7 +8,6 @@ import collections
 import json
 import shutil
 import tempfile
-import time
 from collections import OrderedDict
 from pathlib import Path
 
@@ -418,13 +417,6 @@ class Trainer:
         if detection_score_threshold is not None:
             valid = np.logical_and(valid, centers[:, -1] >= detection_score_threshold)
         scores = centers[valid, -1]
-        artifact_file = training_artifact_path(epoch, name, subset)
-        render_started = time.monotonic()
-        print(
-            f"Visualization {subset} '{name}': rendering figure started "
-            f"(detections={int(valid.sum())})",
-            flush=True,
-        )
         fig = plot_training_diagnostics(
             image=image,
             centers=centers[valid, 1:-1],
@@ -434,22 +426,10 @@ class Trainer:
             localization_response=localization_response,
             ground_truth_centers=ground_truth_centers,
         )
-        print(
-            f"Visualization {subset} '{name}': rendering figure completed "
-            f"in {time.monotonic() - render_started:.2f}s; writing artifact started "
-            f"({artifact_file})",
-            flush=True,
-        )
-        write_started = time.monotonic()
         try:
-            log_figure_artifact(fig, artifact_file)
+            log_figure_artifact(fig, training_artifact_path(epoch, name, subset))
         finally:
             plt.close(fig)
-        print(
-            f"Visualization {subset} '{name}': writing artifact completed "
-            f"in {time.monotonic() - write_started:.2f}s",
-            flush=True,
-        )
 
     def visualize_samples(self, loader, epoch, subset, limit=None,
                           detection_score_threshold=None):
@@ -458,26 +438,13 @@ class Trainer:
 
         total = len(loader.dataset) if limit is None else min(limit, len(loader.dataset))
         visualized = 0
-        progress = tqdm(total=total, desc=f'visualise {subset}', dynamic_ncols=True)
+        progress = tqdm(total=total, desc='visualise', dynamic_ncols=True)
         try:
-            for batch_index, sample in enumerate(loader, start=1):
-                inference_started = time.monotonic()
-                print(
-                    f"Visualization {subset} batch {batch_index}/{len(loader)}: "
-                    "model inference started",
-                    flush=True,
-                )
+            for sample in loader:
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
                     lambda key: center_output[key].detach().cpu().numpy(),
                     ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
-                )
-                candidate_counts = [int((centers[:, 0] == 1).sum()) for centers in center_pred]
-                print(
-                    f"Visualization {subset} batch {batch_index}/{len(loader)}: "
-                    f"model inference completed in {time.monotonic() - inference_started:.2f}s "
-                    f"(candidates={candidate_counts})",
-                    flush=True,
                 )
                 for values in zip(
                         sample['name'], sample['image'], center_pred, angle_pred,
@@ -515,36 +482,17 @@ class Trainer:
             score_threshold=self.args['validation_score_threshold'],
             match_centers=center_evaluator._assign_detections_to_groundtruth,
         )
-        print(
-            f"Validation candidate threshold={self.args['validation_score_threshold']!r}; "
-            f"images={len(self.validation_dataset_it.dataset)}, "
-            f"batches={len(self.validation_dataset_it)}",
-            flush=True,
-        )
         with tqdm(
                 total=len(self.validation_dataset_it.dataset),
-                desc='validation',
+                desc='eval',
                 dynamic_ncols=True,
         ) as progress, center_detection_threshold(
                 self.center_model, self.args['validation_score_threshold']), torch.no_grad():
-            for batch_index, sample in enumerate(self.validation_dataset_it, start=1):
-                inference_started = time.monotonic()
-                print(
-                    f"Validation batch {batch_index}/{len(self.validation_dataset_it)}: "
-                    "model inference started",
-                    flush=True,
-                )
+            for sample in self.validation_dataset_it:
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
                     lambda key: center_output[key].detach().cpu().numpy(),
                     ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
-                )
-                candidate_counts = [int((centers[:, 0] == 1).sum()) for centers in center_pred]
-                print(
-                    f"Validation batch {batch_index}/{len(self.validation_dataset_it)}: "
-                    f"model inference completed in {time.monotonic() - inference_started:.2f}s "
-                    f"(candidates={candidate_counts})",
-                    flush=True,
                 )
                 orientation_maps = sample['orientation'].detach().cpu().numpy()
                 ground_truth_batch = sample['center'].detach().cpu().numpy()
@@ -559,27 +507,12 @@ class Trainer:
                     ground_truth_centers, ground_truth_angles = extract_ground_truth(
                         ground_truth, orientation_map
                     )
-                    selected_count = int(
-                        (predicted_scores >= self.args['validation_score_threshold']).sum()
-                    )
-                    matching_started = time.monotonic()
-                    print(
-                        f"Validation '{name}': matching started "
-                        f"(candidates={len(predicted_scores)}, selected={selected_count}, "
-                        f"ground_truth={len(ground_truth_centers)})",
-                        flush=True,
-                    )
                     metrics.update(
                         predicted_centers=predicted_centers,
                         predicted_scores=predicted_scores,
                         predicted_angles_deg=predicted_angles,
                         ground_truth_centers=ground_truth_centers,
                         ground_truth_angles_deg=ground_truth_angles,
-                    )
-                    print(
-                        f"Validation '{name}': matching completed "
-                        f"in {time.monotonic() - matching_started:.3f}s",
-                        flush=True,
                     )
                     self.visualize_sample(
                         epoch=epoch,
@@ -598,9 +531,7 @@ class Trainer:
         validation_metrics = {
             f"validation/{name}": value for name, value in metrics.compute().items()
         }
-        print("Validation: logging metrics started", flush=True)
         mlflow.log_metrics(validation_metrics, step=epoch + 1)
-        print("Validation: logging metrics completed", flush=True)
         print(
             "Validation: "
             f"F1@20px={validation_metrics['validation/point_f1_at_20px']:.4f}, "

@@ -245,24 +245,22 @@ class ValidationIntegrationContractTest(unittest.TestCase):
 
     def test_visualization_progress_is_counted_per_image(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("tqdm(total=total, desc=f'visualise {subset}'", train)
+        self.assertIn("tqdm(total=total, desc='visualise'", train)
+        self.assertIn("desc='eval'", train)
         self.assertIn("progress.update()", train)
 
-    def test_validation_logs_detailed_stall_diagnostics(self):
+    def test_validation_logging_remains_concise(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        for marker in (
-            "candidate threshold",
+        for verbose_marker in (
             "model inference started",
             "model inference completed",
             "matching started",
             "matching completed",
             "rendering figure started",
             "writing artifact started",
-            "writing artifact completed",
-            "logging metrics started",
-            "logging metrics completed",
         ):
-            self.assertIn(marker, train)
+            self.assertNotIn(verbose_marker, train)
+
 
     def test_validation_metric_options_are_exposed(self):
         schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))
