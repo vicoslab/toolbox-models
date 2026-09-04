@@ -8,6 +8,7 @@ import collections
 import json
 import shutil
 import tempfile
+import time
 from collections import OrderedDict
 from pathlib import Path
 
@@ -32,6 +33,7 @@ import modelargs
 import mlflow
 from mlflow.entities import RunStatus
 from diagnostics import plot_training_diagnostics, training_artifact_path
+from detection_threshold import center_detection_threshold
 from extras import load_center_model
 from localization_checkpoint import ensure_localization_checkpoint
 from scheduling import should_validate
@@ -139,16 +141,6 @@ class Trainer:
             pin_memory=False,
             collate_fn=variable_len_collate,
         ) if len(validation_dataset) > 0 else None
-        self.validation_visualization_dataset_it = torch.utils.data.DataLoader(
-            validation_dataset,
-            batch_size=self.dataset_batch,
-            shuffle=False,
-            drop_last=False,
-            num_workers=0,
-            pin_memory=False,
-            collate_fn=variable_len_collate,
-        ) if len(validation_dataset) > 0 else None
-
         self.model = get_model(args['model']['name'], args['model']['kwargs'])
         self.model.init_output(args['loss_opts']['num_vector_fields'])
 
@@ -426,6 +418,13 @@ class Trainer:
         if detection_score_threshold is not None:
             valid = np.logical_and(valid, centers[:, -1] >= detection_score_threshold)
         scores = centers[valid, -1]
+        artifact_file = training_artifact_path(epoch, name, subset)
+        render_started = time.monotonic()
+        print(
+            f"Visualization {subset} '{name}': rendering figure started "
+            f"(detections={int(valid.sum())})",
+            flush=True,
+        )
         fig = plot_training_diagnostics(
             image=image,
             centers=centers[valid, 1:-1],
@@ -435,10 +434,22 @@ class Trainer:
             localization_response=localization_response,
             ground_truth_centers=ground_truth_centers,
         )
+        print(
+            f"Visualization {subset} '{name}': rendering figure completed "
+            f"in {time.monotonic() - render_started:.2f}s; writing artifact started "
+            f"({artifact_file})",
+            flush=True,
+        )
+        write_started = time.monotonic()
         try:
-            log_figure_artifact(fig, training_artifact_path(epoch, name, subset))
+            log_figure_artifact(fig, artifact_file)
         finally:
             plt.close(fig)
+        print(
+            f"Visualization {subset} '{name}': writing artifact completed "
+            f"in {time.monotonic() - write_started:.2f}s",
+            flush=True,
+        )
 
     def visualize_samples(self, loader, epoch, subset, limit=None,
                           detection_score_threshold=None):
@@ -449,11 +460,24 @@ class Trainer:
         visualized = 0
         progress = tqdm(total=total, desc=f'visualise {subset}', dynamic_ncols=True)
         try:
-            for sample in loader:
+            for batch_index, sample in enumerate(loader, start=1):
+                inference_started = time.monotonic()
+                print(
+                    f"Visualization {subset} batch {batch_index}/{len(loader)}: "
+                    "model inference started",
+                    flush=True,
+                )
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
                     lambda key: center_output[key].detach().cpu().numpy(),
                     ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
+                )
+                candidate_counts = [int((centers[:, 0] == 1).sum()) for centers in center_pred]
+                print(
+                    f"Visualization {subset} batch {batch_index}/{len(loader)}: "
+                    f"model inference completed in {time.monotonic() - inference_started:.2f}s "
+                    f"(candidates={candidate_counts})",
+                    flush=True,
                 )
                 for values in zip(
                         sample['name'], sample['image'], center_pred, angle_pred,
@@ -480,15 +504,6 @@ class Trainer:
                 limit=self.args['visualization_samples'],
             )
 
-    def visualize_validation_samples(self, epoch):
-        with torch.no_grad():
-            self.visualize_samples(
-                self.validation_visualization_dataset_it,
-                epoch,
-                'validation',
-                detection_score_threshold=self.args['validation_score_threshold'],
-            )
-
     def validate(self, epoch):
         if self.validation_dataset_it is None:
             return None
@@ -500,12 +515,36 @@ class Trainer:
             score_threshold=self.args['validation_score_threshold'],
             match_centers=center_evaluator._assign_detections_to_groundtruth,
         )
-        with torch.no_grad():
-            for sample in tqdm(self.validation_dataset_it, desc='validation', dynamic_ncols=True):
+        print(
+            f"Validation candidate threshold={self.args['validation_score_threshold']!r}; "
+            f"images={len(self.validation_dataset_it.dataset)}, "
+            f"batches={len(self.validation_dataset_it)}",
+            flush=True,
+        )
+        with tqdm(
+                total=len(self.validation_dataset_it.dataset),
+                desc='validation',
+                dynamic_ncols=True,
+        ) as progress, center_detection_threshold(
+                self.center_model, self.args['validation_score_threshold']), torch.no_grad():
+            for batch_index, sample in enumerate(self.validation_dataset_it, start=1):
+                inference_started = time.monotonic()
+                print(
+                    f"Validation batch {batch_index}/{len(self.validation_dataset_it)}: "
+                    "model inference started",
+                    flush=True,
+                )
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
                     lambda key: center_output[key].detach().cpu().numpy(),
                     ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
+                )
+                candidate_counts = [int((centers[:, 0] == 1).sum()) for centers in center_pred]
+                print(
+                    f"Validation batch {batch_index}/{len(self.validation_dataset_it)}: "
+                    f"model inference completed in {time.monotonic() - inference_started:.2f}s "
+                    f"(candidates={candidate_counts})",
+                    flush=True,
                 )
                 orientation_maps = sample['orientation'].detach().cpu().numpy()
                 ground_truth_batch = sample['center'].detach().cpu().numpy()
@@ -520,6 +559,16 @@ class Trainer:
                     ground_truth_centers, ground_truth_angles = extract_ground_truth(
                         ground_truth, orientation_map
                     )
+                    selected_count = int(
+                        (predicted_scores >= self.args['validation_score_threshold']).sum()
+                    )
+                    matching_started = time.monotonic()
+                    print(
+                        f"Validation '{name}': matching started "
+                        f"(candidates={len(predicted_scores)}, selected={selected_count}, "
+                        f"ground_truth={len(ground_truth_centers)})",
+                        flush=True,
+                    )
                     metrics.update(
                         predicted_centers=predicted_centers,
                         predicted_scores=predicted_scores,
@@ -527,11 +576,31 @@ class Trainer:
                         ground_truth_centers=ground_truth_centers,
                         ground_truth_angles_deg=ground_truth_angles,
                     )
+                    print(
+                        f"Validation '{name}': matching completed "
+                        f"in {time.monotonic() - matching_started:.3f}s",
+                        flush=True,
+                    )
+                    self.visualize_sample(
+                        epoch=epoch,
+                        subset='validation',
+                        name=name,
+                        image=image,
+                        centers=centers,
+                        angles=angles,
+                        direction_map=direction_map,
+                        localization_response=heatmap,
+                        ground_truth_centers=ground_truth,
+                        detection_score_threshold=self.args['validation_score_threshold'],
+                    )
+                    progress.update()
 
         validation_metrics = {
             f"validation/{name}": value for name, value in metrics.compute().items()
         }
+        print("Validation: logging metrics started", flush=True)
         mlflow.log_metrics(validation_metrics, step=epoch + 1)
+        print("Validation: logging metrics completed", flush=True)
         print(
             "Validation: "
             f"F1@20px={validation_metrics['validation/point_f1_at_20px']:.4f}, "
@@ -561,7 +630,6 @@ class Trainer:
                 self.center_model.eval()
                 self.validate(epoch)
                 self.visualize_training_samples(epoch)
-                self.visualize_validation_samples(epoch)
                 print(
                     f"Validation step {epoch + 1}/{args['n_epochs']} completed",
                     flush=True,

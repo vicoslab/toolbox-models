@@ -40,6 +40,16 @@ def load_scheduling_module():
     return module
 
 
+def load_detection_threshold_module():
+    path = MODEL_DIR / "detection_threshold.py"
+    spec = importlib.util.spec_from_file_location("cedirnet_detection_threshold", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load detection_threshold.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class ValidationMetricsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -168,6 +178,29 @@ class ValidationMetricsTest(unittest.TestCase):
 
 
 class ValidationIntegrationContractTest(unittest.TestCase):
+    def test_configurable_threshold_is_applied_before_candidate_extraction(self):
+        threshold_module = load_detection_threshold_module()
+
+        class Localization:
+            local_max_thr = 0.1
+
+        class CenterModel:
+            instance_center_estimator = Localization()
+
+        class Parallel:
+            module = CenterModel()
+
+        model = Parallel()
+        with threshold_module.center_detection_threshold(model, 0.5):
+            actual = model.module.instance_center_estimator.local_max_thr
+            expected = float(np.nextafter(np.float32(0.5), np.float32(-np.inf)))
+            self.assertEqual(actual, expected)
+        self.assertEqual(model.module.instance_center_estimator.local_max_thr, 0.1)
+        with self.assertRaisesRegex(RuntimeError, "probe"):
+            with threshold_module.center_detection_threshold(model, 0.7):
+                raise RuntimeError("probe")
+        self.assertEqual(model.module.instance_center_estimator.local_max_thr, 0.1)
+
     def test_validation_processes_all_images_and_logs_mlflow_metrics(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("def validate(self, epoch):", train)
@@ -175,21 +208,20 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         self.assertIn("mlflow.log_metrics(validation_metrics, step=epoch + 1)", train)
         self.assertIn("mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), step=epoch + 1)", train)
         self.assertIn("self.visualize_sample(", train)
-        self.assertIn("self.visualize_validation_samples(epoch)", train)
+        self.assertNotIn("self.visualize_validation_samples(epoch)", train)
+        self.assertIn("center_detection_threshold(\n", train)
         self.assertNotIn("self.visualize(self.validation_dataset_it", train)
         self.assertIn("should_validate(", train)
         validate_call = train.index("self.validate(epoch)")
         train_visualization_call = train.index("self.visualize_training_samples(epoch)")
-        validation_visualization_call = train.index("self.visualize_validation_samples(epoch)")
         self.assertLess(validate_call, train_visualization_call)
-        self.assertLess(train_visualization_call, validation_visualization_call)
 
     def test_train_visualization_remains_limited(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("self.visualize_training_samples(epoch)", train)
         self.assertIn("limit=self.args['visualization_samples']", train)
         self.assertIn("self.training_visualization_dataset_it", train)
-        self.assertIn("self.validation_visualization_dataset_it", train)
+        self.assertNotIn("self.validation_visualization_dataset_it", train)
         self.assertIn("num_workers=0", train)
         self.assertNotIn("num_workers=dataset_workers,\n            pin_memory=True if args['cuda'] else False,\n            collate_fn=variable_len_collate,\n        ) if len(validation_dataset)", train)
         self.assertNotIn("for sample in tqdm(self.train_dataset_it, desc='visualise training'", train)
@@ -215,6 +247,22 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("tqdm(total=total, desc=f'visualise {subset}'", train)
         self.assertIn("progress.update()", train)
+
+    def test_validation_logs_detailed_stall_diagnostics(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        for marker in (
+            "candidate threshold",
+            "model inference started",
+            "model inference completed",
+            "matching started",
+            "matching completed",
+            "rendering figure started",
+            "writing artifact started",
+            "writing artifact completed",
+            "logging metrics started",
+            "logging metrics completed",
+        ):
+            self.assertIn(marker, train)
 
     def test_validation_metric_options_are_exposed(self):
         schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))
