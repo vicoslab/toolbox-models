@@ -33,19 +33,28 @@
             "default": 4
         },
         "display_interval": {
-            "title": "Visualisation interval",
-            "description": "Epoch count between visualisations.",
+            "title": "Validation interval",
+            "description": "Epoch count between full validation/test evaluation passes and diagnostic visualisations.",
             "type": "integer",
-            "default": 4
+            "default": 4,
+            "minimum": 1
         },
         "visualization_samples": {
-            "title": "Samples to visualise per split",
-            "description": "Maximum number of training samples and validation/test samples saved separately with detections, center-direction maps, and localisation maps at each visualisation step.",
+            "title": "Training samples to visualise",
+            "description": "Maximum number of training samples saved at each validation step. Every validation/test image is always visualised.",
             "type": "integer",
             "default": 4,
             "minimum": 1,
             "maximum": 16
         },
+        "validation_score_threshold": {
+            "title": "Validation score threshold",
+            "description": "Minimum center confidence used to calculate validation point and orientation metrics.",
+            "type": "number",
+            "default": 0.5,
+            "minimum": 0
+        },
+
         "width": {
             "title": "Image width",
             "description": "Width to transform image to (should be divisible by 32).",

@@ -21,6 +21,16 @@ def load_module():
     return module
 
 
+def load_localization_module():
+    path = MODEL_DIR / "localization_checkpoint.py"
+    spec = importlib.util.spec_from_file_location("cedirnet_localization_checkpoint", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load localization_checkpoint.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 class DiagnosticMapsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -65,7 +75,7 @@ class DiagnosticMapsTest(unittest.TestCase):
             ground_truth_centers=np.array([[5, 4]], dtype=np.float32),
         )
         titles = [axis.get_title() for axis in fig.axes]
-        self.assertIn("Training sample + ground truth", titles)
+        self.assertIn("Input + ground truth", titles)
         self.assertIn("Final detections", titles)
         self.assertIn("Center-direction angle", titles)
         self.assertIn("Localization probability", titles)
@@ -78,6 +88,48 @@ class DiagnosticMapsTest(unittest.TestCase):
 
 
 class PreparedModelContractTest(unittest.TestCase):
+    def test_missing_default_checkpoint_is_downloaded_and_verified_at_runtime(self):
+        helper = load_localization_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "source.pth"
+            source.write_bytes(b"verified checkpoint")
+            expected = __import__("hashlib").sha256(source.read_bytes()).hexdigest()
+            destination = root / "cache" / "localization_checkpoint.pth"
+
+            actual = helper.ensure_localization_checkpoint(
+                destination, url=source.as_uri(), expected_sha256=expected
+            )
+
+            self.assertEqual(actual, destination)
+            self.assertEqual(destination.read_bytes(), source.read_bytes())
+            self.assertEqual(list(destination.parent.glob("*.part")), [])
+
+    def test_valid_cached_checkpoint_does_not_require_network(self):
+        helper = load_localization_module()
+        with tempfile.TemporaryDirectory() as directory:
+            destination = pathlib.Path(directory) / "localization_checkpoint.pth"
+            destination.write_bytes(b"cached checkpoint")
+            expected = __import__("hashlib").sha256(destination.read_bytes()).hexdigest()
+            actual = helper.ensure_localization_checkpoint(
+                destination, url="file:///does-not-exist", expected_sha256=expected
+            )
+            self.assertEqual(actual, destination)
+
+    def test_bad_download_is_rejected_without_publishing_final_file(self):
+        helper = load_localization_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "source.pth"
+            source.write_bytes(b"wrong checkpoint")
+            destination = root / "cache" / "localization_checkpoint.pth"
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                helper.ensure_localization_checkpoint(
+                    destination, url=source.as_uri(), expected_sha256="0" * 64
+                )
+            self.assertFalse(destination.exists())
+            self.assertEqual(list(destination.parent.glob("*.part")), [])
+
     def test_setup_downloads_default_localization_checkpoint(self):
         setup = (MODEL_DIR / "setup.sh").read_text(encoding="utf-8")
         self.assertIn("localization_checkpoint.pth", setup)
@@ -92,11 +144,13 @@ class PreparedModelContractTest(unittest.TestCase):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("default_localisation_checkpoint", train)
         self.assertIn("cmd_args.get('localisation') or default_localisation_checkpoint", train)
+        self.assertIn("ensure_localization_checkpoint(default_localisation_checkpoint)", train)
 
     def test_inference_uses_default_localization_checkpoint_when_not_provided(self):
         infer = (MODEL_DIR / "infer.py").read_text(encoding="utf-8")
         self.assertIn("default_localisation_checkpoint", infer)
         self.assertIn("cmd_args.get(\"localisation\") or default_localisation_checkpoint", infer)
+        self.assertIn("ensure_localization_checkpoint(default_localisation_checkpoint)", infer)
 
     def test_localization_option_is_a_checkpoint_file_and_optional(self):
         schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))
@@ -114,8 +168,8 @@ class PreparedModelContractTest(unittest.TestCase):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("self.validation_dataset_it", train)
         self.assertIn("validation_kwargs['split'] = 'test'", train)
-        self.assertIn("self.visualize(self.train_dataset_it, epoch, 'training')", train)
-        self.assertIn("self.visualize(self.validation_dataset_it, epoch, 'validation')", train)
+        self.assertIn("self.visualize_training_samples(epoch)", train)
+        self.assertIn("self.validate(epoch)", train)
 
     def test_checkpoints_are_stored_under_checkpoint_subfolder(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")

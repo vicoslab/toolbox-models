@@ -8,6 +8,7 @@ from typing import List, Tuple
 
 import modelargs, json
 from extras import plot_results, load_center_model
+from localization_checkpoint import ensure_localization_checkpoint
 
 from matplotlib import pyplot as plt
 import numpy as np
@@ -32,9 +33,12 @@ args['checkpoint_path'] = cmd_args["model"]
 default_localisation_checkpoint = os.path.join(
     os.environ["TOOLBOX_CACHE"], "cedirnet", "localization_checkpoint.pth"
 )
-args['center_checkpoint_path'] = (
-    cmd_args.get("localisation") or default_localisation_checkpoint
-)
+localisation_checkpoint = cmd_args.get("localisation") or default_localisation_checkpoint
+if localisation_checkpoint == default_localisation_checkpoint:
+    localisation_checkpoint = str(
+        ensure_localization_checkpoint(default_localisation_checkpoint)
+    )
+args['center_checkpoint_path'] = localisation_checkpoint
 
 model = get_model(args['model']['name'], args['model']['kwargs'])
 model.init_output(args['loss_opts']['num_vector_fields'])

@@ -32,6 +32,8 @@ import mlflow
 from mlflow.entities import RunStatus
 from diagnostics import plot_training_diagnostics, training_artifact_path
 from extras import load_center_model
+from localization_checkpoint import ensure_localization_checkpoint
+from validation_metrics import POINT_MATCH_DISTANCE_PX, ValidationMetrics, extract_ground_truth
 
 class Trainer:
     def __init__(self, args):
@@ -370,44 +372,110 @@ class Trainer:
 
         return stored_results
 
-    def visualize(self, loader, epoch, subset):
-        if loader is None:
-            return
+    def visualize_sample(self, epoch, subset, name, image, centers, angles,
+                         direction_map, localization_response, ground_truth_centers,
+                         detection_score_threshold=None):
+        valid = centers[:, 0] == 1
+        if detection_score_threshold is not None:
+            valid = np.logical_and(valid, centers[:, -1] >= detection_score_threshold)
+        scores = centers[valid, -1]
+        fig = plot_training_diagnostics(
+            image=image,
+            centers=centers[valid, 1:-1],
+            scores=scores,
+            angles=angles[valid],
+            direction_output=direction_map,
+            localization_response=localization_response,
+            ground_truth_centers=ground_truth_centers,
+        )
+        mlflow.log_figure(
+            fig,
+            artifact_file=training_artifact_path(epoch, name, subset),
+        )
+        plt.close(fig)
 
+    def visualize_training_samples(self, epoch):
         visualized = 0
         with torch.no_grad():
-            for sample in tqdm(loader, desc=f'visualise {subset}', dynamic_ncols=True):
+            for sample in tqdm(self.train_dataset_it, desc='visualise training', dynamic_ncols=True):
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
-                    lambda k: center_output[k].detach().cpu().numpy(),
+                    lambda key: center_output[key].detach().cpu().numpy(),
                     ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
                 )
-
-                for name, im, centers, angles, dirs, heatmap, ground_truth in zip(
+                for values in zip(
                         sample['name'], sample['image'], center_pred, angle_pred,
                         direction_maps, center_heatmap, sample['center']):
-                    valid = centers[:, 0] == 1
-                    scores = centers[valid, -1]
-
-                    fig = plot_training_diagnostics(
-                        image=im,
-                        centers=centers[valid, 1:-1],
-                        scores=scores,
-                        angles=angles[valid],
-                        direction_output=dirs,
-                        localization_response=heatmap,
-                        ground_truth_centers=ground_truth,
-                    )
-                    mlflow.log_figure(
-                        fig,
-                        artifact_file=training_artifact_path(epoch, name, subset),
-                    )
-                    plt.close(fig)
+                    self.visualize_sample(epoch, 'training', *values)
                     visualized += 1
                     if visualized >= self.args['visualization_samples']:
                         break
                 if visualized >= self.args['visualization_samples']:
                     break
+
+    def validate(self, epoch):
+        if self.validation_dataset_it is None:
+            return None
+
+        self.model.eval()
+        self.center_model.eval()
+        center_evaluator = CenterGlobalMinimizationEval(tau_thr=POINT_MATCH_DISTANCE_PX)
+        metrics = ValidationMetrics(
+            score_threshold=self.args['validation_score_threshold'],
+            match_centers=center_evaluator._assign_detections_to_groundtruth,
+        )
+        with torch.no_grad():
+            for sample in tqdm(self.validation_dataset_it, desc='validation', dynamic_ncols=True):
+                center_output = self.center_model(self.model(sample['image']), **sample)
+                direction_maps, center_pred, center_heatmap, angle_pred = map(
+                    lambda key: center_output[key].detach().cpu().numpy(),
+                    ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
+                )
+                orientation_maps = sample['orientation'].detach().cpu().numpy()
+                ground_truth_batch = sample['center'].detach().cpu().numpy()
+
+                for name, image, centers, angles, direction_map, heatmap, ground_truth, orientation_map in zip(
+                        sample['name'], sample['image'], center_pred, angle_pred,
+                        direction_maps, center_heatmap, ground_truth_batch, orientation_maps):
+                    valid = centers[:, 0] == 1
+                    predicted_centers = centers[valid, 1:3]
+                    predicted_scores = centers[valid, -1]
+                    predicted_angles = angles[valid]
+                    ground_truth_centers, ground_truth_angles = extract_ground_truth(
+                        ground_truth, orientation_map
+                    )
+                    metrics.update(
+                        predicted_centers=predicted_centers,
+                        predicted_scores=predicted_scores,
+                        predicted_angles_deg=predicted_angles,
+                        ground_truth_centers=ground_truth_centers,
+                        ground_truth_angles_deg=ground_truth_angles,
+                    )
+                    self.visualize_sample(
+                        epoch=epoch,
+                        subset='validation',
+                        name=name,
+                        image=image,
+                        centers=centers,
+                        angles=angles,
+                        direction_map=direction_map,
+                        localization_response=heatmap,
+                        ground_truth_centers=ground_truth,
+                        detection_score_threshold=self.args['validation_score_threshold'],
+                    )
+
+        validation_metrics = {
+            f"validation/{name}": value for name, value in metrics.compute().items()
+        }
+        mlflow.log_metrics(validation_metrics, step=epoch)
+        print(
+            "Validation: "
+            f"F1@20px={validation_metrics['validation/point_f1_at_20px']:.4f}, "
+            f"localization MAE={validation_metrics['validation/localization_mae_px']:.2f}px, "
+            f"orientation MAE={validation_metrics['validation/orientation_mae_deg']:.2f}deg",
+            flush=True,
+        )
+        return validation_metrics
 
     def run(self):
         args = self.args
@@ -419,11 +487,13 @@ class Trainer:
             if self.scheduler: self.scheduler.step()
             if self.center_scheduler: self.center_scheduler.step()
 
-            if args['display'] and (epoch + 1) % args['display_it'] == 0:
+            if args['display'] and (
+                    (epoch + 1) % args['display_it'] == 0
+                    or epoch + 1 == args['n_epochs']):
                 self.model.eval()
                 self.center_model.eval()
-                self.visualize(self.train_dataset_it, epoch, 'training')
-                self.visualize(self.validation_dataset_it, epoch, 'validation')
+                self.visualize_training_samples(epoch)
+                self.validate(epoch)
 
             if args['save'] and ((epoch + 1) % args.get('save_interval',10) == 0 or epoch + 1 == args['n_epochs']):
                 print('Saving checkpoint', flush=True)
@@ -462,11 +532,15 @@ if __name__ == '__main__':
     default_localisation_checkpoint = os.path.join(
         os.environ['TOOLBOX_CACHE'], 'cedirnet', 'localization_checkpoint.pth'
     )
-    args['pretrained_center_model_path'] = (
-        cmd_args.get('localisation') or default_localisation_checkpoint
-    )
+    localisation_checkpoint = cmd_args.get('localisation') or default_localisation_checkpoint
+    if localisation_checkpoint == default_localisation_checkpoint:
+        localisation_checkpoint = str(
+            ensure_localization_checkpoint(default_localisation_checkpoint)
+        )
+    args['pretrained_center_model_path'] = localisation_checkpoint
     args['display_it'] = cmd_args['display_interval']
     args['visualization_samples'] = cmd_args['visualization_samples']
+    args['validation_score_threshold'] = cmd_args['validation_score_threshold']
     args['save_interval'] = cmd_args['save_interval']
     
     mlflow.set_tracking_uri('http://localhost:8081')
@@ -483,6 +557,7 @@ if __name__ == '__main__':
         print('Experiment:', run.info.experiment_id)
         print('Run:', run.info.run_id)
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: '<not serializable>')))
+        mlflow.log_param('validation_match_distance_px', POINT_MATCH_DISTANCE_PX)
 
         trainer = Trainer(args)
 

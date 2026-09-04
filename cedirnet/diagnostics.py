@@ -111,7 +111,7 @@ def plot_training_diagnostics(
             linewidths=2,
             color="yellow",
         )
-    axes[0, 0].set_title("Training sample + ground truth")
+    axes[0, 0].set_title("Input + ground truth")
     axes[0, 0].axis("off")
 
     axes[0, 1].imshow(image)
