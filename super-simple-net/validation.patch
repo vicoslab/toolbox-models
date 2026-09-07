@@ -1,0 +1,32 @@
+diff --git a/datamodules/base/datamodule.py b/datamodules/base/datamodule.py
+index 56453a7..dd373dc 100644
+--- a/datamodules/base/datamodule.py
++++ b/datamodules/base/datamodule.py
+@@ -124,9 +124,11 @@ class SSNDataModule(LightningDataModule, ABC):
+         the test set must therefore be created as early as the `fit` stage.
+         """
+         assert self.train_data is not None
++        assert self.val_data is not None
+         assert self.test_data is not None
+ 
+         self.train_data.setup()
++        self.val_data.setup()
+         self.test_data.setup()
+ 
+     def train_dataloader(self) -> TRAIN_DATALOADERS:
+@@ -144,6 +146,15 @@ class SSNDataModule(LightningDataModule, ABC):
+             persistent_workers=persist,
+         )
+ 
++    def val_dataloader(self) -> EVAL_DATALOADERS:
++        """Get validation dataloader."""
++        return DataLoader(
++            dataset=self.val_data,
++            shuffle=False,
++            batch_size=self.eval_batch_size,
++            num_workers=self.num_workers,
++        )
++
+     def test_dataloader(self) -> EVAL_DATALOADERS:
+         """Get test dataloader."""
+         return DataLoader(
