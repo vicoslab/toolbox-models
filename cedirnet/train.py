@@ -384,14 +384,14 @@ class Trainer:
                 if (ARTIFACTS := os.getenv("MLFLOW_ARTIFACTS_DESTINATION")) and (run := mlflow.active_run()):
                     filename = os.path.join(ARTIFACTS, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
                     torch.save(state, filename)
-                    print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
+                    modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
                 else:
                     with tempfile.TemporaryDirectory() as d:
                         filename = os.path.join(d, "checkpoint.pth")
                         torch.save(state, filename)
                         mlflow.log_artifact(filename)
                         info = mlflow.active_run().info
-                        print("Weights:", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pth")
+                        modelargs.emit_action("Weights", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pth")
 
 if __name__ == '__main__':
 
@@ -418,8 +418,8 @@ if __name__ == '__main__':
         signal.signal(signal.SIGTERM, handler)
 
         # this gets parsed and turned into a link in the frontend
-        print('Experiment:', run.info.experiment_id)
-        print('Run:', run.info.run_id)
+        modelargs.emit_action('Experiment', run.info.experiment_id)
+        modelargs.emit_action('Run', run.info.run_id)
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: '<not serializable>')))
 
         trainer = Trainer(args)

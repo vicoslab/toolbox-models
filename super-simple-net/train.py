@@ -404,8 +404,8 @@ def train_and_eval(model, datamodule, config, device):
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
 
-        print("Experiment:", run.info.experiment_id)
-        print("Run:", run.info.run_id)
+        modelargs.emit_action("Experiment", run.info.experiment_id)
+        modelargs.emit_action("Run", run.info.run_id)
         mlflow.log_params(config)
         args = {
             "model": model,
@@ -433,7 +433,7 @@ def train_and_eval(model, datamodule, config, device):
             p = Path(d)
             model.save_model(p)
             mlflow.log_artifact(p / "weights.pt")
-            print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/weights.pt")
+            modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/weights.pt")
         
         eval(**args, loader=datamodule.val_dataloader(), normalize=True)
 
@@ -481,7 +481,7 @@ if __name__ == "__main__":
     else:
         supervision = Supervision.MIXED_SUPERVISION
 
-    print("Info:", json.dumps(dict(title="Supervision", description="Supervision refers to detected dataset structure. Click to learn more.", value=str(supervision), link="https://arxiv.org/pdf/2508.19060")), flush=True)
+    modelargs.emit_action("Info", json.dumps(dict(title="Supervision", description="Supervision refers to detected dataset structure. Click to learn more.", value=str(supervision), link="https://arxiv.org/pdf/2508.19060")))
     if supervision == Supervision.UNSUPERVISED:
         config = {
             **base_config,
