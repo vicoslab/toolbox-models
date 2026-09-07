@@ -18,6 +18,9 @@ DEVICE='cuda' if torch.cuda.is_available() else 'cpu'
 model = SuperSimpleNet(image_size=IMAGE_SIZE, config=config).to(DEVICE)
 if config['weights']:
     model.load_model(config['weights'])
+else:
+    print('Error:', 'Cannot start inference without weights')
+    raise ValueError('Cannot start inference without weights')
 model.eval()
 
 transforms = Compose([

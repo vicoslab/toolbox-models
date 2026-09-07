@@ -472,7 +472,7 @@ if __name__ == "__main__":
     else:
         supervision = Supervision.MIXED_SUPERVISION
 
-    print("Using", supervision, flush=True)
+    print("Info:", json.dumps(dict(title="Supervision", description="Supervision refers to detected dataset structure. Click to learn more.", value=str(supervision), link="https://arxiv.org/pdf/2508.19060")), flush=True)
     if supervision == Supervision.UNSUPERVISED:
         config = {
             **base_config,
