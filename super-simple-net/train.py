@@ -253,6 +253,7 @@ def train(
 
         if (epoch + 1) % eval_step_size == 0:
             results = eval(
+                title="Validation",
                 model=model,
                 loader=datamodule.val_dataloader(),
                 device=device,
@@ -260,14 +261,14 @@ def train(
                 pixel_metrics=pixel_metrics,
                 normalize=True,
             )
-            mlflow.log_metrics({**results, **output}, epoch)
-        else:
-            mlflow.log_metrics(output, epoch)
+            mlflow.log_metrics(results, epoch)
+        mlflow.log_metrics(output, epoch)
         scheduler.step()
 
 
 @torch.no_grad()
 def eval(
+    title: str,
     model: SuperSimpleNet,
     loader,
     device: str,
@@ -365,14 +366,14 @@ def eval(
             if not name.startswith("AP-"):
                 metric.update(results)
             else:
-                metric.update(results.anomaly_map, results.gt_mask.type(torch.float32))
+                metric.update(results.anomaly_map.squeeze(1), results.gt_mask)
             results_dict[name] = metric.to(device).compute().item()
         except RuntimeError:
             # AUPRO in some cases with early predictions crashes cuda, so just skip it in that case
             results_dict[name] = 0
         metric.to("cpu")
 
-    Visualizer(Path("vis")).visualize(results)
+    Visualizer(Path(title)).visualize(results)
     score_dict = {}
     # save both segscore and score to json
     for img_path, score, seg_score, label in zip(
@@ -389,8 +390,8 @@ def eval(
             "seg_score": seg_score.item(),
         }
 
-    mlflow.log_text(json.dumps(score_dict), "image_scores.json")
-    mlflow.log_text(json.dumps(results_dict), "results.json")
+    mlflow.log_text(json.dumps(score_dict), f"{title}/image_scores.json")
+    mlflow.log_text(json.dumps(results_dict), f"{title}/results.json")
 
     return results_dict
 
@@ -435,7 +436,9 @@ def train_and_eval(model, datamodule, config, device):
             mlflow.log_artifact(p / "weights.pt")
             modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/weights.pt")
         
-        eval(**args, loader=datamodule.val_dataloader(), normalize=True)
+        test_loader = datamodule.test_dataloader()
+        if len(test_loader) > 0:
+            eval(title="Test", **args, loader=test_loader, normalize=True)
 
 if __name__ == "__main__":
     base_config = modelargs.parse('./model.json')
