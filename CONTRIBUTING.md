@@ -27,3 +27,10 @@ btoa(JSON.stringify([{ owner: "ViCoS", group: "Tracking", models: ["dam4sam"], u
 JSON.parse(atob("W3sib3duZXIiOiJWaUNvUyIsImdyb3VwIjoiVHJhY2tpbmciLCJtb2RlbHMiOlsiZGFtNHNhbSJdLCJ1cmwiOiJodHRwczovL2dpdGh1Yi5jb20vdmljb3NsYWIvdG9vbGJveC1tb2RlbHMifV0="))
 > [{ owner: "ViCoS", group: "Tracking", models: ["dam4sam"], url: "https://github.com/vicoslab/toolbox-models"}]
 ```
+
+## Manifest version
+Models are expected to accept manifest files as input. Over time, it is understandable that some breaking changes may be introduced in which case the manifest version is increased, so manifest consumers can gate or refuse processing of incompatible manifests. Here is a change log for manifests:
+- version 4: train/val/test splits can be specified in the manifest
+- version 3: manifests may be combined
+- version 2: manifest items may contain grouped images ('images' attribute with list of paths)
+- initial: base version (task specific values + 'image' attribute with path)
