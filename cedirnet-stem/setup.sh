@@ -11,14 +11,11 @@ git clone --depth 1 "$repository" "$model_dir"
 cd "$model_dir"
 git apply "$dir"/*.patch
 
+install -m 0644 "$dir/annotations.py" "$model_dir/src/datasets/annotations.py"
+install -m 0644 "$dir/generic_dataset.py" "$model_dir/src/datasets/GenericPointRadiusDataset.py"
 curl --fail --location --retry 3 \
     --output "$model_dir/localization_checkpoint.pth" \
     https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth
-
-curl --fail --location --retry 3 \
-    --output "$model_dir/stem_checkpoint.pt" \
-    https://data.vicos.si/skokec/STEM/checkpoint.pth
-echo "SHA256 (stem_checkpoint.pt) = b77a30d6346309aeb64a7646d851db74d974758bf7d8e5f2cfcfd9f081637980" | cksum -c
 
 cd "$model_dir"
 uv venv --python 3.11
