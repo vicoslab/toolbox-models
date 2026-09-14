@@ -20,6 +20,7 @@ class GenericPointRadiusDataset(Dataset):
 
     def __init__(
         self,
+        root,
         manifest,
         split="train",
         fixed_bbox_size=15,
@@ -33,20 +34,9 @@ class GenericPointRadiusDataset(Dataset):
         if num_cpu_threads:
             torch.set_num_threads(num_cpu_threads)
 
-        with open(manifest, encoding="utf-8") as stream:
-            manifest_data = json.load(stream)
-        if manifest_data.get('version', 0) < 2:
-            raise ValueError("Version of loaded manifest is too low")
-        if split in manifest_data:
-            items = manifest_data[split]
-        elif split == "train" and "data" in manifest_data:
-            items = manifest_data["data"]
-        else:
-            items = []
-
-        self.root_dir = os.path.dirname(os.path.abspath(manifest))
-        self.items = [item for item in items if "points" in item]
-        skipped = len(items) - len(self.items)
+        self.root_dir = root
+        self.items = [item for item in manifest[split] if "points" in item]
+        skipped = len(manifest[split]) - len(self.items)
         if skipped:
             print(f"Warning: skipped {skipped} items without point-radius annotations")
         if not self.items:

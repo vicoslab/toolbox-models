@@ -41,6 +41,13 @@
             "default": 10,
             "minimum": 1
         },
+        "val_interval": {
+            "title": "Validation pass",
+            "description": "Number of epochs between validation passes.",
+            "type": "integer",
+            "default": 10,
+            "minimum": 1
+        },
         "width": {
             "title": "Image width",
             "description": "Network input width; must be divisible by 32.",
