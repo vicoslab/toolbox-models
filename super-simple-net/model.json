@@ -7,11 +7,13 @@
             "title": "Dataset manifest",
             "description": "The dataset manifest should be a file containing a JSON object with either a single attribute 'data', or attributes 'train' and 'test', each of which should be a list of objects with properties 'label' (with value being either 'normal' or 'abnormal'), 'image_path' and 'mask_path' (their values should be file paths, relative to the manifest file). Attributes mask_path or label may be omitted, but this will impact which training regime is used. ",
             "format": "file:manifest.json",
+            "stage": "train",
             "type": "string"
         },
         "name": {
             "title": "Experiment name",
             "description": "Title of experiments.",
+            "stage": "train",
             "type": "string"
         },
         "width": {
@@ -52,31 +54,37 @@
         "noise": {
             "title": "Noise",
             "type": "boolean",
+            "stage": "train",
             "default": true
         },
         "noise_std": {
             "title": "Noise standard deviation",
             "type": "number",
+            "stage": "train",
             "default": 0.015
         },
         "perlin": {
             "title": "Perlin noise",
             "type": "boolean",
+            "stage": "train",
             "default": true
         },
         "perlin_thr": {
             "title": "Perlin threshold",
             "type": "number",
+            "stage": "train",
             "default": 0.6
         },
         "flips": {
             "title": "Flip augmentation",
             "type": "boolean",
+            "stage": "train",
             "default": true
         },
         "dilate": {
             "title": "Mask dilation",
             "type": "integer",
+            "stage": "train",
             "default": null
         },
         "no_anomaly": {
@@ -86,60 +94,70 @@
                 "full",
                 "empty"
             ],
+            "stage": "train",
             "default": "empty"
         },
         "bad": {
             "title": "Overlay anomalies",
             "description": "Whether to add noise to already anomalous regions.",
             "type": "boolean",
+            "stage": "train",
             "default": true
         },
         "seed": {
             "title": "Random seed",
             "description": "Seed for random number generation.",
             "type": "integer",
+            "stage": "train",
             "default": 42
         },
         "batch": {
             "title": "Batch size",
             "description": "Number of images to use each training step.",
             "type": "integer",
+            "stage": "train",
             "default": 32
         },
         "epochs": {
             "title": "Training duration",
             "description": "Number of epochs to train for (1 epoch == 1 pass through the dataset).",
             "type": "integer",
+            "stage": "train",
             "default": 10
         },
         "seg_lr": {
             "title": "Segmentation LR",
             "description": "Learning rate for segmentation head.",
             "type": "number",
+            "stage": "train",
             "default": 0.0002
         },
         "dec_lr": {
             "title": "Decision LR",
             "description": "Learning rate for decision head.",
             "type": "number",
+            "stage": "train",
             "default": 0.0002
         },
         "adapt_lr": {
             "title": "Feature adaptor LR",
             "description": "Learning rate for feature adaptor.",
             "type": "number",
+            "stage": "train",
             "default": 0.0001
         },
         "gamma": {
             "title": "LR decay",
             "description": "Parameter for learning rate decay (MultiStepLR - for each milestone, multiply lr with gamma).",
             "type": "number",
+            "stage": "train",
             "default": 0.4
         },
         "eval_step_size": {
             "title": "Evaluation interval",
             "description": "Number of steps beween each evaluation.",
             "type": "integer",
+            "stage": "train",
             "default": 4
         }
     }

@@ -177,14 +177,14 @@ class Trainer:
             filename = os.path.join(artifacts, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
             os.makedirs(os.path.dirname(filename), exist_ok=True)
             torch.save(state, filename)
-            print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
+            modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
         else:
             with tempfile.TemporaryDirectory() as directory:
                 filename = os.path.join(directory, "checkpoint.pt")
                 torch.save(state, filename)
                 mlflow.log_artifact(filename)
                 info = mlflow.active_run().info
-                print("Weights:", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pt")
+                modelargs.emit_action("Weights", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pt")
 
     def run(self):
         for epoch in range(self.args["n_epochs"]):
@@ -229,8 +229,8 @@ def main():
 
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
-        print("Experiment:", run.info.experiment_id)
-        print("Run:", run.info.run_id)
+        modelargs.emit_action("Experiment", run.info.experiment_id)
+        modelargs.emit_action("Run", run.info.run_id)
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: "<callable>")))
 
         trainer = Trainer(args)

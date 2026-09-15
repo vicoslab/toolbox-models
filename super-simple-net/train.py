@@ -76,7 +76,7 @@ class GenericDataset(SSNDataset):
         } for f in self.manifest[self.split.value]]
 
         normal = [x for x in samples if x["label_index"] == LabelName.NORMAL]
-        if len(normal) == 0:
+        if len(normal) == 0 and split != "test":
             raise ValueError("Cannot start training without any normal samples")
         return pd.DataFrame(normal), pd.DataFrame([x for x in samples if x["label_index"] == LabelName.ABNORMAL])
 
@@ -122,6 +122,16 @@ class Generic(SSNDataModule):
             supervision=supervision,
             dilate=dilate,
             dt=dt,
+            debug=debug,
+        )
+        self.val_data = GenericDataset(
+            manifest=manifest,
+            transform=self.transform_eval,
+            split=Split.VAL,
+            root=root,
+            flips=flips,
+            normal_flips=False,
+            supervision=supervision,
             debug=debug,
         )
         self.test_data = GenericDataset(
@@ -242,24 +252,25 @@ def train(
                 prog_bar.update(1)
 
         if (epoch + 1) % eval_step_size == 0:
-            results = test(
+            results = eval(
+                title="Validation",
                 model=model,
-                datamodule=datamodule,
+                loader=datamodule.val_dataloader(),
                 device=device,
                 image_metrics=image_metrics,
                 pixel_metrics=pixel_metrics,
                 normalize=True,
             )
-            mlflow.log_metrics({**results, **output}, epoch)
-        else:
-            mlflow.log_metrics(output, epoch)
+            mlflow.log_metrics(results, epoch)
+        mlflow.log_metrics(output, epoch)
         scheduler.step()
 
 
 @torch.no_grad()
-def test(
+def eval(
+    title: str,
     model: SuperSimpleNet,
-    datamodule: LightningDataModule,
+    loader,
     device: str,
     image_metrics: dict[str, Metric],
     pixel_metrics: dict[str, Metric],
@@ -283,7 +294,6 @@ def test(
         metric.cpu()
         metric.reset()
 
-    test_loader = datamodule.test_dataloader()
     results = {
         "anomaly_map": [],
         "gt_mask": [],
@@ -293,7 +303,7 @@ def test(
         "image_path": [],
         "mask_path": [],
     }
-    for batch in tqdm(test_loader, position=0, leave=True, desc="eval"):
+    for batch in tqdm(loader, position=0, leave=True, desc="eval"):
         image_batch = batch["image"].to(device)
         anomaly_map, anomaly_score = model.forward(image_batch)
 
@@ -356,14 +366,14 @@ def test(
             if not name.startswith("AP-"):
                 metric.update(results)
             else:
-                metric.update(results.anomaly_map, results.gt_mask.type(torch.float32))
+                metric.update(results.anomaly_map.squeeze(1), results.gt_mask)
             results_dict[name] = metric.to(device).compute().item()
         except RuntimeError:
             # AUPRO in some cases with early predictions crashes cuda, so just skip it in that case
             results_dict[name] = 0
         metric.to("cpu")
 
-    Visualizer(Path("vis")).visualize(results)
+    Visualizer(Path(title)).visualize(results)
     score_dict = {}
     # save both segscore and score to json
     for img_path, score, seg_score, label in zip(
@@ -380,8 +390,8 @@ def test(
             "seg_score": seg_score.item(),
         }
 
-    mlflow.log_text(json.dumps(score_dict), "image_scores.json")
-    mlflow.log_text(json.dumps(results_dict), "results.json")
+    mlflow.log_text(json.dumps(score_dict), f"{title}/image_scores.json")
+    mlflow.log_text(json.dumps(results_dict), f"{title}/results.json")
 
     return results_dict
 
@@ -395,12 +405,11 @@ def train_and_eval(model, datamodule, config, device):
         signal.signal(signal.SIGINT, handler)
         signal.signal(signal.SIGTERM, handler)
 
-        print("Experiment:", run.info.experiment_id)
-        print("Run:", run.info.run_id)
+        modelargs.emit_action("Experiment", run.info.experiment_id)
+        modelargs.emit_action("Run", run.info.run_id)
         mlflow.log_params(config)
         args = {
             "model": model,
-            "datamodule": datamodule,
             "device": device,
             "image_metrics": {
                 "I-AUROC": AUROC(fields=["score", "label"]), # , prefix="image_"
@@ -415,6 +424,7 @@ def train_and_eval(model, datamodule, config, device):
 
         train(
             **args,
+            datamodule=datamodule,
             epochs=config["epochs"],
             clip_grad=config["clip_grad"],
             eval_step_size=config["eval_step_size"],
@@ -424,9 +434,11 @@ def train_and_eval(model, datamodule, config, device):
             p = Path(d)
             model.save_model(p)
             mlflow.log_artifact(p / "weights.pt")
-            print("Weights:", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/weights.pt")
+            modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/weights.pt")
         
-        test(**args, normalize=True)
+        test_loader = datamodule.test_dataloader()
+        if len(test_loader) > 0:
+            eval(title="Test", **args, loader=test_loader, normalize=True)
 
 if __name__ == "__main__":
     base_config = modelargs.parse('./model.json')
@@ -436,20 +448,20 @@ if __name__ == "__main__":
     with open(manifest_path) as f:
         manifest = json.load(f)
     
-    if not ("train" in manifest and "test" in manifest):
-        if "data" in manifest:
-            data_train, data_test = train_test_split(manifest["data"], train_size=0.7, stratify=[x.get("label", "") for x in manifest["data"]])
-            manifest = {
-                "train": data_train,
-                "test": data_test,
-            }
-        else:
-            raise ValueError("Passed manifest.json does not contain 'data' or 'train'/'test' attributes.")
+    if "data" in manifest:
+        data_train, data_val = train_test_split(manifest["data"], train_size=0.7, stratify=[x.get("label", "") for x in manifest["data"]])
+        manifest = {
+            "train": manifest.get("train", []) + data_train,
+            "val": manifest.get("val", []) + data_val,
+            "test": manifest.get("test", []),
+        }
+    if len(manifest["train"]) == 0 or len(manifest["val"]) == 0:
+        raise ValueError("Passed manifest.json does not contain 'data' or 'train'/'val' attributes.")
 
     unsupervised = True
     weakly_supervised = True
     fully_supervised = True
-    for split in ["train", "test"]:
+    for split in ["train", "val", "test"]:
         old_len = len(manifest[split])
         manifest[split] = [x for x in manifest[split] if "label" in x]
         if len(manifest[split]) != old_len:
@@ -472,7 +484,7 @@ if __name__ == "__main__":
     else:
         supervision = Supervision.MIXED_SUPERVISION
 
-    print("Using", supervision, flush=True)
+    modelargs.emit_action("Info", json.dumps(dict(title="Supervision", description="Supervision refers to detected dataset structure. Click to learn more.", value=str(supervision), link="https://arxiv.org/pdf/2508.19060")))
     if supervision == Supervision.UNSUPERVISED:
         config = {
             **base_config,

@@ -10,6 +10,13 @@ details: |
   </dl>
 config: |
   <View>
+    <Header style="margin-bottom: -1rem">Split</Header>
+    <Choices name="split" toName="image" showInline="true" >
+      <Choice value="train">Train</Choice>
+      <Choice value="val">Validation</Choice>
+      <Choice value="test">Test</Choice>
+      <Choice value="auto" selected="true">Auto</Choice>
+    </Choices>
     <Labels name="labels" toName="image">
       <Label value="Anomaly" background="rgba(200, 20, 20, 0.7)" />
     </Labels>
