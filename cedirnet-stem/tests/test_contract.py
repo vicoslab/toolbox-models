@@ -25,7 +25,7 @@ def load_module(name: str, filename: str):
 class AnnotationContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.annotations = load_module("cedirnet_stem_annotations", "annotations.py")
+        cls.annotations = load_module("cedirnet_stem_annotations", "stem_plugin/annotations.py")
 
     def test_direct_point_radius_annotation(self):
         point = self.annotations.parse_point_radius([12, 20, 7])
@@ -87,7 +87,7 @@ class AnnotationContractTest(unittest.TestCase):
 class InferenceContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.results = load_module("cedirnet_stem_results", "results.py")
+        cls.results = load_module("cedirnet_stem_results", "stem_plugin/results.py")
 
     def test_resize_prediction_returns_original_pixel_radius(self):
         center, radius = self.results.restore_prediction(
@@ -147,7 +147,7 @@ class InferenceContractTest(unittest.TestCase):
 class CheckpointCompatibilityTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.checkpoints = load_module("cedirnet_stem_checkpoint", "checkpoint.py")
+        cls.checkpoints = load_module("cedirnet_stem_checkpoint", "stem_plugin/checkpoint.py")
 
     def test_only_matching_checkpoint_tensors_are_loaded(self):
         class Tensor:
@@ -210,7 +210,7 @@ class PreparedModelFilesTest(unittest.TestCase):
         self.assertNotIn("vicoslab/toolbox.git", setup)
 
     def test_training_config_is_radius_only(self):
-        config = (MODEL_DIR / "base_config.py").read_text()
+        config = (MODEL_DIR / "stem_plugin/base_config.py").read_text()
         self.assertIn("NUM_VECTOR_FIELDS = 4", config)
         self.assertIn('"name": "generic_point_radius"', config)
         self.assertIn('"shape_type": "circle"', config)
@@ -222,7 +222,7 @@ class PreparedModelFilesTest(unittest.TestCase):
         self.assertIn("mlflow", train)
 
     def test_inference_returns_radius_and_label_studio_vectors(self):
-        infer = (MODEL_DIR / "serving.py").read_text() + (MODEL_DIR / "runtime.py").read_text()
+        infer = (MODEL_DIR / "stem_plugin/serving.py").read_text() + (MODEL_DIR / "stem_plugin/runtime.py").read_text()
         self.assertIn("'radii'", infer)
         self.assertIn("label_studio_vector_result", infer)
         self.assertIn("pred_attributes", infer)

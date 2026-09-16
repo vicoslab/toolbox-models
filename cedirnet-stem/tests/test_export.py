@@ -29,7 +29,7 @@ def vector():
 
 
 def brushes():
-    from semantic_results import brush_results
+    from stem_plugin.semantic_results import brush_results
     mask = np.zeros((64, 64), np.uint8)
     mask[:, 21:42] = 1
     mask[:, 42:] = 2
@@ -86,9 +86,9 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
     import torch
     import mlflow
     from train import Trainer
-    from runtime import StemRuntime
-    from stem_tasks import TaskConfig
-    from toolbox_dataset import ToolboxDataset
+    from stem_plugin.runtime import StemRuntime
+    from stem_plugin.stem_tasks import TaskConfig
+    from stem_plugin.toolbox_dataset import ToolboxDataset
     torch.set_num_threads(2)
     tags = ([vector()] if particles else []) + (brushes() if semantic else [])
     manifest = host_export(tmp_path, monkeypatch, tags)
@@ -195,7 +195,7 @@ def test_invalid_exports(tmp_path, case):
 
 def test_actual_modelargs_flags(monkeypatch):
     import modelargs
-    from task_options import task_config
+    from stem_plugin.task_options import task_config
     for p, s in [('true', 'false'), ('false', 'true'), ('true', 'true')]:
         monkeypatch.setattr(sys, 'argv', ['train', '--nanoparticles', p, '--segmentation', s])
         config = task_config(modelargs.parse(str(ROOT / 'model.json')))
@@ -205,8 +205,8 @@ def test_actual_modelargs_flags(monkeypatch):
 
 def test_exported_dimensions_checked_against_images(tmp_path):
     from ls_adapter import export
-    from toolbox_dataset import ToolboxDataset
-    from stem_tasks import TaskConfig
+    from stem_plugin.toolbox_dataset import ToolboxDataset
+    from stem_plugin.stem_tasks import TaskConfig
     item = export([[vector()]], tmp_path, ['BF', 'HAADF'], False)
     item['images'] = ['BF.png', 'HAADF.png']
     for name in item['images']:
@@ -221,9 +221,9 @@ def test_exported_dimensions_checked_against_images(tmp_path):
 def test_negative_particles_and_all_ignore_backward(tmp_path, mixed):
     import torch
     from ls_adapter import export
-    from runtime import StemRuntime
-    from stem_tasks import TaskConfig
-    from toolbox_dataset import ToolboxDataset
+    from stem_plugin.runtime import StemRuntime
+    from stem_plugin.stem_tasks import TaskConfig
+    from stem_plugin.toolbox_dataset import ToolboxDataset
     torch.set_num_threads(2)
     tag = brushes()[0]
     tag['value']['brushlabels'] = ['Ignore']
@@ -246,8 +246,8 @@ def test_negative_particles_and_all_ignore_backward(tmp_path, mixed):
 
 def test_class_order_rejected(tmp_path):
     from ls_adapter import export
-    from toolbox_dataset import ToolboxDataset
-    from stem_tasks import TaskConfig
+    from stem_plugin.toolbox_dataset import ToolboxDataset
+    from stem_plugin.stem_tasks import TaskConfig
     item = export([brushes()], tmp_path, ['BF', 'HAADF'], False)
     item['images'] = ['BF', 'HAADF']
     manifest = tmp_path / 'manifest.json'

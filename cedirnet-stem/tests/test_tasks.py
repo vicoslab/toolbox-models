@@ -18,7 +18,7 @@ def fixture_manifest(tmp_path, points=False):
 
 
 def test_flag_parser_and_neither():
-    from task_options import task_config
+    from stem_plugin.task_options import task_config
     assert not task_config({'nanoparticles':'false', 'segmentation':'true'}).nanoparticles
     with pytest.raises(ValueError, match='at least one'):
         task_config({'nanoparticles':'false','segmentation':'false'})
@@ -28,8 +28,8 @@ def test_flag_parser_and_neither():
 
 @pytest.mark.parametrize('particles,semantic', [(True,False),(False,True),(True,True)])
 def test_manifest_modes(tmp_path, particles, semantic):
-    from stem_tasks import TaskConfig
-    from toolbox_dataset import ToolboxDataset
+    from stem_plugin.stem_tasks import TaskConfig
+    from stem_plugin.toolbox_dataset import ToolboxDataset
     ds = ToolboxDataset(fixture_manifest(tmp_path, particles), TaskConfig(particles, semantic), size=(32,32))
     sample = ds[0]
     assert sample['image'].shape == (3,32,32)
@@ -41,8 +41,8 @@ def test_manifest_modes(tmp_path, particles, semantic):
 
 
 def test_missing_supervision_and_class_ids(tmp_path):
-    from stem_tasks import TaskConfig
-    from toolbox_dataset import ToolboxDataset
+    from stem_plugin.stem_tasks import TaskConfig
+    from stem_plugin.toolbox_dataset import ToolboxDataset
     manifest = fixture_manifest(tmp_path)
     with pytest.raises(ValueError, match='points'):
         ToolboxDataset(manifest, TaskConfig(True,False))
@@ -54,9 +54,9 @@ def test_missing_supervision_and_class_ids(tmp_path):
 @pytest.mark.parametrize('particles,semantic', [(True,False),(False,True),(True,True)])
 def test_runtime_train_checkpoint_infer(tmp_path, particles, semantic):
     import torch
-    from stem_tasks import TaskConfig
-    from runtime import StemRuntime
-    from toolbox_dataset import ToolboxDataset
+    from stem_plugin.stem_tasks import TaskConfig
+    from stem_plugin.runtime import StemRuntime
+    from stem_plugin.toolbox_dataset import ToolboxDataset
     torch.set_num_threads(2)
     tasks = TaskConfig(particles,semantic)
     dataset = ToolboxDataset(fixture_manifest(tmp_path,particles),tasks,size=(64,64))
@@ -101,8 +101,8 @@ def test_trainer_real_epoch(tmp_path, monkeypatch, particles, semantic):
         width=64,height=64,batch_size=1,workers=0,epochs=1,save_interval=1,
         display_interval=1,visualization_samples=1,backbone='resnet18',device='cpu')
     if particles:
-        from runtime import StemRuntime
-        from stem_tasks import TaskConfig
+        from stem_plugin.runtime import StemRuntime
+        from stem_plugin.stem_tasks import TaskConfig
         initial=StemRuntime(TaskConfig(particles,semantic),backbone='resnet18')
         path=tmp_path/'initial-fixture.pth'; torch.save(initial.checkpoint(-1),path)
         options['model']=str(path)
@@ -120,9 +120,9 @@ def test_http_inference_and_preannotations(tmp_path, monkeypatch, particles, sem
     import sys
     import importlib.util
     import torch
-    from runtime import StemRuntime
-    from stem_tasks import TaskConfig
-    from serving import preannotation
+    from stem_plugin.runtime import StemRuntime
+    from stem_plugin.stem_tasks import TaskConfig
+    from stem_plugin.serving import preannotation
     torch.set_num_threads(2)
     tasks=TaskConfig(particles,semantic)
     runtime=StemRuntime(tasks,backbone='resnet18')
@@ -152,7 +152,7 @@ def test_http_inference_and_preannotations(tmp_path, monkeypatch, particles, sem
 
 
 def test_particle_metrics_match_radius_and_empty():
-    from validation_metrics import ParticleMetrics
+    from stem_plugin.validation_metrics import ParticleMetrics
     metric = ParticleMetrics(distance=3)
     metric.update([[10,10],[50,50]],[5,2],[[11,10]],[4])
     values=metric.compute()
@@ -164,7 +164,7 @@ def test_particle_metrics_match_radius_and_empty():
 
 
 def test_semantic_output_roundtrip():
-    from semantic_results import encode_mask, brush_results
+    from stem_plugin.semantic_results import encode_mask, brush_results
     from label_studio_converter.brush import decode_rle
     mask = np.array([[0,1],[2,2]],dtype=np.uint8)
     result = encode_mask(mask, ['Carbon','Film','Vacuum'])
@@ -175,7 +175,7 @@ def test_semantic_output_roundtrip():
 
 
 def test_diagnostics_modes(tmp_path):
-    from diagnostics import plot_training_diagnostics, training_artifact_path
+    from stem_plugin.diagnostics import plot_training_diagnostics, training_artifact_path
     from matplotlib import pyplot as plt
     for particles, semantic in [(True,False),(False,True),(True,True)]:
         fig = plot_training_diagnostics(image=np.zeros((3,32,32)), centers=[[10,10]], radii=[3], scores=[.9],

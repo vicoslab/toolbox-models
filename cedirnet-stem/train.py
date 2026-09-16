@@ -10,12 +10,12 @@ import numpy as np
 import torch
 import mlflow
 from matplotlib import pyplot as plt
-from task_options import task_config
-from toolbox_dataset import ToolboxDataset
-from runtime import StemRuntime
-from checkpoint import safe_torch_load
-from diagnostics import plot_training_diagnostics, training_artifact_path
-from validation_metrics import ParticleMetrics
+from stem_plugin.task_options import task_config
+from stem_plugin.toolbox_dataset import ToolboxDataset
+from stem_plugin.runtime import StemRuntime
+from stem_plugin.checkpoint import safe_torch_load
+from stem_plugin.diagnostics import plot_training_diagnostics, training_artifact_path
+from stem_plugin.validation_metrics import ParticleMetrics
 
 
 def log_figure_artifact(fig, artifact_file):

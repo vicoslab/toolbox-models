@@ -1,6 +1,6 @@
 """Strict options, including a workaround for old Toolbox boolean parsing."""
 import json
-from stem_tasks import TaskConfig
+from .stem_tasks import TaskConfig
 
 
 def parse_bool(value, default):
