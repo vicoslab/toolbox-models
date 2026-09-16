@@ -1,80 +1,23 @@
 {
-    "title": "CeDiRNet-STEM",
-    "description": "Center and particle-radius estimation for STEM images",
-    "type": "object",
-    "properties": {
-        "manifest": {
-            "title": "Dataset manifest",
-            "description": "The dataset manifest should be a JSON file with properties 'train' and 'test' or a single property 'data'. Either of these needs to be a list where each item has an attribute 'images', containing a [BF, HAADF] pair of image paths, and 'points', containing a list of lists [cx,cy,rx,ry] (c is the center point, r is a point on the radius; in absolute image coordinates).",
-            "format": "file:manifest.json",
-            "type": "string"
-        },
-        "name": {
-            "title": "Experiment name",
-            "description": "Title of the training experiment.",
-            "type": "string"
-        },
-        "model": {
-            "title": "Weights",
-            "description": "Path to a CeDiRNet-STEM model checkpoint. The stock upstream radius+circularity checkpoint is accepted; its shared center-direction and radius tensors are loaded while the circularity-only head is ignored. For training, this is an optional initialization checkpoint.",
-            "format": "file:checkpoint.pth",
-            "type": "string"
-        },
-        "localisation": {
-            "title": "Localisation weights",
-            "description": "Optional path to a pretrained CeDiRNet localisation-head checkpoint.",
-            "format": "file:checkpoint.pth",
-            "type": "string"
-        },
-        "score_threshold": {
-            "title": "Score threshold",
-            "description": "Minimum center confidence returned during inference.",
-            "type": "number",
-            "default": 0.5,
-            "minimum": 0,
-            "maximum": 1
-        },
-        "save_interval": {
-            "title": "Weights save interval",
-            "description": "Number of epochs between checkpoints.",
-            "type": "integer",
-            "default": 10,
-            "minimum": 1
-        },
-        "width": {
-            "title": "Image width",
-            "description": "Network input width; must be divisible by 32.",
-            "type": "integer",
-            "default": 512,
-            "multipleOf": 32
-        },
-        "height": {
-            "title": "Image height",
-            "description": "Network input height; must be divisible by 32.",
-            "type": "integer",
-            "default": 512,
-            "multipleOf": 32
-        },
-        "epochs": {
-            "title": "Training duration",
-            "description": "Number of training epochs.",
-            "type": "integer",
-            "default": 100,
-            "minimum": 1
-        },
-        "batch_size": {
-            "title": "Batch size",
-            "description": "Training batch size.",
-            "type": "integer",
-            "default": 2,
-            "minimum": 1
-        },
-        "workers": {
-            "title": "Data loader instances",
-            "description": "Number of data-loader worker processes.",
-            "type": "integer",
-            "default": 2,
-            "minimum": 0
-        }
-    }
+  "title": "CeDiRNet-STEM",
+  "description": "Optional nanoparticle center/radius detection and multiclass semantic segmentation of paired BF/HAADF STEM images.",
+  "type": "object",
+  "properties": {
+    "manifest": {"title":"Dataset manifest","description":"Toolbox version-4 export: images [BF, HAADF], points [x, y, radius] or [x, y, radius_x, radius_y] for nanoparticles, semantic_mask and per-item semantic_classes for segmentation. Export from the model annotation project; no manual manifest required.","format":"file:manifest.json","type":"string"},
+    "name": {"title":"Experiment name","type":"string"},
+    "nanoparticles": {"title":"Enable nanoparticles","description":"Independently enable particle center/radius detection. At least one task must be true.","type":"string","enum":["true","false"],"default":"true"},
+    "segmentation": {"title":"Enable multiclass segmentation","description":"Requires a class-ID mask for training and trained semantic weights for inference.","type":"string","enum":["true","false"],"default":"false"},
+    "semantic_classes": {"title":"Semantic classes (JSON)","description":"Ordered names; index is mask class ID. Class 0 is a real class, not implicitly background. 255 is ignored.","type":"string","default":"[\"Carbon\", \"Film\", \"Vacuum\"]"},
+    "model": {"title":"Weights","description":"Optional training initialization. Inference requires trained weights for each enabled task. Legacy stock particle checkpoint is supported only for particle-only mode.","format":"file:checkpoint.pth","type":"string"},
+    "localisation": {"title":"Localisation weights","description":"Particle-only dependency; ignored when nanoparticles is false.","format":"file:checkpoint.pth","type":"string"},
+    "score_threshold": {"title":"Particle score threshold","type":"number","default":0.5,"minimum":0,"maximum":1},
+    "display_interval": {"title":"Validation / visualization interval","description":"Run deterministic training/validation diagnostics every N epochs and at the final epoch.","type":"integer","default":10,"minimum":1},
+    "visualization_samples": {"title":"Plots per split","type":"integer","default":4,"minimum":1},
+    "save_interval": {"title":"Weights save interval","type":"integer","default":10,"minimum":1},
+    "width": {"title":"Image width","type":"integer","default":512,"minimum":32,"multipleOf":32},
+    "height": {"title":"Image height","type":"integer","default":512,"minimum":32,"multipleOf":32},
+    "epochs": {"title":"Training duration","type":"integer","default":100,"minimum":1},
+    "batch_size": {"title":"Batch size","type":"integer","default":2,"minimum":1},
+    "workers": {"title":"Data loader instances","type":"integer","default":2,"minimum":0}
+  }
 }

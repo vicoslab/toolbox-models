@@ -1,22 +1,27 @@
-title: STEM Particle Center and Radius
+title: STEM Nanoparticles and Multiclass Segmentation
 type: community
 group: Counting
 image:
 details: |
-  <h1>Annotate particle centers and radii in STEM images</h1>
-  <p>Each sample requires matching BF and HAADF images. Annotate the BF image; the model combines BF grayscale, HAADF grayscale, and a zero third channel.</p>
-  <p>Draw each vector from the particle center to its circumference. The first point is the center and the vector length is the radius.</p>
-  <dl>
-    <dt>Industry Applications</dt>
-    <dd>Nanoparticle detection and size estimation</dd>
-    <dt>Annotation</dt>
-    <dd>Center point + radius</dd>
-  </dl>
+  <h1>STEM particle centers/radii and semantic regions</h1>
+  <p>Enable nanoparticles, segmentation, or both in the model options. Matching BF and HAADF images are required in every mode.</p>
+  <p>Particle vectors run from center to circumference. Semantic brushes label Carbon, Film and Vacuum; customize names to match the ordered model classes. Defects can be added as semantic classes, not inferred particle attributes.</p>
+  <p>Create groups of two images in BF, HAADF order. Mark reviewed tasks, including Nanoparticles for a negative image. Export creates the paired-image manifest and class-ID masks automatically. Overlaps and unpainted pixels are ignored.</p>
 config: |
   <View>
     <Labels name="labels" toName="image">
       <Label value="Particle" background="rgba(20, 200, 80, 0.7)" />
     </Labels>
+    <BrushLabels name="semantic" toName="image">
+      <Label value="Carbon" background="#f24949" />
+      <Label value="Film" background="#49f249" />
+      <Label value="Vacuum" background="#4949f2" />
+      <Label value="Ignore" background="#808080" />
+    </BrushLabels>
     <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
     <Vector name="radius" toName="image" smart="true" />
+    <Choices name="reviewed" toName="image" choice="multiple">
+      <Choice value="Nanoparticles" />
+      <Choice value="Segmentation" />
+    </Choices>
   </View>

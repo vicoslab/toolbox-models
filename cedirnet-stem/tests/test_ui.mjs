@@ -7,8 +7,15 @@ const html = fs.readFileSync(new URL("../ui.html", import.meta.url), "utf8");
 const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 assert.ok(script, "ui.html must contain a script");
 const helpers = script.split('document.getElementById("infer").onInference')[0];
-vm.runInThisContext(`${helpers}\nglobalThis.__cedirnetUi = { buildZip, crc32, assertClassicZipLimit };`);
-const { buildZip, crc32, assertClassicZipLimit } = globalThis.__cedirnetUi;
+vm.runInThisContext(`${helpers}\nglobalThis.__cedirnetUi = { buildZip, crc32, assertClassicZipLimit, sampleResult };`);
+const { buildZip, crc32, assertClassicZipLimit, sampleResult } = globalThis.__cedirnetUi;
+
+test('all independent task result modes preserve masks without particle output', () => {
+  const segmentation = { classes: ['Carbon', 'Film', 'Vacuum'], mask_png: 'data:image/png;base64,AA==' };
+  assert.deepEqual(sampleResult({segmentation:[segmentation]}, 0), {centers:[],scores:[],radii:[],segmentation});
+  assert.equal(sampleResult({centers:[[[.5,.5]]],scores:[[.9]],radii:[[4]]},0).segmentation,null);
+  assert.equal(sampleResult({segmentation:[segmentation],centers:[[[.5,.5]]]},0).centers.length,1);
+});
 
 function uint32(bytes, offset) {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(offset, true);
