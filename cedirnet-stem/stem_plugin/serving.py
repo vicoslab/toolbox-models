@@ -4,12 +4,12 @@ import io
 import os
 import numpy as np
 from PIL import Image
-from annotations import load_stem_image
-from checkpoint import safe_torch_load
-from runtime import StemRuntime
-from task_options import task_config
-from results import label_studio_vector_result
-from semantic_results import brush_results
+from .annotations import load_stem_image
+from .checkpoint import safe_torch_load
+from .runtime import StemRuntime
+from .task_options import task_config
+from .results import label_studio_vector_result
+from .semantic_results import brush_results
 
 
 def load_runtime(options, device):

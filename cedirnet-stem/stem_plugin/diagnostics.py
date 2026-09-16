@@ -9,7 +9,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.patches import Circle, Patch
-from semantic_results import palette
+from .semantic_results import palette
 
 
 def _numpy(value):

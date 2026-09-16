@@ -39,5 +39,5 @@ class TaskConfig:
 def build_semantic_model(config, **kwargs):
     if not config.segmentation:
         return None
-    from semantic_model import build_semantic_fpn
+    from .semantic_model import build_semantic_fpn
     return build_semantic_fpn(len(config.classes), **kwargs)

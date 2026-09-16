@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from PIL import Image
 from torch.utils.data import Dataset
-from annotations import load_stem_image, build_targets
+from .annotations import load_stem_image, build_targets
 
 
 class ToolboxDataset(Dataset):
@@ -46,7 +46,7 @@ class ToolboxDataset(Dataset):
                       name=item['images'][0], im_name=item['images'][0], index=index,
                       im_size=(w,h), org_im_size=np.array([old_w,old_h]))
         if self.tasks.nanoparticles:
-            from annotations import parse_point_radius
+            from .annotations import parse_point_radius
             points = []
             for point in item['points']:
                 x,y,r = parse_point_radius(point)

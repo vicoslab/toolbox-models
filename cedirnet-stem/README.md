@@ -126,12 +126,23 @@ CEDIRNET_STEM_DOWNLOAD_PARTICLES=0 bash setup.sh
 never modifies it. Environment overrides are import checks, not proof of a fresh
 dependency install. Omit the overrides in the Toolbox container for normal setup.
 
+## Code organization
+
+Toolbox-facing files stay at the plugin root: `train.py`, `infer.py`,
+`ls_adapter.py`, `setup.sh`, and the model/UI/annotation configuration. Internal
+Python helpers live in the `stem_plugin/` package; tests remain in `tests/`.
+The package groups dataset/annotation, model/runtime, checkpoint, serving and
+visualization helpers without changing their behavior or checkpoint state keys.
+Import helpers as `stem_plugin.runtime`, for example, rather than `runtime`.
+Only the plugin root belongs on `PYTHONPATH`, not `stem_plugin/` itself.
+
 ## Verification
 
-With plugin, installed upstream `src`, and current Toolbox `apps/modelargs` on
-`PYTHONPATH`, run:
+From the plugin root, add the plugin, installed upstream `src`, and current
+Toolbox `apps/modelargs` to `PYTHONPATH`:
 
 ```bash
+export PYTHONPATH="$PWD:/absolute/cache/cedirnet-stem/src:/absolute/toolbox/apps/modelargs"
 MPLBACKEND=Agg CUDA_VISIBLE_DEVICES='' python -m pytest tests -q
 node --test tests/test_ui.mjs
 bash -n setup.sh

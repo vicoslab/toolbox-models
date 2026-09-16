@@ -3,10 +3,10 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from PIL import Image
-from stem_tasks import TaskConfig, build_semantic_model
-from checkpoint import load_compatible_model_state
-from results import restore_prediction
-from semantic_results import encode_mask
+from .stem_tasks import TaskConfig, build_semantic_model
+from .checkpoint import load_compatible_model_state
+from .results import restore_prediction
+from .semantic_results import encode_mask
 
 
 class StemRuntime(torch.nn.Module):
@@ -15,7 +15,7 @@ class StemRuntime(torch.nn.Module):
         self.tasks, self.device, self.backbone = tasks, torch.device(device), backbone
         self.particle_model = self.center_model = self.semantic_model = None
         if tasks.nanoparticles:
-            from base_config import get_args, NUM_VECTOR_FIELDS
+            from .base_config import get_args, NUM_VECTOR_FIELDS
             from models import get_model, get_center_model
             from models.center_groundtruth import CenterDirGroundtruth
             from criterions import get_criterion
@@ -52,7 +52,7 @@ class StemRuntime(torch.nn.Module):
             self.particle_criterion = get_criterion(args['loss_type'],args['loss_opts'],model,center).to(self.device)
             self.loss_w = args['loss_w']
         if tasks.segmentation:
-            from semantic_loss import MulticlassCrossEntropyDiceLoss
+            from .semantic_loss import MulticlassCrossEntropyDiceLoss
             self.semantic_model = build_semantic_model(tasks,backbone=backbone,pretrained=pretrained,
                 encoder_depth=5 if backbone=='resnet18' else 4).to(self.device)
             self.semantic_criterion = MulticlassCrossEntropyDiceLoss([1.0]*len(tasks.classes)).to(self.device)

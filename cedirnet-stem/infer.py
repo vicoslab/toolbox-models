@@ -5,7 +5,7 @@ site.addsitedir(str(Path(os.environ.get('CEDIRNET_STEM_SOURCE',os.path.join(os.e
 
 import torch
 import modelargs
-from serving import load_runtime, load_pairs, preannotation
+from stem_plugin.serving import load_runtime, load_pairs, preannotation
 
 CMD_ARGS = modelargs.parse('./model.json')
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'

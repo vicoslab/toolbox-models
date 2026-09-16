@@ -40,4 +40,4 @@ else
     uv pip install --python "$python" 'numpy<2' 'opencv-python-headless<4.12' /opt/apps/modelargs mlflow psutil flask gunicorn label-studio-converter /opt/apps/label-studio-ml-backend
 fi
 PYTHONPATH="$model_dir/src:$dir" "$model_dir/.venv/bin/python" -c \
-    'import torch; from stem_tasks import TaskConfig; from semantic_model import build_semantic_fpn; from runtime import StemRuntime; print("Verified STEM source:", TaskConfig(False, True).to_dict(), "torch", torch.__version__)'
+    'import torch; from stem_plugin.stem_tasks import TaskConfig; from stem_plugin.semantic_model import build_semantic_fpn; from stem_plugin.runtime import StemRuntime; print("Verified STEM source:", TaskConfig(False, True).to_dict(), "torch", torch.__version__)'
