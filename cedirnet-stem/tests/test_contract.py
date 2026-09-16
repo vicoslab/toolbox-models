@@ -109,8 +109,8 @@ class InferenceContractTest(unittest.TestCase):
         self.assertEqual(center, (0.5, 0.5))
         self.assertEqual(radius, 10.0)
 
-    def test_label_studio_result_is_center_to_radius_vector(self):
-        result = self.results.label_studio_vector_result(
+    def test_label_studio_result_is_circular_ellipse(self):
+        result = self.results.label_studio_ellipse_result(
             center=(0.25, 0.5),
             radius=10,
             score=0.8,
@@ -120,16 +120,13 @@ class InferenceContractTest(unittest.TestCase):
             label="Particle",
             result_id="particle-1",
         )
-        self.assertEqual(result["type"], "labels")
-        vertices = result["value"]["vertices"]
-        self.assertEqual(vertices[0]["x"], 25.0)
-        self.assertEqual(vertices[0]["y"], 50.0)
-        self.assertEqual(vertices[1]["x"], 30.0)
-        self.assertEqual(vertices[1]["y"], 50.0)
+        self.assertEqual(result["type"], "ellipselabels")
+        self.assertEqual(result["value"], dict(x=25, y=50, radiusX=5, radiusY=10,
+                                             rotation=0, ellipselabels=['Particle']))
         self.assertAlmostEqual(result["score"], 0.8)
 
-    def test_label_studio_radius_handle_stays_inside_right_edge(self):
-        result = self.results.label_studio_vector_result(
+    def test_label_studio_ellipse_preserves_radius_at_right_edge(self):
+        result = self.results.label_studio_ellipse_result(
             center=(0.95, 0.5),
             radius=10,
             score=0.8,
@@ -139,9 +136,8 @@ class InferenceContractTest(unittest.TestCase):
             label="Particle",
             result_id="particle-2",
         )
-        vertices = result["value"]["vertices"]
-        self.assertEqual(vertices[0]["x"], 95.0)
-        self.assertEqual(vertices[1]["x"], 85.0)
+        self.assertEqual(result["value"]["x"], 95.0)
+        self.assertEqual(result["value"]["radiusX"], 10.0)
 
 
 class CheckpointCompatibilityTest(unittest.TestCase):
@@ -196,9 +192,9 @@ class PreparedModelFilesTest(unittest.TestCase):
         self.assertIn("BF", description)
         self.assertIn("HAADF", description)
 
-    def test_label_config_uses_vector_radius_handle(self):
+    def test_label_config_uses_ellipse(self):
         config = (MODEL_DIR / "config.yml").read_text()
-        self.assertIn('<Vector name="radius"', config)
+        self.assertIn('<EllipseLabels name="labels"', config)
         self.assertIn("center", config.lower())
         self.assertIn("radius", config.lower())
 
@@ -221,10 +217,10 @@ class PreparedModelFilesTest(unittest.TestCase):
         self.assertIn("task_config(args)", train)
         self.assertIn("mlflow", train)
 
-    def test_inference_returns_radius_and_label_studio_vectors(self):
+    def test_inference_returns_radius_and_label_studio_ellipses(self):
         infer = (MODEL_DIR / "stem_plugin/serving.py").read_text() + (MODEL_DIR / "stem_plugin/runtime.py").read_text()
         self.assertIn("'radii'", infer)
-        self.assertIn("label_studio_vector_result", infer)
+        self.assertIn("label_studio_ellipse_result", infer)
         self.assertIn("pred_attributes", infer)
         self.assertIn("load_stem_image", infer)
         self.assertIn('pretrained=False', infer)

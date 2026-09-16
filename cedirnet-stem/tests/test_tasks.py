@@ -143,7 +143,7 @@ def test_http_inference_and_preannotations(tmp_path, monkeypatch, particles, sem
     result=client.post('/infer',data={'images':[(image(17),'BF.png'),(image(91),'HAADF.png')]})
     assert result.status_code == 200, result.json
     assert result.json['tasks'] == tasks.to_dict()
-    config={'labels':dict(type='Labels',to_name=['image'],labels=['Particle']),
+    config={'labels':dict(type='EllipseLabels',to_name=['image'],labels=['Particle']),
             'semantic':dict(type='BrushLabels',to_name=['image'],labels=list(tasks.classes))}
     annotation=preannotation(result.json,0,(80,40),config)
     assert all(x['type']=='brushlabels' for x in annotation['result']) if not particles else True

@@ -28,6 +28,13 @@ def vector():
                 value={'vertices': [{'x': 25, 'y': 25}, {'x': 37.5, 'y': 25}]})
 
 
+def ellipse():
+    return dict(id='particle', from_name='labels', to_name='image', type='ellipselabels',
+                original_width=64, original_height=64, image_rotation=0,
+                value=dict(x=25, y=25, radiusX=12.5, radiusY=12.5,
+                           rotation=0, ellipselabels=['Particle']))
+
+
 def brushes():
     from stem_plugin.semantic_results import brush_results
     mask = np.zeros((64, 64), np.uint8)
@@ -90,7 +97,7 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
     from stem_plugin.stem_tasks import TaskConfig
     from stem_plugin.toolbox_dataset import ToolboxDataset
     torch.set_num_threads(2)
-    tags = ([vector()] if particles else []) + (brushes() if semantic else [])
+    tags = ([ellipse()] if particles else []) + (brushes() if semantic else [])
     manifest = host_export(tmp_path, monkeypatch, tags)
     data = json.loads(manifest.read_text())
     assert data['version'] == 4
@@ -101,7 +108,7 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
     sample = ds[0]
     assert sample['image'][:, 0, 0].tolist() == [17., 91., 0.]
     if particles:
-        assert ds.items[0]['points'] == [[16., 16., 24., 16.]]
+        assert ds.items[0]['points'] == [[16., 16., 8.]]
         assert sample['shape_coef'][0, 16, 16] == 8
     else:
         assert 'points' not in ds.items[0]
@@ -141,14 +148,14 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
 def test_missing_vs_negative(tmp_path, monkeypatch):
     from ls_adapter import export
     assert export([], tmp_path, ['BF', 'HAADF'], False) == {}
-    assert export([[]], tmp_path, ['BF', 'HAADF'], False) == {'points': []}
+    assert export([[]], tmp_path, ['BF', 'HAADF'], False) == {}
     assert 'points' not in export([brushes()], tmp_path, ['BF', 'HAADF'], False)
     reviewed = dict(from_name='reviewed', type='choices', value={'choices': ['Nanoparticles']})
     assert export([[reviewed]], tmp_path, ['BF', 'HAADF'], False) == {'points': []}
     extra = dict(data={'images': ['https://example/data/local-files/?d=dataset/BF.png',
                                   'https://example/data/local-files/?d=dataset/HAADF.png']},
                  annotations=[], split='Train')
-    manifest = host_export(tmp_path, monkeypatch, [], [extra])
+    manifest = host_export(tmp_path, monkeypatch, [reviewed], [extra])
     data = json.loads(manifest.read_text())
     assert data['train'][0]['points'] == []
     assert 'points' not in data['train'][1]

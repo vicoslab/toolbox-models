@@ -11,11 +11,14 @@ tested against the host parser.
    registered, equally sized images in **BF, HAADF** order. Use interlaced groups
    with filenames that sort into pairs (e.g. `sample_BF.png`, `sample_HAADF.png`).
    Do not use the current host's broken `divide` grouping mode.
-2. Particle vectors have exactly two vertices: center, circumference handle.
-   Paint semantic regions using Carbon, Film, Vacuum; **Ignore** explicitly masks
-   pixels out. The image view shares regions across the aligned pair.
-3. Mark the tasks reviewed using the Nanoparticles/Segmentation choices. In
-   particular, select **Nanoparticles** for a reviewed image with no particles.
+2. Select **Nanoparticles (N)**, **Segmentation (S)**, or both at the top. These
+   checkboxes show independent collapsible annotation sections, not training flags
+   or review confirmations. Collapsing/hiding a section does not delete its regions.
+   Draw particle **ellipses** (Particle: **P**). Paint semantic regions using
+   **Carbon (1)**, **Film (2)**, **Vacuum (3)**, **Ignore (4)**. The image view shares
+   regions across the aligned pair.
+3. For a reviewed image with no particles, explicitly check **No nanoparticles**
+   (Alt+N). Do not check it if particle regions exist; export rejects that conflict.
    Submit one annotation per pair. Resolve multiple annotators before export;
    the adapter rejects multiple annotations rather than guessing a consensus.
 4. Assign Train, Validation, or Test splits and use Toolbox **Export**. The host
@@ -38,16 +41,35 @@ configuration to the adapter. Unknown classes are rejected, not reindexed.
   is a real class, **not** implicit background. 255 is ignored.
 - Unpainted pixels, explicit Ignore, and overlapping *different* classes become
   255. Same-class overlaps are unions. Region order does not change the mask.
-- A task with no submitted annotation remains missing supervision. A submitted
-  empty legacy annotation means `points: []` (a particle negative), **not** a
-  semantic background mask. Brush-only annotations do not invent particle labels.
+- No annotation, an empty submitted annotation, and task-selection-only annotations
+  remain **missing supervision**. Only explicit **No nanoparticles** (or legacy
+  `reviewed: Nanoparticles`) creates `points: []`. Brush-only annotations do not
+  invent particle labels. **Migration:** older empty submissions were treated as
+  negatives; review and explicitly confirm them before re-export. Existing exported
+  manifests with `points: []` remain valid and unchanged.
 - Missing labels for an enabled task fail training. An all-ignore brush is allowed
   and has zero semantic loss; it does not teach the model a background class.
 - Shared pair region duplicates are deduplicated. Coordinates remain subpixel
-  original-image coordinates; malformed vectors, rotated annotations, unknown
+  original-image coordinates; malformed ellipses/vectors, rotated images, unknown
   classes, invalid RLE sizes and inconsistent region dimensions fail export.
 - Masks are content-addressed, so later exports/COMBINE cannot overwrite different
   masks under an existing manifest item. Paths are relative to the export folder.
+
+### Ellipse geometry and model compatibility
+
+Label Studio `x/y` are ellipse **center** percentages (not a bounding-box corner);
+`radiusX/radiusY` are semi-axis percentages of image width/height. Export converts
+them to pixels and writes `[cx, cy, (rx + ry) / 2]`. This arithmetic-mean radius is
+an explicit **circle approximation**: ellipse rotation/eccentricity are not trained
+or predicted. Rotated ellipses are accepted; image rotation must be reset to zero.
+Legacy two-vertex particle exports remain readable. Preannotations now require an
+`EllipseLabels` control and encode the existing circle prediction as equal **pixel**
+radii (different percentages on non-square images), without clipping at edges.
+Update old project XML deliberately before using the new preannotation backend.
+
+The annotation template uses documented `Choices showInline`, `Choice/Label hotkey`,
+`View visibleWhen="choice-selected" whenTagName/whenChoiceValue`, and
+`Collapse/Panel open="true"` syntax. No custom JavaScript or host changes are needed.
 
 The loader accepts host `train`, `val`, `test`, and `data`. `data` is used for
 training only when `train` is absent. Validation uses **only `val`**, never the
@@ -104,7 +126,7 @@ match count.
 per-pair centers, scores, radii, semantic masks and task metadata. Disabled tasks
 return empty particle arrays or `null` semantic results. Semantic logits resize to
 original resolution before argmax. The UI supports class-mask PNG, JSON and
-rasterized overlay ZIP downloads. Preannotations preserve Particle vectors and
+rasterized overlay ZIP downloads. Preannotations preserve Particle ellipses and
 per-class RLE brushes using actual control names.
 
 ## Installation
