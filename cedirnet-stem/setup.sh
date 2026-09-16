@@ -34,10 +34,12 @@ else
     uv venv --python 3.11 "$model_dir/.venv"
     python="$model_dir/.venv/bin/python"
     uv pip install --python "$python" torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
-    uv pip install --python "$python" 'numpy<2' opencv-python pandas scikit-learn scikit-image tensorboard matplotlib scipy tqdm \
-        segmentation-models-pytorch==0.3.2 future
-    uv pip install --python "$python" --no-deps timm==0.6.13
-    uv pip install --python "$python" 'numpy<2' 'opencv-python-headless<4.12' /opt/apps/modelargs mlflow psutil flask gunicorn label-studio-converter /opt/apps/label-studio-ml-backend
+    # One solve for model + host requirements. Constraints cannot replace the
+    # backend's SDK git URL; uv overrides explicitly select our tested SDK.
+    uv pip install --python "$python" --override "$dir/dependency-overrides.txt" \
+        -r "$dir/requirements.txt" \
+        "${CEDIRNET_STEM_MODELARGS:-/opt/apps/modelargs}" \
+        "${CEDIRNET_STEM_ML_BACKEND:-/opt/apps/label-studio-ml-backend}"
 fi
 PYTHONPATH="$model_dir/src:$dir" "$model_dir/.venv/bin/python" -c \
-    'import torch; from stem_plugin.stem_tasks import TaskConfig; from stem_plugin.semantic_model import build_semantic_fpn; from stem_plugin.runtime import StemRuntime; print("Verified STEM source:", TaskConfig(False, True).to_dict(), "torch", torch.__version__)'
+    'import torch, cv2, timm, segmentation_models_pytorch; from label_studio_ml.model import LabelStudioMLBase; from label_studio_sdk.converter.brush import decode_rle; from label_studio_converter.brush import mask2rle; from stem_plugin.stem_tasks import TaskConfig; from stem_plugin.semantic_model import build_semantic_fpn; from stem_plugin.runtime import StemRuntime; print("Verified STEM source:", TaskConfig(False, True).to_dict(), "torch", torch.__version__)'

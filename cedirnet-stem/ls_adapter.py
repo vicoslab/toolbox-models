@@ -25,6 +25,16 @@ def semantic_classes():
     return classes
 
 
+def particle_labels():
+    """SDK serializes alias when present; retain the old Particle export label."""
+    view = ET.fromstring(yaml.safe_load(Path(__file__).with_name('config.yml').read_text())['config'])
+    control = view.find(".//EllipseLabels[@name='labels']")
+    if control is None or len(control.findall('Label')) != 1:
+        raise ValueError('config.yml needs exactly one particle label')
+    node = control.findall('Label')[0]
+    return {node.get('alias') or node.attrib['value'], 'Particle'}
+
+
 def export(annotations, export_dir, relpaths, shared):
     # shared is currently always False in Toolbox, including shared Image views.
     if len(relpaths) != 2:
@@ -37,6 +47,7 @@ def export(annotations, export_dir, relpaths, shared):
     if not isinstance(tags, list):
         raise ValueError('annotation must be a list of results')
     classes = semantic_classes()
+    accepted_particles = particle_labels()
     reviewed, points, brushes = set(), [], []
     negative_particles = False
     dimensions = None
@@ -69,8 +80,9 @@ def export(annotations, export_dir, relpaths, shared):
         seen.add(signature)
         w, h = size
         if is_ellipse:
-            if tag.get('from_name') != 'labels' or value.get('ellipselabels') != ['Particle']:
-                raise ValueError('particle ellipses require labels control and Particle label')
+            labels = value.get('ellipselabels', [])
+            if tag.get('from_name') != 'labels' or len(labels) != 1 or labels[0] not in accepted_particles:
+                raise ValueError('particle ellipses require labels control and configured particle label/alias (or legacy Particle)')
             try:
                 x, y, rx, ry, rotation = map(float, [value['x'], value['y'],
                     value['radiusX'], value['radiusY'], value.get('rotation', 0)])
@@ -85,8 +97,8 @@ def export(annotations, export_dir, relpaths, shared):
             points.append([x * w / 100, y * h / 100, (rx * w + ry * h) / 200])
         elif is_vector:
             labels = value.get('vectorlabels', value.get('labels', []))
-            if labels and labels != ['Particle']:
-                raise ValueError('particle vectors must have label Particle')
+            if labels and (len(labels) != 1 or labels[0] not in accepted_particles):
+                raise ValueError('particle vectors must have configured particle label/alias (or legacy Particle)')
             vertices = value['vertices']
             if len(vertices) != 2:
                 raise ValueError('particle vectors need exactly two vertices')

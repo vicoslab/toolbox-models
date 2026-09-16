@@ -11,15 +11,17 @@ tested against the host parser.
    registered, equally sized images in **BF, HAADF** order. Use interlaced groups
    with filenames that sort into pairs (e.g. `sample_BF.png`, `sample_HAADF.png`).
    Do not use the current host's broken `divide` grouping mode.
-2. Select **Nanoparticles (N)**, **Segmentation (S)**, or both at the top. These
-   checkboxes show independent collapsible annotation sections, not training flags
-   or review confirmations. Collapsing/hiding a section does not delete its regions.
-   Draw particle **ellipses** (Particle: **P**). Paint semantic regions using
-   **Carbon (1)**, **Film (2)**, **Vacuum (3)**, **Ignore (4)**. The image view shares
-   regions across the aligned pair.
-3. For a reviewed image with no particles, explicitly check **No nanoparticles**
-   (Alt+N). Do not check it if particle regions exist; export rejects that conflict.
-   Submit one annotation per pair. Resolve multiple annotators before export;
+2. Use the two open sidebar panels, **Particle instances** and **Segmentation**.
+   Select **PtCo (P)**, then draw particle ellipses (center click first). The exported
+   particle label is its alias **nanoparticle**. Paint **Carbon (1)**, **Film (2)**,
+   **Vacuum (3)**, or **Ignore (4)**; the segmentation panel also includes Magicwand.
+   Regions are shared across the aligned pair. There are no N/S visibility toggles.
+3. Submit one annotation per pair. This selected interface intentionally has no
+   **No nanoparticles** checkbox. An empty submission could mean a reviewed negative
+   or unfinished work: export cannot distinguish them and keeps particle supervision
+   missing, just as for segmentation-only annotations. Use an explicitly reviewed
+   legacy annotation or an existing reviewed manifest for particle negatives; this
+   UI cannot record that confirmation. Resolve multiple annotators before export;
    the adapter rejects multiple annotations rather than guessing a consensus.
 4. Assign Train, Validation, or Test splits and use Toolbox **Export**. The host
    imports this plugin's `ls_adapter.export(annotations, export_dir, relpaths,
@@ -67,9 +69,18 @@ Legacy two-vertex particle exports remain readable. Preannotations now require a
 radii (different percentages on non-square images), without clipping at edges.
 Update old project XML deliberately before using the new preannotation backend.
 
-The annotation template uses documented `Choices showInline`, `Choice/Label hotkey`,
-`View visibleWhen="choice-selected" whenTagName/whenChoiceValue`, and
-`Collapse/Panel open="true"` syntax. No custom JavaScript or host changes are needed.
+The image is nested in a flex layout beside a fixed 380px, two-column sidebar,
+with bordered open Collapse panels. The host's create script validates only direct
+Image children, so its valueList check does not inspect this nested Image. Group
+size **2**, **interlace** creation is tested with the unchanged host and imports
+paired `images` tasks correctly; group size 1 would instead create `image` tasks
+incompatible with this template. Keep group size 2. No host changes are needed.
+
+SDK parsing uses `alias` before `value`: preannotations use the project's single
+configured particle label/alias. Export accepts the plugin's configured serialized
+label and legacy `Particle`, rejecting unknown labels (including display-only
+`PtCo` when its alias is configured). Change the plugin config before project
+creation, not only the project XML, because export receives no project config.
 
 The loader accepts host `train`, `val`, `test`, and `data`. `data` is used for
 training only when `train` is absent. Validation uses **only `val`**, never the
@@ -126,7 +137,7 @@ match count.
 per-pair centers, scores, radii, semantic masks and task metadata. Disabled tasks
 return empty particle arrays or `null` semantic results. Semantic logits resize to
 original resolution before argmax. The UI supports class-mask PNG, JSON and
-rasterized overlay ZIP downloads. Preannotations preserve Particle ellipses and
+rasterized overlay ZIP downloads. Preannotations preserve configured particle-label ellipses and
 per-class RLE brushes using actual control names.
 
 ## Installation
@@ -135,6 +146,32 @@ per-class RLE brushes using actual control names.
 existing Python 3.11 `collections.abc` compatibility patch, and records the source
 revision. All new functionality resides in this plugin. It refuses to overwrite an
 existing cache. Set `CEDIRNET_STEM_DOWNLOAD_PARTICLES=0` for semantic-only setup.
+
+The Python 3.11 environment uses NumPy **1.26.4**, one OpenCV wheel
+(`opencv-python==4.11.0.86`), and the existing Torch **2.7.0 / CUDA 12.8** stack.
+`requirements.txt` is resolved together with the host packages. The explicit uv
+`dependency-overrides.txt` replaces the backend's moving SDK git dependency with
+**label-studio-sdk 2.0.0**: newer SDK HEAD requires OpenCV 4.12 and therefore
+NumPy 2, which is not this plugin's tested numerical stack. A constraint alone
+cannot replace a direct git requirement. The SDK's converter and standalone
+converter 0.0.59 are both supported; no headless OpenCV wheel is installed over
+`cv2`. The timm **0.6.13** override replaces SMP 0.3.2's Python-3.11-incompatible
+0.6.12 pin; its dependencies are resolved normally, without `--no-deps`.
+`uv pip check` will still report SMP's original timm metadata pin; this is the
+intentional tested override, not a missing dependency. Use the same overrides
+when resolving additional packages into this environment.
+
+**Retrying a failed installation:** setup deliberately does not resume or erase
+`$TOOLBOX_CACHE/cedirnet-stem`. Stop model workers and move the *entire* failed
+model directory to a uniquely named backup, or select a new empty cache root,
+then rerun setup with this plugin revision. Do not delete user checkpoints,
+training output, or other models' caches. Keep the backup until the fresh install
+is verified. This is a fresh-install fix, not an in-place environment migration.
+
+Outside the Toolbox container, `CEDIRNET_STEM_MODELARGS` and
+`CEDIRNET_STEM_ML_BACKEND` can name local copies of the two host packages
+(normally `/opt/apps/modelargs` and `/opt/apps/label-studio-ml-backend`). They
+still undergo the full dependency solve and install; they do not reuse a venv.
 
 For testing against an existing verified environment:
 
@@ -165,7 +202,7 @@ Toolbox `apps/modelargs` to `PYTHONPATH`:
 
 ```bash
 export PYTHONPATH="$PWD:/absolute/cache/cedirnet-stem/src:/absolute/toolbox/apps/modelargs"
-MPLBACKEND=Agg CUDA_VISIBLE_DEVICES='' python -m pytest tests -q
+MPLBACKEND=Agg CUDA_VISIBLE_DEVICES='' CEDIRNET_STEM_VERIFY_DEPENDENCIES=1 python -m pytest tests -q
 node --test tests/test_ui.mjs
 bash -n setup.sh
 ```
