@@ -59,7 +59,7 @@
     });
   }
 
-  async function renderAnnotatedPng(file, centers, scores, radii) {
+  async function renderAnnotatedPng(file, centers, scores, radii, segmentation = null) {
     const image = await loadBrowserImage(file);
     const canvas = document.createElement("canvas");
     canvas.width = image.naturalWidth;
@@ -68,6 +68,10 @@
     if (!context) throw new Error("Canvas rendering is unavailable");
 
     context.drawImage(image, 0, 0);
+    if (segmentation) {
+      const overlay = await loadDataImage(segmentation.overlay_png);
+      context.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+    }
     context.strokeStyle = "limegreen";
     context.lineWidth = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) / 512 * 2));
 
@@ -188,15 +192,30 @@
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function loadDataImage(uri) {
+    return new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Could not decode semantic overlay"));
+      image.src = uri;
+    });
+  }
+
+  function sampleResult(response, i) {
+    return { centers: response.centers?.[i] || [], scores: response.scores?.[i] || [],
+      radii: response.radii?.[i] || [], segmentation: response.segmentation?.[i] || null };
+  }
+
   document.getElementById("infer").onInference = function (request, response) {
     const group = document.createElement("div");
     group.classList.add("group");
     const images = request.getAll("images");
-    const { centers, scores, radii } = response;
+    const centers = [], scores = [], radii = [];
 
     const results = [];
     for (let i = 0; i < images.length / 2; i++) {
-      const result = {};
+      const result = sampleResult(response, i);
+      centers.push(result.centers); scores.push(result.scores); radii.push(result.radii);
       result["image-BF"] = images[2 * i].name;
       result["image-HAADF"] = images[2 * i + 1].name;
       result.centers = centers[i];
@@ -215,12 +234,33 @@
         image.src = URL.createObjectURL(images[2 * i]);
       }
       image.onload = () => {
+        if (result.segmentation) {
+          const overlay = document.createElement("img");
+          overlay.src = result.segmentation.overlay_png;
+          Object.assign(overlay.style, {position: "absolute", left: "0", top: "0", width: "100%", height: "100%", pointerEvents: "none"});
+          wrapper.appendChild(overlay);
+        }
         for (let j = 0; j < centers[i].length; j++) {
           wrapper.appendChild(createCircle(centers[i][j], radii[i][j], scores[i][j], image));
         }
       };
       wrapper.appendChild(image);
       group.appendChild(wrapper);
+      if (result.segmentation) {
+        const legend = document.createElement("div");
+        for (const [id, name] of result.segmentation.classes.entries()) {
+          const label = document.createElement("span");
+          label.textContent = `${id}: ${name}  `;
+          label.style.borderBottom = `4px solid rgb(${result.segmentation.colors[id].join(",")})`;
+          legend.appendChild(label);
+        }
+        const maskDownload = document.createElement("a");
+        maskDownload.textContent = "Download class-ID mask PNG";
+        maskDownload.href = result.segmentation.mask_png;
+        maskDownload.download = `${i + 1}-semantic-mask.png`;
+        legend.appendChild(maskDownload);
+        group.appendChild(legend);
+      }
     }
 
     const actions = document.createElement("div");
@@ -254,6 +294,7 @@
             centers[i] || [],
             scores[i] || [],
             radii[i] || [],
+            response.segmentation?.[i] || null,
           );
           entries.push({ name: annotatedFilename(images[2 * i], i), blob: png });
         }

@@ -1,242 +1,174 @@
-import json
+"""Toolbox training with independently enabled STEM tasks and MLflow views."""
 import os
-import signal
 import site
-import sys
+from pathlib import Path
+site.addsitedir(str(Path(os.environ.get('CEDIRNET_STEM_SOURCE',os.path.join(os.environ.get('TOOLBOX_CACHE','.'),'cedirnet-stem'))) / 'src'))
+
+import signal
 import tempfile
-
-site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/cedirnet-stem/src')
-
-import mlflow
-import modelargs
 import numpy as np
 import torch
-from mlflow.entities import RunStatus
-from tqdm import tqdm
-
-from criterions import get_criterion
-from datasets import get_centerdir_dataset
-from models import get_center_model, get_model
-from utils.utils import variable_len_collate
-
-from base_config import NUM_VECTOR_FIELDS, get_args
-from checkpoint import load_compatible_model_state, safe_torch_load
+import mlflow
+from matplotlib import pyplot as plt
+from task_options import task_config
+from toolbox_dataset import ToolboxDataset
+from runtime import StemRuntime
+from checkpoint import safe_torch_load
+from diagnostics import plot_training_diagnostics, training_artifact_path
+from validation_metrics import ParticleMetrics
 
 
-def _parallel(module, device):
-    return torch.nn.DataParallel(module.to(device), device_ids=[0])
-
-
-def _load_model_state(model, state):
-    skipped = load_compatible_model_state(model, state)
-    if skipped:
-        print(
-            "Warning: ignored checkpoint tensors not used by the point+radius "
-            f"adaptation: {len(skipped)}"
-        )
-
-
-def _load_center_state(center_model, state):
-    center_state = state.get("center_model_state_dict")
-    if not center_state:
-        raise ValueError("checkpoint does not contain center_model_state_dict")
-
-    input_key = "module.instance_center_estimator.conv_start.0.weight"
-    checkpoint_weights = center_state.get(input_key)
-    if checkpoint_weights is not None:
-        expected_weights = center_model.module.instance_center_estimator.conv_start[0].weight
-        if checkpoint_weights.shape != expected_weights.shape:
-            center_state = dict(center_state)
-            center_state[input_key] = checkpoint_weights[:, : expected_weights.shape[1], :, :]
-    center_model.load_state_dict(center_state, strict=False)
+def log_figure_artifact(fig, artifact_file):
+    run = mlflow.active_run()
+    artifacts = os.getenv('MLFLOW_ARTIFACTS_DESTINATION')
+    if artifacts and run:
+        destination = Path(artifacts)/run.info.experiment_id/run.info.run_id/'artifacts'/artifact_file
+        destination.parent.mkdir(parents=True,exist_ok=True)
+        fig.savefig(destination)
+    else:
+        mlflow.log_figure(fig,artifact_file)
 
 
 class Trainer:
     def __init__(self, args):
         self.args = args
-        self.device = torch.device("cuda" if args["cuda"] else "cpu")
+        self.tasks = task_config(args)
+        self.device = args.get('device') or ('cuda' if torch.cuda.is_available() else 'cpu')
+        self.size = (int(args.get('width',512)),int(args.get('height',512)))
+        if any(s <= 0 or s % 32 for s in self.size):
+            raise ValueError('image dimensions must be positive multiples of 32')
+        for key in ('epochs','batch_size','save_interval','display_interval','visualization_samples'):
+            if int(args.get(key,1)) < 1:
+                raise ValueError(f'{key} must be positive')
 
     def initialize(self):
         args = self.args
-        dataset, center_groundtruth = get_centerdir_dataset(
-            args["train_dataset"]["name"],
-            args["train_dataset"]["kwargs"],
-            args["train_dataset"]["centerdir_gt_opts"],
-        )
-        self.loader = torch.utils.data.DataLoader(
-            dataset,
-            batch_size=args["train_dataset"]["batch_size"],
-            shuffle=args["train_dataset"]["shuffle"],
-            drop_last=False,
-            num_workers=args["train_dataset"]["workers"],
-            pin_memory=args["cuda"],
-            collate_fn=variable_len_collate,
-        )
-
-        model = get_model(args["model"]["name"], args["model"]["kwargs"])
-        model.init_output(NUM_VECTOR_FIELDS)
-        center_model = get_center_model(
-            args["center_model"]["name"],
-            args["center_model"]["kwargs"],
-            is_learnable=args["center_model"]["use_learnable_center_estimation"],
-        )
-        center_model.init_output(NUM_VECTOR_FIELDS)
-        criterion = get_criterion(
-            args["loss_type"], args["loss_opts"], model, center_model
-        )
-
-        self.model = _parallel(model, self.device)
-        self.center_model = _parallel(center_model, self.device)
-        self.criterion = _parallel(criterion, self.device)
-        self.center_groundtruth = _parallel(center_groundtruth, self.device)
-
-        self.optimizer = torch.optim.Adam(
-            self.model.parameters(),
-            lr=args["model"]["lr"],
-            weight_decay=args["model"]["weight_decay"],
-        )
-        self.scheduler = torch.optim.lr_scheduler.LambdaLR(
-            self.optimizer,
-            lr_lambda=args["model"]["lambda_scheduler_fn"](args),
-        )
-
-        if args.get("pretrained_model_path"):
-            state = safe_torch_load(
-                args["pretrained_model_path"], map_location=self.device
-            )
-            _load_model_state(self.model, state)
-            if state.get("center_model_state_dict"):
-                _load_center_state(self.center_model, state)
-
-        if args.get("pretrained_center_model_path"):
-            state = safe_torch_load(
-                args["pretrained_center_model_path"], map_location=self.device
-            )
-            _load_center_state(self.center_model, state)
+        self.runtime = StemRuntime(self.tasks,self.device,args.get('backbone') or 'tu-convnext_base',pretrained=False)
+        if args.get('model'):
+            self.runtime.load(safe_torch_load(args['model'],map_location=self.device))
+        if self.tasks.nanoparticles:
+            path = args.get('localisation')
+            if not path and not args.get('model'):
+                path = os.path.join(os.environ.get('TOOLBOX_CACHE','.'),'cedirnet-stem','localization_checkpoint.pth')
+            if path:
+                self.runtime.load_center(safe_torch_load(path,map_location=self.device))
+        self.loaders = {}
+        for subset,split,augment in [('train','train',True),('training','train',False),('validation','val',False)]:
+            dataset = ToolboxDataset(args['manifest'],self.tasks,split,self.size,augment,
+                                     allow_empty=subset=='validation')
+            self.loaders[subset] = torch.utils.data.DataLoader(dataset,
+                batch_size=int(args.get('batch_size',2)),shuffle=augment,
+                num_workers=int(args.get('workers') or 0))
+        self.optimizer = torch.optim.Adam((p for p in self.runtime.parameters() if p.requires_grad),lr=1e-4)
+        self.scheduler = torch.optim.lr_scheduler.LambdaLR(self.optimizer,
+            lambda epoch: max(0,1-epoch/int(args.get('epochs',100)))**.9)
 
     def train_epoch(self, epoch):
-        self.model.train()
-        self.center_model.train()
-        losses_epoch = []
-        iterator = tqdm(
-            self.loader,
-            desc=f"{epoch + 1}/{self.args['n_epochs']}",
-            dynamic_ncols=True,
-        )
+        self.runtime.train()
+        values = []
+        for sample in self.loaders['train']:
+            self.optimizer.zero_grad(set_to_none=True)
+            loss,parts = self.runtime.loss(sample)
+            if not torch.isfinite(loss):
+                raise FloatingPointError('non-finite STEM training loss')
+            loss.backward(); self.optimizer.step()
+            values.append({k:float(v.detach()) for k,v in parts.items()})
+        metrics = {key:float(np.mean([v[key] for v in values])) for key in values[0]}
+        metrics['loss'] = sum(metrics.values())
+        mlflow.log_metrics(metrics,step=epoch+1)
+        return metrics
 
-        for sample in iterator:
-            batch_size = sample["image"].shape[0]
-            sample = self.center_groundtruth(
-                sample, torch.arange(batch_size, dtype=torch.int32)
-            )
-            instances = sample["instance"].squeeze(1)
-            ignore = sample.get("ignore")
-            ignore_mask = ignore > 0 if ignore is not None else None
-            difficult = (
-                (((ignore & 8) | (ignore & 2)) > 0).squeeze(1)
-                if ignore is not None
-                else torch.zeros_like(instances)
-            )
-
-            self.optimizer.zero_grad()
-            self.center_model.zero_grad(set_to_none=True)
-            output = self.model(sample["image"])
-            center_output = self.center_model(output, **sample)
-            center_pred = center_output["center_pred"]
-            center_heatmap = center_output["center_heatmap"]
-            losses = self.criterion(
-                center_output["output"],
-                sample,
-                centerdir_responses=(center_pred, center_heatmap),
-                centerdir_gt=sample["centerdir_groundtruth"],
-                ignore_mask=ignore_mask,
-                difficult_mask=difficult,
-                reduction_dims=(1, 2, 3),
-                epoch_percent=epoch / max(self.args["n_epochs"], 1),
-                **self.args["loss_w"],
-            )
-            loss = losses[0].sum()
-            loss.backward()
-            self.optimizer.step()
-
-            value = float(loss.detach().cpu())
-            losses_epoch.append(value)
-            iterator.set_postfix(loss=value)
-
-        mean_loss = float(np.mean(losses_epoch))
-        mlflow.log_metric("loss", mean_loss, step=epoch)
-        return mean_loss
+    @torch.no_grad()
+    def visualize(self, epoch, subset):
+        self.runtime.eval()
+        limit = int(self.args.get('visualization_samples',4))
+        threshold = float(self.args.get('score_threshold',.5))
+        confusion = np.zeros((len(self.tasks.classes),len(self.tasks.classes)),dtype=np.int64)
+        visualized = 0
+        particle_metrics = ParticleMetrics(distance=20)
+        for sample in self.loaders[subset]:
+            output = self.runtime(sample['image'])
+            for i,name in enumerate(sample['name']):
+                kwargs = dict(image=sample['image'][i],classes=self.tasks.classes)
+                if self.tasks.nanoparticles:
+                    out = output['particles']
+                    pred = out['center_pred'][i].cpu().numpy()
+                    valid = (pred[:,0]==1)&(pred[:,4]>=threshold)
+                    kwargs.update(centers=pred[valid,1:3],scores=pred[valid,4],
+                        radii=out['pred_attributes']['shape_coef'][i].cpu().numpy()[valid],
+                        direction_output=out['output'][i],localization_response=out['center_heatmap'][i],
+                        ground_truth_centers=sample['center'][i])
+                    gt = sample['center'][i].numpy()
+                    gt = gt[np.any(gt != 0, axis=1)]
+                    gt_radii = [sample['shape_coef'][i,0,int(y),int(x)].item() for x,y in gt]
+                    particle_metrics.update(kwargs['centers'],kwargs['radii'],gt,gt_radii)
+                if self.tasks.segmentation:
+                    pred = output['semantic'][i].argmax(0).cpu().numpy()
+                    target = sample['semantic_segmentation'][i].numpy()
+                    valid = target != 255
+                    n = len(self.tasks.classes)
+                    confusion += np.bincount(n*target[valid]+pred[valid],minlength=n*n).reshape(n,n)
+                    kwargs.update(semantic_target=target,semantic_prediction=pred)
+                if visualized < limit:
+                    fig = plot_training_diagnostics(**kwargs)
+                    try:
+                        log_figure_artifact(fig,training_artifact_path(epoch,f'{visualized:04d}-{name}',subset))
+                    finally:
+                        plt.close(fig)
+                    visualized += 1
+        if self.tasks.nanoparticles and len(self.loaders[subset].dataset):
+            mlflow.log_metrics({f'{subset}/{key}':value for key,value in particle_metrics.compute().items()},step=epoch+1)
+        if self.tasks.segmentation and confusion.sum():
+            union = confusion.sum(0)+confusion.sum(1)-confusion.diagonal()
+            present = union>0
+            iou = np.divide(confusion.diagonal(),union,out=np.zeros(len(union),float),where=present)
+            metrics = {f'{subset}/semantic_mIoU':float(iou[present].mean()),
+                       f'{subset}/semantic_pixel_accuracy':float(confusion.trace()/confusion.sum())}
+            metrics.update({f'{subset}/semantic_iou_class_{i}':float(iou[i]) for i in np.flatnonzero(present)})
+            mlflow.log_metrics(metrics,step=epoch+1)
 
     def checkpoint(self, epoch):
-        state = {
-            "epoch": epoch,
-            "model_state_dict": self.model.state_dict(),
-            "center_model_state_dict": self.center_model.state_dict(),
-        }
-        if (artifacts := os.getenv("MLFLOW_ARTIFACTS_DESTINATION")) and (run := mlflow.active_run()):
-            filename = os.path.join(artifacts, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
-            os.makedirs(os.path.dirname(filename), exist_ok=True)
-            torch.save(state, filename)
-            modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
+        state = self.runtime.checkpoint(epoch)
+        run = mlflow.active_run()
+        artifacts = os.getenv('MLFLOW_ARTIFACTS_DESTINATION')
+        relative = 'checkpoints/checkpoint.pth'
+        if artifacts:
+            filename = Path(artifacts)/run.info.experiment_id/run.info.run_id/'artifacts'/relative
+            filename.parent.mkdir(parents=True,exist_ok=True)
+            torch.save(state,filename)
         else:
             with tempfile.TemporaryDirectory() as directory:
-                filename = os.path.join(directory, "checkpoint.pt")
-                torch.save(state, filename)
-                mlflow.log_artifact(filename)
-                info = mlflow.active_run().info
-                modelargs.emit_action("Weights", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pt")
+                filename = Path(directory)/'checkpoint.pth'
+                torch.save(state,filename); mlflow.log_artifact(str(filename),artifact_path='checkpoints')
+        import modelargs
+        modelargs.emit_action('Weights',f'mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/{relative}')
 
     def run(self):
-        for epoch in range(self.args["n_epochs"]):
-            self.train_epoch(epoch)
-            self.scheduler.step()
-            if (epoch + 1) % self.args["save_interval"] == 0 or (
-                epoch + 1 == self.args["n_epochs"]
-            ):
+        epochs = int(self.args.get('epochs',100))
+        for epoch in range(epochs):
+            self.train_epoch(epoch); self.scheduler.step()
+            if (epoch+1)%int(self.args.get('display_interval',10))==0 or epoch+1==epochs:
+                self.visualize(epoch,'training'); self.visualize(epoch,'validation')
+            if (epoch+1)%int(self.args.get('save_interval',10))==0 or epoch+1==epochs:
                 self.checkpoint(epoch)
 
 
 def main():
-    cmd_args = modelargs.parse("./model.json")
-    if not cmd_args.get("manifest"):
-        raise ValueError("CeDiRNet-STEM training requires a manifest")
-
-    args = get_args(
-        width=cmd_args["width"],
-        height=cmd_args["height"],
-        batch_size=cmd_args["batch_size"],
-        workers=cmd_args["workers"],
-    )
-    args["train_dataset"]["kwargs"]["manifest"] = cmd_args["manifest"]
-    args["n_epochs"] = cmd_args["epochs"]
-    args["save_interval"] = cmd_args["save_interval"]
-    args["pretrained_model_path"] = cmd_args.get("model") or None
-    args["model"]["kwargs"]["pretrained"] = not bool(args["pretrained_model_path"])
-
-    default_localisation = os.path.join(
-        os.environ["TOOLBOX_CACHE"], "cedirnet-stem", "localization_checkpoint.pth"
-    )
-    args["pretrained_center_model_path"] = (
-        cmd_args.get("localisation") or default_localisation
-    )
-
-    mlflow.set_tracking_uri("http://localhost:8081")
-    mlflow.set_experiment("CeDiRNet-STEM")
-    with mlflow.start_run(run_name=cmd_args.get("name")) as run:
-        def handler(_signal, _frame):
-            mlflow.end_run(RunStatus.to_string(RunStatus.KILLED))
-            sys.exit(0)
-
-        signal.signal(signal.SIGINT, handler)
-        signal.signal(signal.SIGTERM, handler)
-        modelargs.emit_action("Experiment", run.info.experiment_id)
-        modelargs.emit_action("Run", run.info.run_id)
-        mlflow.log_params(json.loads(json.dumps(args, default=lambda _: "<callable>")))
-
-        trainer = Trainer(args)
-        trainer.initialize()
-        trainer.run()
+    import modelargs
+    args = modelargs.parse('./model.json')
+    trainer = Trainer(args)
+    mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI','http://localhost:8081'))
+    mlflow.set_experiment('CeDiRNet-STEM')
+    with mlflow.start_run(run_name=args.get('name')) as run:
+        def handler(_signal,_frame):
+            mlflow.end_run('KILLED')
+            raise SystemExit(0)
+        signal.signal(signal.SIGINT,handler); signal.signal(signal.SIGTERM,handler)
+        modelargs.emit_action('Experiment',run.info.experiment_id)
+        modelargs.emit_action('Run',run.info.run_id)
+        mlflow.log_params({k:v for k,v in args.items() if v is not None})
+        trainer.initialize(); trainer.run()
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

@@ -205,7 +205,8 @@ class PreparedModelFilesTest(unittest.TestCase):
     def test_setup_clones_stem_repository(self):
         setup = (MODEL_DIR / "setup.sh").read_text()
         self.assertIn("vicoslab/CeDiRNet-STEM", setup)
-        self.assertIn("GenericPointRadiusDataset.py", setup)
+        self.assertIn("branch=master", setup)
+        self.assertIn('git clone --depth 1 --branch "$branch"', setup)
         self.assertNotIn("vicoslab/toolbox.git", setup)
 
     def test_training_config_is_radius_only(self):
@@ -216,17 +217,17 @@ class PreparedModelFilesTest(unittest.TestCase):
 
     def test_training_entrypoint_uses_manifest(self):
         train = (MODEL_DIR / "train.py").read_text()
-        self.assertIn('cmd_args["manifest"]', train)
-        self.assertIn("GenericPointRadiusDataset", (MODEL_DIR / "setup.sh").read_text())
+        self.assertIn("ToolboxDataset(args['manifest']", train)
+        self.assertIn("task_config(args)", train)
         self.assertIn("mlflow", train)
 
     def test_inference_returns_radius_and_label_studio_vectors(self):
-        infer = (MODEL_DIR / "infer.py").read_text()
-        self.assertIn('"radii"', infer)
+        infer = (MODEL_DIR / "serving.py").read_text() + (MODEL_DIR / "runtime.py").read_text()
+        self.assertIn("'radii'", infer)
         self.assertIn("label_studio_vector_result", infer)
         self.assertIn("pred_attributes", infer)
         self.assertIn("load_stem_image", infer)
-        self.assertIn('ARGS["model"]["kwargs"]["pretrained"] = False', infer)
+        self.assertIn('pretrained=False', infer)
 
     def test_browser_ui_draws_radius_circles(self):
         ui = (MODEL_DIR / "ui.html").read_text()

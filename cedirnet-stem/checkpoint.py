@@ -8,8 +8,8 @@ def safe_torch_load(path, *, map_location):
     import numpy as np
     import torch
 
-    numpy_core = np._core if hasattr(np, "_core") else np.core
-    numpy_scalar = numpy_core.multiarray.scalar
+    import importlib
+    numpy_scalar = importlib.import_module('numpy.core.multiarray').scalar
     safe_globals = [
         (numpy_scalar, "numpy.core.multiarray.scalar"),
         np.dtype,

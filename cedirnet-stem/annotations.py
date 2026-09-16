@@ -9,8 +9,19 @@ from typing import Iterable, Sequence
 import numpy as np
 from PIL import Image, ImageOps
 
-def load_stem_image(bf_source, haadf_source) -> Image.Image:
-    """Compose the upstream STEM input as BF, HAADF, and a zero channel."""
+def load_stem_image(bf_source, haadf_source=None) -> Image.Image:
+    """Compose BF, HAADF, zero; infer a pair only for explicit _BF/_HAADF paths."""
+    if haadf_source is None:
+        path = Path(bf_source)
+        if '_HAADF' in path.name:
+            haadf_source = path
+            bf_source = path.with_name(path.name.replace('_HAADF', '_BF'))
+        elif '_BF' in path.name:
+            haadf_source = path.with_name(path.name.replace('_BF', '_HAADF'))
+        else:
+            raise ValueError('provide both BF and HAADF paths')
+        if not Path(haadf_source).is_file():
+            raise FileNotFoundError(f'HAADF pair missing: {haadf_source}')
     if isinstance(bf_source, (str, Path)) and isinstance(haadf_source, (str, Path)):
         bf_lower, haadf_lower = str(bf_source).lower(), str(haadf_source).lower()
         if "bf" not in bf_lower and "haadf" in bf_lower and "haadf" not in haadf_lower and "bf" in haadf_lower:
