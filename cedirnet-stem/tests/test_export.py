@@ -78,14 +78,26 @@ def test_host_create_uses_plugin_config(tmp_path, monkeypatch):
     def create(**kw):
         calls.update(kw)
         return SimpleNamespace(id=1)
-    client = SimpleNamespace(projects=SimpleNamespace(create=create), ml=SimpleNamespace(create=lambda **kw: None))
+    client = SimpleNamespace(
+        projects=SimpleNamespace(create=create, import_tasks=lambda **kw: calls.update(imported=kw)),
+        import_storage=SimpleNamespace(local=SimpleNamespace(create=lambda **kw: calls.update(storage=kw))),
+        ml=SimpleNamespace(create=lambda **kw: None))
     monkeypatch.setattr(label_studio_sdk, 'LabelStudio', lambda **kw: client)
-    request = dict(group_size=2, title='STEM', dataset=None, regex_include='.*', regex_exclude='')
+    dataset = tmp_path / 'pairs'
+    dataset.mkdir()
+    for name in ['sample_BF.png', 'sample_HAADF.png']:
+        Image.new('L', (64, 64)).save(dataset / name)
+    request = dict(group_size=2, group_separation='interlace', title='STEM', dataset=str(dataset), regex_include=r'.*\.png$', regex_exclude='')
+    monkeypatch.setenv('LABEL_STUDIO_HOST', 'https://example')
     for key, value in dict(LOCAL_FILES_DOCUMENT_ROOT=tmp_path, MODEL_DIR=ROOT,
                            LABEL_STUDIO_USER_TOKEN='fixture-token', CREATION_REQUEST=json.dumps(request)).items():
         monkeypatch.setenv(key, str(value))
     runpy.run_path(str(HOST / 'apps/ls-utils/create.py'), run_name='__main__')
     assert calls['label_config'] == yaml.safe_load((ROOT / 'config.yml').read_text())['config']
+    assert calls['imported']['request'] == [{'data': {'images': [
+        'https://example/data/local-files/?d=pairs/sample_BF.png',
+        'https://example/data/local-files/?d=pairs/sample_HAADF.png']}}]
+    assert json.loads((dataset / 'groups.json').read_text())['group_size'] == 2
 
 
 @pytest.mark.parametrize('particles,semantic', [(True, False), (False, True), (True, True)])

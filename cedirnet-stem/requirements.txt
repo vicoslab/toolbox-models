@@ -1,0 +1,21 @@
+# Keep the legacy CeDiRNet numerical ABI; do not mix OpenCV distributions.
+numpy==1.26.4
+opencv-python==4.11.0.86
+# Preserve the CUDA 12.8 framework stack installed by setup.sh.
+torch==2.7.0
+torchvision==0.22.0
+torchaudio==2.7.0
+pandas
+scikit-learn
+scikit-image
+tensorboard
+matplotlib
+scipy
+tqdm
+segmentation-models-pytorch==0.3.2
+future
+mlflow
+psutil
+flask
+gunicorn
+label-studio-converter==0.0.59

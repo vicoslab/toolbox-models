@@ -42,9 +42,11 @@ def preannotation(response, index, size, parsed_config):
         if len(candidates)!=1:
             raise ValueError('nanoparticles requires exactly one EllipseLabels control')
         name,tag = candidates[0]
-        label = 'Particle'
-        if label not in tag.get('labels',[]):
-            raise ValueError('particle control must contain Particle; defect classification is semantic')
+        labels = tag.get('labels', [])
+        if len(labels) != 1:
+            raise ValueError('particle control must contain exactly one configured label/alias; defect classification is semantic')
+        # The SDK parsed config already resolves Label alias before value.
+        label = labels[0]
         for j,(center,radius,score) in enumerate(zip(response['centers'][index],response['radii'][index],response['scores'][index])):
             results.append(label_studio_ellipse_result(center=center,radius=radius,score=score,original_size=size,
                 from_name=name,to_name=tag['to_name'][0],label=label,result_id=f'particle-{j}'))

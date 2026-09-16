@@ -72,22 +72,50 @@ def test_non_circular_ellipse_export_dataset(tmp_path):
     assert sample['shape_coef'][0, 50, 50] == 15
 
 
-def test_conditional_ui_and_hotkeys():
+def test_sidebar_ui_and_hotkeys():
     root = ET.fromstring(yaml.safe_load((ROOT / 'config.yml').read_text())['config'])
-    tasks = root.find("Choices[@name='annotation_tasks']")
-    assert tasks is not None
-    assert tasks.attrib['choice'] == 'multiple'
-    assert tasks.attrib['showInline'] == 'true'
-    assert {c.attrib['value']: c.attrib['hotkey'] for c in tasks} == {'Nanoparticles': 'n', 'Segmentation': 's'}
-    assert not any(c.get('selected') == 'true' for c in tasks)
-    for name, control in [('Nanoparticles', 'EllipseLabels'), ('Segmentation', 'BrushLabels')]:
-        view = root.find(f"View[@whenChoiceValue='{name}']")
-        assert view is not None
-        assert view.attrib['visibleWhen'] == 'choice-selected'
-        assert view.attrib['whenTagName'] == 'annotation_tasks'
-        assert view.find(f'Collapse/Panel/{control}') is not None
+    assert root.attrib == {'className': 'stem-annotation'}
+    assert root.find('.//Choices') is None
+    assert root.find('.//Choice') is None
+    row = root.find('View')
+    assert row.attrib['style'] == 'display: flex; flex-direction: row; align-items: flex-start; gap: 16px;'
+    left, right = row.findall('View')
+    assert left.attrib['style'] == 'flex: 1 1 0%; min-width: 0;'
+    assert right.attrib['style'] == 'display: flex; flex-direction: row; align-items: flex-start; gap: 8px; flex: 0 0 380px;'
+    assert left.find('Image').attrib == dict(name='image', valueList='$images', zoom='true', gallery='true', shared='true')
+    assert root.find('Image') is None
+    assert [p.attrib['value'] for p in right.findall('View/Collapse/Panel')] == ['Particle instances', 'Segmentation']
+    assert all(c.attrib == dict(open='true', bordered='true') for c in root.findall('.//Collapse'))
+    assert root.find('.//EllipseLabels/Label').attrib == dict(value='PtCo', alias='nanoparticle', background='#14c850', hotkey='p')
     assert [x.attrib['hotkey'] for x in root.findall('.//BrushLabels/Label')] == ['1', '2', '3', '4']
-    image, = root.findall('.//Image')
-    assert image.attrib['valueList'] == '$images'
-    assert image.attrib['shared'] == 'true'
+    assert root.find(".//Label[@value='Ignore']").attrib['hint'] == 'Use when unsure which category.'
+    assert root.find(".//Panel[@value='Segmentation']/Magicwand").attrib == dict(name='wand', toName='image')
     assert root.find('.//Vector') is None
+
+
+@pytest.mark.parametrize('label', ['nanoparticle', 'Particle'])
+def test_configured_and_legacy_labels(tmp_path, label):
+    tag = ellipse()
+    tag['value']['ellipselabels'] = [label]
+    assert export([[tag]], tmp_path, ['BF', 'HAADF'], False)['points'] == [[50, 50, 15]]
+
+
+@pytest.mark.parametrize('labels', [['PtCo'], ['Unknown'], [], ['nanoparticle', 'Particle']])
+def test_unknown_particle_labels_rejected(tmp_path, labels):
+    tag = ellipse()
+    tag['value']['ellipselabels'] = labels
+    with pytest.raises(ValueError, match='configured particle'):
+        export([[tag]], tmp_path, ['BF', 'HAADF'], False)
+
+
+def test_real_sdk_alias_preannotation_roundtrip(tmp_path):
+    from label_studio_sdk._extensions.label_studio_tools.core.label_config import parse_config
+    from stem_plugin.serving import preannotation
+    config = parse_config(yaml.safe_load((ROOT / 'config.yml').read_text())['config'])
+    assert config['labels']['labels'] == ['nanoparticle']
+    assert config['labels']['inputs'][0]['valueList'] == 'images'
+    response = dict(tasks={'nanoparticles': True}, centers=[[[.25, .5]]],
+                    radii=[[10]], scores=[[.8]], segmentation=[None])
+    annotation = preannotation(response, 0, (200, 100), config)
+    assert annotation['result'][0]['value']['ellipselabels'] == ['nanoparticle']
+    assert export([annotation['result']], tmp_path, ['BF', 'HAADF'], False)['points'] == [[50, 50, 10]]

@@ -1,0 +1,7 @@
+# Backend requirements follow SDK git HEAD. Replace that direct URL explicitly:
+# 2.0.0 supports NumPy 1.26 / OpenCV 4.11 and the backend's extension imports.
+label-studio-sdk==2.0.0
+# SMP 0.3.2 declares timm 0.6.12, which fails on Python 3.11 dataclasses.
+# 0.6.13 is the tested compatibility replacement (all three task modes).
+# Resolve its dependencies normally instead of installing with --no-deps.
+timm==0.6.13

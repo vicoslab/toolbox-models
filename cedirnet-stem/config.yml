@@ -5,47 +5,44 @@ image:
 details: |
   <h1>STEM nanoparticles and semantic regions</h1>
   <p>Create groups of two registered images in BF, HAADF order. The model combines BF grayscale, HAADF grayscale, and a zero third channel.</p>
-  <p>Choose annotation tasks at the top of the labeling view: nanoparticles, segmentation, or both. These checkboxes show annotation tools; they do not change training options or confirm negative labels.</p>
+  <p>Use the Particle instances and Segmentation panels beside the image. Annotation tools do not change training options. This interface has no explicit particle-negative confirmation; empty submissions remain missing supervision.</p>
   <p>Draw particle ellipses and paint semantic classes. Ellipses train the existing circle model using the mean of their two pixel radii. Export creates the paired-image manifest and class-ID masks; overlaps and unpainted pixels are ignored.</p>
 config: |
   <View className="stem-annotation">
     <Style>
-      .stem-annotation h4 { font-size: 13px; line-height: 18px; font-weight: normal; margin: 6px 0 !important; }
+      .stem-annotation h4 {font-size:13px;line-height:18px;font-weight:normal;margin:6px 0 !important;}
     </Style>
-    <Header value="Annotation tasks" size="4" />
-    <Choices name="annotation_tasks" toName="image" choice="multiple" showInline="true">
-      <Choice value="Nanoparticles" hotkey="n" />
-      <Choice value="Segmentation" hotkey="s" />
-    </Choices>
-    <View style="margin: 4px 0 12px; color: #555;">
-      <Header size="5" value="Select Nanoparticles (N), Segmentation (S), or both to show their tools. These are annotation controls, not training options. Hiding a section does not delete its annotations." />
+    <View style="display: flex; flex-direction: row; align-items: flex-start; gap: 16px;">
+      <View style="flex: 1 1 0%; min-width: 0;">
+        <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
+      </View>
+      <View style="display: flex; flex-direction: row; align-items: flex-start; gap: 8px; flex: 0 0 380px;">
+        <View style="flex: 1 1 0%; min-width: 0;">
+          <Collapse open="true" bordered="true">
+            <Panel value="Particle instances">
+              <Header size="5" value="Select particle class, then draw an ellipse (center click first)." />
+              <EllipseLabels name="labels" toName="image" canRotate="true" strokeWidth="2" opacity="0.3">
+                <Label value="PtCo" alias="nanoparticle" background="#14c850" hotkey="p" />
+              </EllipseLabels>
+              <Header size="6" value="The center and mean pixel radius train the circle model; ellipse rotation and eccentricity are not predicted." />
+            </Panel>
+          </Collapse>
+        </View>
+        <View style="flex: 1 1 0%; min-width: 0;">
+          <Collapse open="true" bordered="true">
+            <Panel value="Segmentation">
+              <Header size="5" value="Select a class, then paint its region." />
+              <BrushLabels name="semantic" toName="image">
+                <Label value="Carbon" background="#f24949" hotkey="1" />
+                <Label value="Film" background="#49f249" hotkey="2" />
+                <Label value="Vacuum" background="#4949f2" hotkey="3" />
+                <Label value="Ignore" background="#808080" hotkey="4" hint="Use when unsure which category." />
+              </BrushLabels>
+              <Header size="6" value="Pres ESC before selecting next class." />
+              <Magicwand name="wand" toName="image" />
+            </Panel>
+          </Collapse>
+        </View>
+      </View>
     </View>
-    <View visibleWhen="choice-selected" whenTagName="annotation_tasks" whenChoiceValue="Nanoparticles">
-      <Collapse open="true">
-        <Panel value="Nanoparticle annotation">
-          <Header size="5" value="Draw an ellipse around each particle. The center and mean pixel radius train the circle model; ellipse rotation and eccentricity are not predicted." />
-          <EllipseLabels name="labels" toName="image" canRotate="true" strokeWidth="2" opacity="0.3">
-            <Label value="Particle" background="#14c850" hotkey="p" />
-          </EllipseLabels>
-          <Choices name="particle_review" toName="image" choice="multiple" showInline="true">
-            <Choice value="No nanoparticles" hotkey="alt+n" />
-          </Choices>
-          <Header size="5" value="Check No nanoparticles only after reviewing the entire image and confirming it has none. Opening this section alone does not create a negative training label." />
-        </Panel>
-      </Collapse>
-    </View>
-    <View visibleWhen="choice-selected" whenTagName="annotation_tasks" whenChoiceValue="Segmentation">
-      <Collapse open="true">
-        <Panel value="Semantic segmentation annotation">
-          <Header size="5" value="Paint Carbon (1), Film (2), Vacuum (3), or Ignore (4). Unpainted pixels and conflicting class overlaps are ignored, not background." />
-          <BrushLabels name="semantic" toName="image">
-            <Label value="Carbon" background="#f24949" hotkey="1" />
-            <Label value="Film" background="#49f249" hotkey="2" />
-            <Label value="Vacuum" background="#4949f2" hotkey="3" />
-            <Label value="Ignore" background="#808080" hotkey="4" />
-          </BrushLabels>
-        </Panel>
-      </Collapse>
-    </View>
-    <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
   </View>
