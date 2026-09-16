@@ -8,7 +8,7 @@ from .annotations import load_stem_image
 from .checkpoint import safe_torch_load
 from .runtime import StemRuntime
 from .task_options import task_config
-from .results import label_studio_vector_result
+from .results import label_studio_ellipse_result
 from .semantic_results import brush_results
 
 
@@ -38,15 +38,15 @@ def preannotation(response, index, size, parsed_config):
     """Resolve controls by type, never use a semantic label as a particle label."""
     results = []
     if response['tasks']['nanoparticles']:
-        candidates = [(name,tag) for name,tag in parsed_config.items() if tag.get('type','').lower() in {'labels','vectorlabels'}]
+        candidates = [(name,tag) for name,tag in parsed_config.items() if tag.get('type','').lower() == 'ellipselabels']
         if len(candidates)!=1:
-            raise ValueError('nanoparticles requires exactly one Labels/VectorLabels control')
+            raise ValueError('nanoparticles requires exactly one EllipseLabels control')
         name,tag = candidates[0]
         label = 'Particle'
         if label not in tag.get('labels',[]):
             raise ValueError('particle control must contain Particle; defect classification is semantic')
         for j,(center,radius,score) in enumerate(zip(response['centers'][index],response['radii'][index],response['scores'][index])):
-            results.append(label_studio_vector_result(center=center,radius=radius,score=score,original_size=size,
+            results.append(label_studio_ellipse_result(center=center,radius=radius,score=score,original_size=size,
                 from_name=name,to_name=tag['to_name'][0],label=label,result_id=f'particle-{j}'))
     semantic = response['segmentation'][index]
     if semantic is not None:

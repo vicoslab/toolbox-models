@@ -3,25 +3,49 @@ type: community
 group: Counting
 image:
 details: |
-  <h1>STEM particle centers/radii and semantic regions</h1>
-  <p>Enable nanoparticles, segmentation, or both in the model options. Matching BF and HAADF images are required in every mode.</p>
-  <p>Particle vectors run from center to circumference. Semantic brushes label Carbon, Film and Vacuum; customize names to match the ordered model classes. Defects can be added as semantic classes, not inferred particle attributes.</p>
-  <p>Create groups of two images in BF, HAADF order. Mark reviewed tasks, including Nanoparticles for a negative image. Export creates the paired-image manifest and class-ID masks automatically. Overlaps and unpainted pixels are ignored.</p>
+  <h1>STEM nanoparticles and semantic regions</h1>
+  <p>Create groups of two registered images in BF, HAADF order. The model combines BF grayscale, HAADF grayscale, and a zero third channel.</p>
+  <p>Choose annotation tasks at the top of the labeling view: nanoparticles, segmentation, or both. These checkboxes show annotation tools; they do not change training options or confirm negative labels.</p>
+  <p>Draw particle ellipses and paint semantic classes. Ellipses train the existing circle model using the mean of their two pixel radii. Export creates the paired-image manifest and class-ID masks; overlaps and unpainted pixels are ignored.</p>
 config: |
-  <View>
-    <Labels name="labels" toName="image">
-      <Label value="Particle" background="rgba(20, 200, 80, 0.7)" />
-    </Labels>
-    <BrushLabels name="semantic" toName="image">
-      <Label value="Carbon" background="#f24949" />
-      <Label value="Film" background="#49f249" />
-      <Label value="Vacuum" background="#4949f2" />
-      <Label value="Ignore" background="#808080" />
-    </BrushLabels>
-    <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
-    <Vector name="radius" toName="image" smart="true" />
-    <Choices name="reviewed" toName="image" choice="multiple">
-      <Choice value="Nanoparticles" />
-      <Choice value="Segmentation" />
+  <View className="stem-annotation">
+    <Style>
+      .stem-annotation h4 { font-size: 13px; line-height: 18px; font-weight: normal; margin: 6px 0 !important; }
+    </Style>
+    <Header value="Annotation tasks" size="4" />
+    <Choices name="annotation_tasks" toName="image" choice="multiple" showInline="true">
+      <Choice value="Nanoparticles" hotkey="n" />
+      <Choice value="Segmentation" hotkey="s" />
     </Choices>
+    <View style="margin: 4px 0 12px; color: #555;">
+      <Header size="5" value="Select Nanoparticles (N), Segmentation (S), or both to show their tools. These are annotation controls, not training options. Hiding a section does not delete its annotations." />
+    </View>
+    <View visibleWhen="choice-selected" whenTagName="annotation_tasks" whenChoiceValue="Nanoparticles">
+      <Collapse open="true">
+        <Panel value="Nanoparticle annotation">
+          <Header size="5" value="Draw an ellipse around each particle. The center and mean pixel radius train the circle model; ellipse rotation and eccentricity are not predicted." />
+          <EllipseLabels name="labels" toName="image" canRotate="true" strokeWidth="2" opacity="0.3">
+            <Label value="Particle" background="#14c850" hotkey="p" />
+          </EllipseLabels>
+          <Choices name="particle_review" toName="image" choice="multiple" showInline="true">
+            <Choice value="No nanoparticles" hotkey="alt+n" />
+          </Choices>
+          <Header size="5" value="Check No nanoparticles only after reviewing the entire image and confirming it has none. Opening this section alone does not create a negative training label." />
+        </Panel>
+      </Collapse>
+    </View>
+    <View visibleWhen="choice-selected" whenTagName="annotation_tasks" whenChoiceValue="Segmentation">
+      <Collapse open="true">
+        <Panel value="Semantic segmentation annotation">
+          <Header size="5" value="Paint Carbon (1), Film (2), Vacuum (3), or Ignore (4). Unpainted pixels and conflicting class overlaps are ignored, not background." />
+          <BrushLabels name="semantic" toName="image">
+            <Label value="Carbon" background="#f24949" hotkey="1" />
+            <Label value="Film" background="#49f249" hotkey="2" />
+            <Label value="Vacuum" background="#4949f2" hotkey="3" />
+            <Label value="Ignore" background="#808080" hotkey="4" />
+          </BrushLabels>
+        </Panel>
+      </Collapse>
+    </View>
+    <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
   </View>

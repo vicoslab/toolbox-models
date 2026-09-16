@@ -25,7 +25,7 @@ def restore_prediction(
     return normalized_center, float(radius) / resize_scale
 
 
-def label_studio_vector_result(
+def label_studio_ellipse_result(
     *,
     center: Sequence[float],
     radius: float,
@@ -36,27 +36,14 @@ def label_studio_vector_result(
     label: str,
     result_id: str,
 ) -> dict[str, object]:
-    """Encode center+radius as a Label Studio two-vertex Vector result."""
+    """Encode the circle prediction as an ellipse with equal pixel semi-axes.
+
+    Label Studio x/y are the ellipse center. Percentage radii differ on a
+    non-square image; neither the center nor radius is clipped at image edges.
+    The circle runtime does not predict eccentricity or orientation.
+    """
     center_x, center_y = map(float, center)
     original_width, original_height = map(float, original_size)
-    x_percent = center_x * 100.0
-    y_percent = center_y * 100.0
-    radius = float(radius)
-    candidates = [
-        (x_percent + radius / original_width * 100.0, y_percent),
-        (x_percent - radius / original_width * 100.0, y_percent),
-        (x_percent, y_percent + radius / original_height * 100.0),
-        (x_percent, y_percent - radius / original_height * 100.0),
-    ]
-    handle_x, handle_y = next(
-        (
-            candidate
-            for candidate in candidates
-            if 0.0 <= candidate[0] <= 100.0 and 0.0 <= candidate[1] <= 100.0
-        ),
-        candidates[0],
-    )
-
     return {
         "id": result_id,
         "from_name": from_name,
@@ -65,18 +52,14 @@ def label_studio_vector_result(
         "original_height": int(original_height),
         "image_rotation": 0,
         "value": {
-            "closed": False,
-            "vertices": [
-                {"x": x_percent, "y": y_percent, "id": f"{result_id}-center"},
-                {
-                    "x": handle_x,
-                    "y": handle_y,
-                    "id": f"{result_id}-radius",
-                },
-            ],
-            "labels": [label],
+            "x": center_x * 100,
+            "y": center_y * 100,
+            "radiusX": float(radius) / original_width * 100,
+            "radiusY": float(radius) / original_height * 100,
+            "rotation": 0,
+            "ellipselabels": [label],
         },
         "score": float(score),
-        "type": "labels",
+        "type": "ellipselabels",
         "readonly": False,
     }
