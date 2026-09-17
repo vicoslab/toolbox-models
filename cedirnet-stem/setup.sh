@@ -36,10 +36,15 @@ else
     uv pip install --python "$python" torch==2.7.0 torchvision==0.22.0 torchaudio==2.7.0 --index-url https://download.pytorch.org/whl/cu128
     # One solve for model + host requirements. Constraints cannot replace the
     # backend's SDK git URL; uv overrides explicitly select our tested SDK.
-    uv pip install --python "$python" --override "$dir/dependency-overrides.txt" \
-        -r "$dir/requirements.txt" \
-        "${CEDIRNET_STEM_MODELARGS:-/opt/apps/modelargs}" \
-        "${CEDIRNET_STEM_ML_BACKEND:-/opt/apps/label-studio-ml-backend}"
+    # uv splits --override values on spaces even when the shell quotes them.
+    # Pass a relative filename from the plugin directory (also for -r).
+    (
+        cd "$dir"
+        uv pip install --python "$python" --override dependency-overrides.txt \
+            -r requirements.txt \
+            "${CEDIRNET_STEM_MODELARGS:-/opt/apps/modelargs}" \
+            "${CEDIRNET_STEM_ML_BACKEND:-/opt/apps/label-studio-ml-backend}"
+    )
 fi
 PYTHONPATH="$model_dir/src:$dir" "$model_dir/.venv/bin/python" -c \
     'import torch, cv2, timm, segmentation_models_pytorch; from label_studio_ml.model import LabelStudioMLBase; from label_studio_sdk.converter.brush import decode_rle; from label_studio_converter.brush import mask2rle; from stem_plugin.stem_tasks import TaskConfig; from stem_plugin.semantic_model import build_semantic_fpn; from stem_plugin.runtime import StemRuntime; print("Verified STEM source:", TaskConfig(False, True).to_dict(), "torch", torch.__version__)'
