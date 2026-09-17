@@ -1,4 +1,6 @@
 """Shared optional-task runtime for training, inference and diagnostics."""
+import logging
+
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -104,8 +106,34 @@ class StemRuntime(torch.nn.Module):
         values = dict(values)
         key = 'module.instance_center_estimator.conv_start.0.weight'
         expected = self.center_model.state_dict()
-        if key in values and values[key].shape != expected[key].shape:
-            values[key] = values[key][:,:expected[key].shape[1]]
+        # The released 3DoF localizer consumes C/S plus magnitude and class
+        # channels. STEM disables the latter two; no other shape change is safe.
+        if (key in values and tuple(values[key].shape) == (16, 4, 3, 3)
+                and tuple(expected[key].shape) == (16, 2, 3, 3)):
+            values[key] = values[key][:, :2]
+
+        # Old checkpoints serialized coordinate caches and the analytic 1D
+        # kernels. This runtime has no instance-mask estimator/augmentation and
+        # uses the learned 2D localizer, not those 1D kernels. Never filter by
+        # prefix or discard arbitrary unmatched learned weights.
+        legacy_geometry = {
+            'module.instance_mask_estimator.xym_1024',
+            'module.center_augmentator.xym',
+            'module.instance_center_estimator.kernel_cos',
+            'module.instance_center_estimator.kernel_sin',
+        }
+        ignored = sorted((values.keys() - expected.keys()) & legacy_geometry)
+        for name in ignored:
+            del values[name]
+        if ignored:
+            logging.getLogger(__name__).warning('Ignoring legacy localization geometry: %s', ', '.join(ignored))
+
+        # Like main's strict=False loader, retain runtime-initialized smoothing
+        # when absent from the legacy checkpoint; no kernel regeneration needed.
+        # Allow only this known nonlearned tensor, not missing learned weights.
+        gaussian_key = 'module.instance_center_estimator.gaussian_blur.conv.weight'
+        if gaussian_key in expected and gaussian_key not in values:
+            values[gaussian_key] = expected[gaussian_key]
         self.center_model.load_state_dict(values,strict=True)
 
     def load(self, state, inference=False):

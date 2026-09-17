@@ -104,8 +104,23 @@ Joint mode intentionally uses **two independent FPNs**. A shared trunk would use
 less memory but cannot preserve two independently trained backbone states or allow
 independent existing particle/semantic weights to load unchanged. Only enabled
 models are instantiated; there is no duplicate unused branch in single-task mode.
-Default backbone: `tu-convnext_base`. Training without initialization weights starts
-from random weights (no implicit pretrained-weight download).
+Default backbone: `tu-convnext_base`. Training without model initialization weights
+starts the FPNs randomly (no implicit backbone-weight download). Particle and joint
+training still load the setup-installed `localization_checkpoint.pth` by default;
+semantic-only training neither reads nor requires localization weights.
+
+The official legacy localization checkpoint contains four obsolete geometry keys:
+`module.instance_mask_estimator.xym_1024`, `module.center_augmentator.xym`, and
+`module.instance_center_estimator.kernel_cos` / `kernel_sin`. Only these exact keys
+are ignored, and only when absent from the current runtime; ignored keys are logged.
+They are coordinate caches / analytic 1D kernels, not the learned 2D localizer.
+As in main's loader, a missing fixed peak-smoothing kernel leaves the runtime's
+initialized value unchanged; no kernel is regenerated. Existing upstream smoothing
+at peak detection remains enabled. The known first-convolution conversion
+`[16,4,3,3]` → `[16,2,3,3]`
+retains C/S and removes the disabled magnitude/class inputs. All other missing,
+unexpected or shape-mismatched localization tensors still fail strict loading;
+a partially initialized/random localizer is not silently accepted.
 
 Version-2 checkpoints carry tasks, class order, backbone and enabled model states.
 Joint checkpoints can serve either single task. Missing task weights or mismatched
@@ -207,6 +222,8 @@ Toolbox `apps/modelargs` to `PYTHONPATH`:
 
 ```bash
 export PYTHONPATH="$PWD:/absolute/cache/cedirnet-stem/src:/absolute/toolbox/apps/modelargs"
+# Enable released-checkpoint/default-initialization integration tests (no downloads in pytest):
+export CEDIRNET_STEM_TEST_LOCALIZATION=/absolute/cache/cedirnet-stem/localization_checkpoint.pth
 MPLBACKEND=Agg CUDA_VISIBLE_DEVICES='' CEDIRNET_STEM_VERIFY_DEPENDENCIES=1 python -m pytest tests -q
 node --test tests/test_ui.mjs
 bash -n setup.sh
