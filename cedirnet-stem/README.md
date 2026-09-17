@@ -161,6 +161,11 @@ converter 0.0.59 are both supported; no headless OpenCV wheel is installed over
 intentional tested override, not a missing dependency. Use the same overrides
 when resolving additional packages into this environment.
 
+The dependency solve runs from the plugin directory with relative requirements
+filenames. This supports imported group paths containing spaces (for example,
+`.models/ViCoS/CeDiRNet STEM/cedirnet-stem`): uv splits `--override` values on
+spaces even when the shell quotes an absolute filename.
+
 **Retrying a failed installation:** setup deliberately does not resume or erase
 `$TOOLBOX_CACHE/cedirnet-stem`. Stop model workers and move the *entire* failed
 model directory to a uniquely named backup, or select a new empty cache root,

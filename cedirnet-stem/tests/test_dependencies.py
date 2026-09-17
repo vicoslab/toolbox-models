@@ -2,6 +2,8 @@
 import os
 from pathlib import Path
 import subprocess
+import shutil
+import sys
 
 import pytest
 
@@ -10,13 +12,41 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_installer_resolves_host_and_model_in_one_transaction():
     setup = (ROOT / 'setup.sh').read_text()
-    assert '--override "$dir/dependency-overrides.txt"' in setup
-    assert '-r "$dir/requirements.txt"' in setup
+    assert '--override dependency-overrides.txt' in setup
+    assert '-r requirements.txt' in setup
     assert '--no-deps' not in setup
     assert 'opencv-python-headless' not in setup
     overrides = (ROOT / 'dependency-overrides.txt').read_text()
     assert 'label-studio-sdk==2.0.0' in overrides
     assert 'timm==0.6.13' in overrides
+
+
+@pytest.mark.parametrize('name', ['cedirnet-stem', 'CeDiRNet STEM', 'CeDiRNet-STEM segmentation'])
+def test_real_uv_installer_paths(tmp_path, name):
+    """Execute setup's solve with real uv, without downloads or environment writes."""
+    uv = shutil.which('uv')
+    if uv is None:
+        pytest.skip('requires uv to exercise its requirements-file argument parser')
+    plugin = tmp_path / '.models' / 'ViCoS' / name
+    plugin.mkdir(parents=True)
+    # An already installed requirement keeps this parser/resolver test offline.
+    requirement = f'pytest=={pytest.__version__}'
+    (plugin / 'requirements.txt').write_text(requirement + '\n')
+    (plugin / 'dependency-overrides.txt').write_text(requirement + '\n')
+    setup = (ROOT / 'setup.sh').read_text()
+    solve = setup.split('    # One solve for model + host requirements.', 1)[1].split('\nfi\n', 1)[0]
+    script = '''set -euo pipefail
+    dir=$PLUGIN_DIR
+    python=$TEST_PYTHON
+    uv() { command "$UV_BIN" "$@" --offline --dry-run; }
+    # One solve for model + host requirements.'''+ solve
+    result = subprocess.run(['bash', '-c', script], cwd=tmp_path, env={
+        **os.environ, 'PLUGIN_DIR': str(plugin), 'TEST_PYTHON': sys.executable,
+        'UV_BIN': uv, 'CEDIRNET_STEM_MODELARGS': requirement,
+        'CEDIRNET_STEM_ML_BACKEND': requirement,
+    }, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert 'Would make no changes' in result.stderr
 
 
 def test_existing_install_is_never_overwritten(tmp_path):
