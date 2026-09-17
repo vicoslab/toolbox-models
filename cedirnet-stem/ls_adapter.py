@@ -12,6 +12,7 @@ import xml.etree.ElementTree as ET
 import numpy as np
 from PIL import Image
 import yaml
+from stem_plugin.ls_geometry import normalize_results, shape_mask
 
 
 def semantic_classes():
@@ -23,6 +24,15 @@ def semantic_classes():
     if not 2 <= len(classes) <= 255 or len(set(classes)) != len(classes):
         raise ValueError('semantic labels must be 2..255 unique classes')
     return classes
+
+
+def semantic_aliases():
+    view = ET.fromstring(yaml.safe_load(Path(__file__).with_name('config.yml').read_text())['config'])
+    nodes = view.findall(".//BrushLabels[@name='semantic']/Label")
+    aliases = {node.get('alias') or node.attrib['value']: node.attrib['value'] for node in nodes}
+    if len(aliases) != len(nodes):
+        raise ValueError('semantic label aliases must be unique')
+    return aliases
 
 
 def particle_labels():
@@ -47,12 +57,13 @@ def export(annotations, export_dir, relpaths, shared):
     if not isinstance(tags, list):
         raise ValueError('annotation must be a list of results')
     classes = semantic_classes()
+    aliases = semantic_aliases()
     accepted_particles = particle_labels()
     reviewed, points, brushes = set(), [], []
     negative_particles = False
     dimensions = None
     seen = set()
-    for tag in tags:
+    for tag in normalize_results(tags):
         value = tag.get('value', {})
         if tag.get('from_name') == 'reviewed':
             reviewed.update(value.get('choices', []))
@@ -61,10 +72,19 @@ def export(annotations, export_dir, relpaths, shared):
             negative_particles |= 'No nanoparticles' in value.get('choices', [])
             continue
         is_vector = 'vertices' in value
-        is_ellipse = tag.get('type') == 'ellipselabels'
+        kind = tag.get('type')
+        is_ellipse = kind == 'ellipselabels' and tag.get('from_name') == 'labels'
+        is_shape = kind in ('polygonlabels', 'rectanglelabels', 'ellipselabels') and not is_ellipse
         is_brush = tag.get('type') == 'brushlabels'
-        if not (is_vector or is_ellipse or is_brush):
+        if not (is_vector or is_ellipse or is_brush or is_shape):
+            if (tag.get('from_name') in ('labels', 'semantic', 'wand')
+                    or 'original_width' in tag or 'original_height' in tag):
+                raise ValueError(f'unsupported annotation type {kind!r}; re-export supported image regions')
             continue
+        if tag.get('to_name', 'image') != 'image':
+            raise ValueError('STEM regions must target image')
+        if tag.get('item_index', 0) not in (0, 1):
+            raise ValueError('STEM gallery item_index must be 0 or 1')
         size = (tag.get('original_width'), tag.get('original_height'))
         if any(type(x) is not int or x <= 0 for x in size):
             raise ValueError('regions require positive integer original dimensions')
@@ -74,7 +94,7 @@ def export(annotations, export_dir, relpaths, shared):
             raise ValueError('all regions in the registered image pair must have equal dimensions')
         dimensions = size
         # Shared-image exports may repeat the same region for both frames.
-        signature = json.dumps([tag.get('from_name'), value], sort_keys=True)
+        signature = json.dumps([tag.get('id'), kind, tag.get('from_name'), value], sort_keys=True)
         if signature in seen:
             continue
         seen.add(signature)
@@ -110,11 +130,13 @@ def export(annotations, export_dir, relpaths, shared):
                 raise ValueError('particle center must lie inside image and radius must be positive')
             points.append(coords.flatten().tolist())
         else:
-            if tag.get('from_name') != 'semantic':
-                raise ValueError('brush control must be semantic')
-            labels = value.get('brushlabels', [])
-            if len(labels) != 1 or labels[0] not in [*classes, 'Ignore']:
-                raise ValueError('unknown semantic brush label; match config.yml class order')
+            labels = value.get(kind, [])
+            if len(labels) != 1 or labels[0] not in aliases:
+                raise ValueError('unknown semantic label; match config.yml class order/aliases')
+            label = aliases[labels[0]]
+            if is_shape:
+                brushes.append((label, shape_mask(kind, value, w, h)))
+                continue
             if value.get('format') != 'rle':
                 raise ValueError('semantic brushes require RLE')
             # Export host ships this SDK; standalone training env ships converter.
@@ -125,7 +147,7 @@ def export(annotations, export_dir, relpaths, shared):
             rgba = np.asarray(decode_rle(value['rle']), dtype=np.uint8)
             if rgba.size != w * h * 4:
                 raise ValueError('brush RLE length does not match original dimensions')
-            brushes.append((labels[0], rgba.reshape(h, w, 4)[:, :, 3] > 0))
+            brushes.append((label, rgba.reshape(h, w, 4)[:, :, 3] > 0))
     result = {}
     if dimensions is not None:
         result['annotation_size'] = list(dimensions)

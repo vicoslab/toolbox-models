@@ -57,6 +57,48 @@ configuration to the adapter. Unknown classes are rejected, not reindexed.
 - Masks are content-addressed, so later exports/COMBINE cannot overwrite different
   masks under an existing manifest item. Paths are relative to the export folder.
 
+### Supported semantic tools and export diagnosis
+
+| Region/tool | Export coverage |
+|---|---|
+| BrushLabels | Every configured class and Ignore, RGBA RLE |
+| Magicwand | Same-ID `magicwand` + labeled `brushlabels` results; every class and Ignore |
+| PolygonLabels / Polygon + Labels | Closed, filled percentage-coordinate polygons |
+| RectangleLabels / Rectangle + Labels | Filled rectangles, including clockwise rotation about their top-left corner |
+| Semantic EllipseLabels / Ellipse + Labels | Filled ellipses, including rotation about the center |
+| Particle EllipseLabels / Ellipse + Labels | Particle `labels` control only; center and mean pixel radius, never a semantic class |
+
+Separate geometry and Labels results are joined using region ID, image target,
+and gallery `item_index`. Unlabeled geometry (including a wand with no assigned
+class), unknown classes, unsupported spatial types and conflicting paired results
+raise errors rather than disappearing. Select a class for every wand region;
+press Escape before creating a separate region/class instead of relabeling the
+currently selected region. Disjoint regions of the same class are all retained.
+The shipped UI remains BrushLabels + Magicwand and the particle ellipse control;
+additional semantic geometries support existing/imported LS projects, not new UI
+buttons. Class vocabulary still comes from the plugin's semantic BrushLabels.
+Polygon fill uses even/odd pixel-center inclusion; rectangle and ellipse masks
+also sample pixel centers. Image rotation, open polygons, video sequences, holes
+as separate subtractive polygons, keypoints and arbitrary vector segmentation
+are not supported. Use brush RLE for raster masks with holes.
+
+Training filters each split for the enabled tasks before reading images: particle-only
+requires a `points` key (including an explicit `[]` negative), semantic-only requires
+`semantic_mask`, and joint training requires both. A warning names the manifest and
+split, reports kept/skipped counts and missing-label counts (which can overlap).
+Missing supervision is never converted to a negative. If no usable training samples
+remain, training fails clearly; optional validation may be empty. Present malformed
+labels, wrong class order, and invalid labeled image pairs still fail validation;
+image/mask contents and dimensions are checked when loading a retained sample.
+
+If the warning reports unexpected missing `points`, check that the **exporting** Toolbox model cache
+contains this plugin revision, not only the training cache: the older main
+exporter reads vector `vertices` only and drops ellipse/semantic results. Then
+re-export the reviewed task; existing manifests are not retroactively repaired.
+The current combined `ellipselabels` + `nanoparticle` alias schema is supported.
+Do not replace missing points with `[]` unless the image is an explicitly confirmed
+negative. Segmentation-only/empty submissions must not become particle negatives.
+
 ### Ellipse geometry and model compatibility
 
 Label Studio `x/y` are ellipse **center** percentages (not a bounding-box corner);
