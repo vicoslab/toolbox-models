@@ -109,7 +109,9 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
     from stem_plugin.stem_tasks import TaskConfig
     from stem_plugin.toolbox_dataset import ToolboxDataset
     torch.set_num_threads(2)
-    tags = ([ellipse()] if particles else []) + (brushes() if semantic else [])
+    browser_tags = json.loads((ROOT / 'tests/fixtures/ls-1.23-current.json').read_text())
+    tags = [t for t in browser_tags if (particles and t['type'] == 'ellipselabels')
+            or (semantic and t['type'] == 'brushlabels')]
     manifest = host_export(tmp_path, monkeypatch, tags)
     data = json.loads(manifest.read_text())
     assert data['version'] == 4
@@ -126,7 +128,7 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
         assert 'points' not in ds.items[0]
     if semantic:
         assert ds.items[0]['semantic_classes'] == CLASSES
-        assert sample['semantic_segmentation'][0, [0, 21, 42]].tolist() == [0, 1, 2]
+        assert sample['semantic_segmentation'][0, [0, 16, 32, 48]].tolist() == [0, 1, 2, 255]
     # The held-out test split must not be opened by Trainer.
     data['test'] = [dict(images=['missing-BF', 'missing-HAADF'])]
     manifest.write_text(json.dumps(data))
@@ -154,6 +156,20 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
     restored.eval()
     result = restored.predict([np.zeros((40, 80, 3), np.uint8)], size=(64, 64))
     assert (result['segmentation'][0] is not None) == semantic
+    # Real restored-model inference -> SDK-configured preannotation -> export.
+    import base64
+    import io
+    import yaml
+    from label_studio_sdk._extensions.label_studio_tools.core.label_config import parse_config
+    from stem_plugin.serving import preannotation
+    from ls_adapter import export
+    config = parse_config(yaml.safe_load((ROOT / 'config.yml').read_text())['config'])
+    predicted = preannotation(result, 0, (80, 40), config)
+    reexport = export([predicted['result']], tmp_path, ['BF', 'HAADF'], False)
+    assert len(reexport.get('points', [])) == len(result['centers'][0])
+    if semantic:
+        original = np.array(Image.open(io.BytesIO(base64.b64decode(result['segmentation'][0]['mask_png'].split(',')[1]))))
+        assert np.array_equal(original, np.array(Image.open(tmp_path / reexport['semantic_mask'])))
     assert len(list((tmp_path / 'artifacts').rglob('*diagnostics.png'))) == 2
 
 

@@ -56,9 +56,13 @@ def preannotation(response, index, size, parsed_config):
         if len(candidates)!=1:
             raise ValueError('segmentation requires exactly one BrushLabels control')
         name,tag = candidates[0]
-        if not set(semantic['classes']).issubset(tag.get('labels',[])):
+        # SDK keys are serialized aliases; model classes retain canonical values.
+        aliases = {attrs.get('value', label): label
+                   for label, attrs in tag.get('labels_attrs', {}).items()}
+        labels = [aliases.get(label, label) for label in semantic['classes']]
+        if not set(labels).issubset(tag.get('labels',[])):
             raise ValueError('BrushLabels must include all configured semantic classes')
         mask = np.array(Image.open(io.BytesIO(base64.b64decode(semantic['mask_png'].split(',',1)[1]))))
-        results.extend(brush_results(mask,semantic['classes'],name,tag['to_name'][0]))
+        results.extend(brush_results(mask,labels,name,tag['to_name'][0]))
     scores = response['scores'][index]
     return dict(result=results,model_version='CeDiRNet-STEM-tasks-v2',score=sum(scores)/max(len(scores),1))

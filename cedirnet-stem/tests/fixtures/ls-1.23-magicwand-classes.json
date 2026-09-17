@@ -1,0 +1,242 @@
+[
+  {
+    "label": "Carbon",
+    "results": [
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "wand",
+        "to_name": "image",
+        "type": "magicwand",
+        "origin": "manual"
+      },
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ],
+          "brushlabels": [
+            "Carbon"
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "semantic",
+        "to_name": "image",
+        "type": "brushlabels",
+        "origin": "manual"
+      }
+    ]
+  },
+  {
+    "label": "Film",
+    "results": [
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "wand",
+        "to_name": "image",
+        "type": "magicwand",
+        "origin": "manual"
+      },
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ],
+          "brushlabels": [
+            "Film"
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "semantic",
+        "to_name": "image",
+        "type": "brushlabels",
+        "origin": "manual"
+      }
+    ]
+  },
+  {
+    "label": "Vacuum",
+    "results": [
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "wand",
+        "to_name": "image",
+        "type": "magicwand",
+        "origin": "manual"
+      },
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ],
+          "brushlabels": [
+            "Vacuum"
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "semantic",
+        "to_name": "image",
+        "type": "brushlabels",
+        "origin": "manual"
+      }
+    ]
+  },
+  {
+    "label": "Ignore",
+    "results": [
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "wand",
+        "to_name": "image",
+        "type": "magicwand",
+        "origin": "manual"
+      },
+      {
+        "original_width": 64,
+        "original_height": 64,
+        "image_rotation": 0,
+        "item_index": 0,
+        "value": {
+          "format": "rle",
+          "rle": [
+            0,
+            0,
+            64,
+            0,
+            57,
+            27,
+            255,
+            63,
+            255,
+            255
+          ],
+          "brushlabels": [
+            "Ignore"
+          ]
+        },
+        "id": "IkNTJ2Nmk4",
+        "from_name": "semantic",
+        "to_name": "image",
+        "type": "brushlabels",
+        "origin": "manual"
+      }
+    ]
+  }
+]

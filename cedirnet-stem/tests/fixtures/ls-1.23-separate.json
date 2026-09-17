@@ -1,0 +1,147 @@
+[
+  {
+    "original_width": 64,
+    "original_height": 64,
+    "image_rotation": 0,
+    "item_index": 0,
+    "value": {
+      "x": 20,
+      "y": 20,
+      "radiusX": 10,
+      "radiusY": 10,
+      "rotation": 30
+    },
+    "id": "ellipse",
+    "from_name": "ellipse",
+    "to_name": "image",
+    "type": "ellipse",
+    "origin": "manual"
+  },
+  {
+    "original_width": 64,
+    "original_height": 64,
+    "image_rotation": 0,
+    "item_index": 0,
+    "value": {
+      "x": 20,
+      "y": 20,
+      "radiusX": 10,
+      "radiusY": 10,
+      "rotation": 30,
+      "labels": [
+        "Film"
+      ]
+    },
+    "id": "ellipse",
+    "from_name": "semantic",
+    "to_name": "image",
+    "type": "labels",
+    "origin": "manual"
+  },
+  {
+    "original_width": 64,
+    "original_height": 64,
+    "image_rotation": 0,
+    "item_index": 0,
+    "value": {
+      "x": 10,
+      "y": 10,
+      "width": 20,
+      "height": 20,
+      "rotation": 0
+    },
+    "id": "rectangle",
+    "from_name": "rectangle",
+    "to_name": "image",
+    "type": "rectangle",
+    "origin": "manual"
+  },
+  {
+    "original_width": 64,
+    "original_height": 64,
+    "image_rotation": 0,
+    "item_index": 0,
+    "value": {
+      "x": 10,
+      "y": 10,
+      "width": 20,
+      "height": 20,
+      "rotation": 0,
+      "labels": [
+        "Film"
+      ]
+    },
+    "id": "rectangle",
+    "from_name": "semantic",
+    "to_name": "image",
+    "type": "labels",
+    "origin": "manual"
+  },
+  {
+    "original_width": 64,
+    "original_height": 64,
+    "image_rotation": 0,
+    "item_index": 0,
+    "value": {
+      "points": [
+        [
+          10,
+          10
+        ],
+        [
+          30,
+          10
+        ],
+        [
+          30,
+          30
+        ],
+        [
+          10,
+          30
+        ]
+      ],
+      "closed": true
+    },
+    "id": "polygon",
+    "from_name": "polygon",
+    "to_name": "image",
+    "type": "polygon",
+    "origin": "manual"
+  },
+  {
+    "original_width": 64,
+    "original_height": 64,
+    "image_rotation": 0,
+    "item_index": 0,
+    "value": {
+      "points": [
+        [
+          10,
+          10
+        ],
+        [
+          30,
+          10
+        ],
+        [
+          30,
+          30
+        ],
+        [
+          10,
+          30
+        ]
+      ],
+      "closed": true,
+      "labels": [
+        "Film"
+      ]
+    },
+    "id": "polygon",
+    "from_name": "semantic",
+    "to_name": "image",
+    "type": "labels",
+    "origin": "manual"
+  }
+]

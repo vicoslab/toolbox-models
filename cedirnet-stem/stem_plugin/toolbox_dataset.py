@@ -1,5 +1,6 @@
 """Strict paired-image manifest adapter; class IDs are never binarized."""
 import json
+import warnings
 from pathlib import Path
 import numpy as np
 import torch
@@ -15,18 +16,45 @@ class ToolboxDataset(Dataset):
         data = json.loads(Path(manifest).read_text())
         if data.get('version',0) < 2:
             raise ValueError('manifest version must be >= 2')
-        self.items = data.get(split, data.get('data',[]) if split == 'train' else [])
+        items = data.get(split, data.get('data',[]) if split == 'train' else [])
+        self.items = []
+        missing_points = missing_masks = 0
+        required = ', '.join(name for enabled, name in (
+            (tasks.nanoparticles, 'points'), (tasks.segmentation, 'semantic_mask')) if enabled)
+        for index, item in enumerate(items):
+            context = f"{Path(manifest).resolve()}: split {split!r} item {index}"
+            # Validate present supervision even when another enabled task is missing.
+            # Missing labels are skippable; malformed labels are not.
+            if tasks.nanoparticles and 'points' in item:
+                from .annotations import parse_point_radius
+                if not isinstance(item['points'], list):
+                    raise ValueError(f'{context}: points must be a list (use [] for a confirmed negative)')
+                for point in item['points']:
+                    parse_point_radius(point)
+            if tasks.segmentation and 'semantic_mask' in item:
+                if not isinstance(item['semantic_mask'], str) or not item['semantic_mask']:
+                    raise ValueError(f'{context}: semantic_mask must be a nonempty path')
+                if item.get('semantic_classes', data.get('semantic_classes')) != list(tasks.classes):
+                    raise ValueError(f'{context}: item semantic_classes must match configured class order')
+            no_points = tasks.nanoparticles and 'points' not in item
+            no_mask = tasks.segmentation and 'semantic_mask' not in item
+            missing_points += int(no_points)
+            missing_masks += int(no_mask)
+            if no_points or no_mask:
+                continue
+            if not isinstance(item.get('images'), list) or len(item['images']) != 2:
+                raise ValueError(f'{context}: each sample requires images [BF, HAADF]')
+            self.items.append(item)
+        skipped = len(items) - len(self.items)
+        summary = (f"{Path(manifest).resolve()}: split {split!r}: kept {len(self.items)} of "
+                   f"{len(items)}, skipped {skipped} missing required supervision ({required}); "
+                   f"missing points={missing_points}, missing semantic_mask={missing_masks}. "
+                   "Missing points are not confirmed negatives; [] explicitly marks a negative. "
+                   "Annotate/re-export missing tasks or disable the corresponding task.")
+        if skipped:
+            warnings.warn(summary, UserWarning, stacklevel=2)
         if not self.items and not allow_empty:
-            raise ValueError(f'manifest split {split!r} is empty')
-        for item in self.items:
-            if tasks.segmentation and item.get('semantic_classes', data.get('semantic_classes')) != list(tasks.classes):
-                raise ValueError('item semantic_classes must match configured class order')
-            if len(item.get('images',[])) != 2:
-                raise ValueError('each sample requires images [BF, HAADF]')
-            if tasks.nanoparticles and 'points' not in item:
-                raise ValueError('nanoparticles requires points (use [] for a negative image)')
-            if tasks.segmentation and not item.get('semantic_mask'):
-                raise ValueError('segmentation requires semantic_mask')
+            raise ValueError(f'No usable samples (empty split after supervision filtering). {summary}')
         self.tasks, self.size, self.augment = tasks, tuple(size), augment
         self.max_num_centers = max_num_centers
         self.return_image = True
