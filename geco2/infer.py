@@ -125,18 +125,16 @@ else:
     from flask import request
 
     class GeCo2(LabelStudioMLBase):
-        def get_results(self, masks, probs, width, height, from_name, to_name, label):
+        def get_results(self, masks, probs, width, height, from_name, to_name, label, extra):
             results = []
             total_prob = 0
             for mask, prob in zip(masks, probs):
-                # creates a random ID for your label everytime so no chance for errors
-                label_id = str(uuid4())[:4]
                 # converting the mask from the model to RLE format which is usable in Label Studio
                 mask = mask * 255
                 rle = brush.mask2rle(mask)
                 total_prob += prob
                 results.append({
-                    'id': label_id,
+                    'id': str(uuid4())[:8],
                     'from_name': from_name,
                     'to_name': to_name,
                     'original_width': width,
@@ -149,12 +147,13 @@ else:
                     },
                     'score': float(prob),
                     'type': 'labels',
-                    'readonly': False
+                    'readonly': False,
+                    **extra,
                 })
 
             return [{
                 'result': results,
-                'model_version': self.get('model_version'),
+                'model_version': "GeCo2",
                 'score': total_prob / max(len(results), 1)
             }]
 
@@ -168,21 +167,31 @@ else:
                     labels = tag['labels']
                     break
 
-            if not context or not (region := context.get('region')):
+            if not context or not (regions := context.get('regions')):
                 # if there is no context, no interaction has happened yet
                 return ModelResponse(predictions=[])
-            if region['type'] != 'rectangleregion':
+            if any((region['type'] != 'rectangleregion' for region in regions)):
                 return ModelResponse(predictions=[])
 
-            image = load(self.get_local_path(tasks[0]['data'][value], task_id=tasks[0]['id']))
+            image_path = tasks[0]['data'][value]
+            extra = {}
+            if type(image_path) == list:
+                idx = regions[0]['item_index']
+                if any((region['item_index'] != idx for region in regions)):
+                    return ModelResponse(predictions=[])
+                image_path = image_path[idx]
+                extra['item_index'] = idx
+            image = load(self.get_local_path(image_path, task_id=tasks[0]['id']))
 
             image_height, image_width, _ = image.shape
 
-            x, y, box_width, box_height = [region[k] / 100 for k in ['x', 'y', 'width', 'height']]
-            # geco2 expects topleft and bottomright corners in absolute
-            box = [x * image_width, y * image_height, (x + box_width) * image_width, (y + box_height) * image_height]
+            exemplars = []
+            for region in regions:
+                x, y, box_width, box_height = [region[k] / 100 for k in ['x', 'y', 'width', 'height']]
+                # geco2 expects topleft and bottomright corners in absolute
+                exemplars.append([x * image_width, y * image_height, (x + box_width) * image_width, (y + box_height) * image_height])
 
-            _, scores, masks = predict(image, [box], True)
+            _, scores, masks = predict(image, exemplars, True)
 
             predictions = self.get_results(
                 masks=masks,
@@ -191,7 +200,8 @@ else:
                 height=image_height,
                 from_name=from_name,
                 to_name=to_name,
-                label=labels[0])
+                label=labels[0],
+                extra=extra)
 
             return ModelResponse(predictions=predictions)
 
