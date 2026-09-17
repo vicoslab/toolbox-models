@@ -9,6 +9,7 @@ import tempfile
 import numpy as np
 import torch
 import mlflow
+from tqdm import tqdm
 from matplotlib import pyplot as plt
 from stem_plugin.task_options import task_config
 from stem_plugin.toolbox_dataset import ToolboxDataset
@@ -66,13 +67,17 @@ class Trainer:
     def train_epoch(self, epoch):
         self.runtime.train()
         values = []
-        for sample in self.loaders['train']:
+        iterator = tqdm(self.loaders['train'],
+                        desc=f"{epoch + 1}/{int(self.args.get('epochs',100))}",
+                        dynamic_ncols=True)
+        for sample in iterator:
             self.optimizer.zero_grad(set_to_none=True)
             loss,parts = self.runtime.loss(sample)
             if not torch.isfinite(loss):
                 raise FloatingPointError('non-finite STEM training loss')
             loss.backward(); self.optimizer.step()
             values.append({k:float(v.detach()) for k,v in parts.items()})
+            iterator.set_postfix(loss=float(loss.detach()), **values[-1])
         metrics = {key:float(np.mean([v[key] for v in values])) for key in values[0]}
         metrics['loss'] = sum(metrics.values())
         mlflow.log_metrics(metrics,step=epoch+1)
