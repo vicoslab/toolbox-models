@@ -29,11 +29,11 @@ if torch.cuda.is_available():
         torch.backends.cudnn.allow_tf32 = True
 
 def load(src):
-    image = Image.open(src)
+    image = Image.open(src).convert("RGB")
     image = ImageOps.exif_transpose(image)
     return image
 
-model = build_sam3_image_model(checkpoint_path=MODEL_CHECKPOINT)
+model = build_sam3_image_model(checkpoint_path=MODEL_CHECKPOINT, enable_inst_interactivity=True)
 processor = Sam3Processor(model, confidence_threshold=0.5)
 
 if __name__ == "__main__":
@@ -55,7 +55,7 @@ else:
         """Custom ML Backend model
         """
 
-        def get_results(self, masks, probs, width, height, from_name, to_name, label):
+        def get_results(self, masks, probs, width, height, from_name, to_name, label, extra):
             results = []
             total_prob = 0
             for mask, prob in zip(masks, probs):
@@ -79,7 +79,8 @@ else:
                     },
                     'score': float(prob),
                     'type': 'labels',
-                    'readonly': False
+                    'readonly': False,
+                    **extra,
                 })
 
             return [{
@@ -98,38 +99,60 @@ else:
                     labels = tag['labels']
                     break
 
-            if not context or not context.get('region'):
+            if not context or not (regions := context.get('regions')):
                 # if there is no context, no interaction has happened yet
                 return ModelResponse(predictions=[])
 
-            image = load(self.get_local_path(tasks[0]['data'][value], task_id=tasks[0]['id']))
+            image_path = tasks[0]['data'][value]
+            extra = {}
+            if type(image_path) == list:
+                idx = regions[0]['item_index']
+                if any((region['item_index'] != idx for region in regions)):
+                    return ModelResponse(predictions=[])
+                image_path = image_path[idx]
+                extra['item_index'] = idx
+
+            image = load(self.get_local_path(image_path, task_id=tasks[0]['id']))
             inference_state = processor.set_image(image)
+            processor.reset_all_prompts(inference_state)
 
+            box = None
+            points_coords = []
+            points_labels = []
             image_width, image_height = image.size
+            for region in regions:
+                if region['type'] == 'rectangleregion':
+                    x, y, box_width, box_height = [region[k] / 100 for k in ['x', 'y', 'width', 'height']]
+                    box = [x + box_width/2, y + box_height/2, box_width, box_height]
+                elif region['type'] == 'keypointregion':
+                    x = int(region['x'] / 100 * image_width)
+                    y = int(region['y'] / 100 * image_height)
+                    pos = 1 - int(region.get('negative', False))
+                    points_coords.append((x,y))
+                    points_labels.append(pos)
+                else:
+                    pass
 
-            region = context['region']
-            if region['type'] != 'rectangleregion':
+            if box is not None:
+                inference_state = processor.add_geometric_prompt(state=inference_state, box=box, label=True)
+                scores = inference_state['scores'].detach().cpu().type(torch.float32).numpy()
+                masks = inference_state['masks'].detach().cpu().squeeze(1).numpy().astype(np.uint8)
+            elif len(points_coords) > 0:
+                masks, scores, _ = model.predict_inst(inference_state, point_coords=points_coords, point_labels=points_labels, multimask_output=False)
+            else:
                 return ModelResponse(predictions=[])
 
-            x, y, box_width, box_height = [region[k] / 100 for k in ['x', 'y', 'width', 'height']]
-            box = [x + box_width/2, y + box_height/2, box_width, box_height]
-
-            processor.reset_all_prompts(inference_state)
-            inference_state = processor.add_geometric_prompt(state=inference_state, box=box, label=True)
-
-            inference_state['scores'] = inference_state['scores'].detach().cpu().type(torch.float32).numpy()
-            sorted_ind = np.argsort(inference_state['scores'])[::-1].copy()
-            inference_state['masks'] = inference_state['masks'][sorted_ind].detach().cpu().squeeze(1).numpy().astype(np.uint8)
-            inference_state['scores'] = inference_state['scores'][sorted_ind]
-
+            sorted_ind = np.argsort(scores)[::-1]
             predictions = self.get_results(
-                masks=inference_state['masks'],
-                probs=inference_state['scores'],
+                masks=masks[sorted_ind].astype(np.uint8),
+                probs=scores[sorted_ind],
                 width=image_width,
                 height=image_height,
                 from_name=from_name,
                 to_name=to_name,
-                label=labels[0])
+                label=labels[0],
+                extra=extra,
+            )
 
             return ModelResponse(predictions=predictions)
 
