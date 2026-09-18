@@ -15,6 +15,7 @@ class Handler(BaseHTTPRequestHandler):
         self.rfile.read(int(self.headers['Content-Length']))
         result=json.loads(json.dumps(response))
         mode=self.path.split('mode=')[-1]
+        result['tasks'] = {'nanoparticles': mode != 'segmentation', 'segmentation': mode not in ('particles', 'empty')}
         if mode in ('particles','empty'): result['segmentation']=[None,None]
         if mode in ('segmentation','empty'):
             for key in ('centers','scores','radii'): result[key]=[[],[]]
@@ -22,7 +23,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers(); self.wfile.write(data)
     def do_GET(self):
         if self.path == '/':
-            html = '''<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/static/style.css"><title>STEM inference controls verification</title><header class="toolbar" style="z-index:2"><div class="toolbar-left">STEM · browser contract harness (synthetic fixtures)</div><div class="toolbar-right"></div></header><main style="padding:4rem 1rem 1rem;overflow:auto"><form style="position:relative">PLUGIN</form></main><script src="/static/model.js"></script><script>
+            html = '''<!doctype html><meta charset="utf-8"><link rel="icon" href="data:,"><link rel="stylesheet" href="/static/style.css"><title>STEM inference controls verification</title><header class="toolbar" style="z-index:2"><div class="toolbar-left">STEM · browser contract harness (synthetic fixtures)</div><div class="toolbar-right"></div></header><main style="padding:4rem 1rem 1rem;overflow:auto"><form style="position:relative">PLUGIN</form></main><script src="/static/model.js"></script><script>
 window.loading=()=>({remove(){}}); window.showToast=(level,e)=>console.error(e); window.errors=[]; addEventListener('error',e=>errors.push(e.message));
 window.runFixture = async function(mode='combined') {
  const data=new DataTransfer();

@@ -27,7 +27,15 @@ Loading/toast plumbing is stubbed, not model.js or the plugin callback.
 The previous free-standing-form harness missed fieldset's `auto 1fr` grid. Absolute
 slotted content has no intrinsic width: plugin images decoded successfully but had
 zero client width/height. Require both natural and layout dimensions, viewport
-screenshots and independent PNG/ZIP pixel checks. Synchronize on render completion,
-not only particle count: class changes can retain the same count during async rendering.
-The regression also covers legend palette/visibility, no inline captions/status,
-threshold and radius filters, class controls, task modes, persistence and reset.
+screenshots and independent ZIP/JPEG (lossy tolerance) and class-ID PNG (exact) pixel
+checks. Synchronize on completed animation frames, not only particle count: class
+changes can retain the same count. The regression instruments requests and image
+`src`/canvas `toBlob` calls to prove that display filtering neither reruns inference
+nor decodes or encodes images. A burst of inputs must draw the latest state exactly
+once in the next animation frame, including a changed overlay pixel; measured
+latency is recorded, not presented as a hardware-independent performance guarantee.
+
+It also covers the exact unified top download labels, all-sample archives, legend
+palette/visibility, no captions/status, task-specific control/download omission,
+enabled-but-empty particle results, immediate persistence, Close/Escape without
+rollback, corrupt storage, reset, and real BF/HAADF source pixels when requested.

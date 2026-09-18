@@ -32,11 +32,29 @@ test('semantic class visibility changes only alpha for matching class IDs', () =
   assert.deepEqual(Array.from(pixels),[255,0,0,120,0,255,0,0]);
 });
 
+test('semantic recoloring reuses native pixel storage and clears unknown IDs', () => {
+  const output = new Uint8ClampedArray([255,255,255,255,255,255,255,255]);
+  assert.equal(semanticPixels(new Uint8ClampedArray([0,0,0,255,3,3,3,255]),
+    {classes:['Carbon'],colors:[[255,0,0]]}, [], output), output);
+  assert.deepEqual(Array.from(output), [255,0,0,120,0,0,0,0]);
+});
+
 test('all independent task result modes preserve masks without particle output', () => {
   const segmentation = { classes: ['Carbon', 'Film', 'Vacuum'], mask_png: 'data:image/png;base64,AA==' };
   assert.deepEqual(sampleResult({segmentation:[segmentation]}, 0), {centers:[],scores:[],radii:[],segmentation});
   assert.equal(sampleResult({centers:[[[.5,.5]]],scores:[[.9]],radii:[[4]]},0).segmentation,null);
   assert.equal(sampleResult({segmentation:[segmentation],centers:[[[.5,.5]]]},0).centers.length,1);
+});
+
+test('explicit task metadata controls availability even with no detections', () => {
+  assert.deepEqual(enabledTasks({tasks:{nanoparticles:true,segmentation:false},scores:[[]]}),
+    {nanoparticles:true,segmentation:false});
+  assert.deepEqual(enabledTasks({tasks:{nanoparticles:false,segmentation:true}}),
+    {nanoparticles:false,segmentation:true});
+});
+
+test('archive filenames are safe, indexed and JPEG', () => {
+  assert.equal(annotatedFilename({name:'../../a b.png'},0),'001-..-..-a-b-cedirnet.jpg');
 });
 
 function uint32(bytes, offset) {
