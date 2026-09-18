@@ -38,30 +38,28 @@ def preannotation(response, index, size, parsed_config):
     """Resolve controls by type, never use a semantic label as a particle label."""
     results = []
     if response['tasks']['nanoparticles']:
-        candidates = [(name,tag) for name,tag in parsed_config.items() if tag.get('type','').lower() == 'ellipselabels']
+        candidates = [(name,tag) for name,tag in parsed_config.items() if tag.get('labels',[]) == ['nanoparticle']]
         if len(candidates)!=1:
             raise ValueError('nanoparticles requires exactly one EllipseLabels control')
         name,tag = candidates[0]
-        labels = tag.get('labels', [])
-        if len(labels) != 1:
-            raise ValueError('particle control must contain exactly one configured label/alias; defect classification is semantic')
-        # The SDK parsed config already resolves Label alias before value.
-        label = labels[0]
+        labels = { tag['type'].lower(): [tag['labels_attrs']['nanoparticle']['value']] }
         for j,(center,radius,score) in enumerate(zip(response['centers'][index],response['radii'][index],response['scores'][index])):
             results.append(label_studio_ellipse_result(center=center,radius=radius,score=score,original_size=size,
-                from_name=name,to_name=tag['to_name'][0],label=label,result_id=f'particle-{j}'))
+                from_name=name,to_name=tag['to_name'][0],label=labels,result_id=f'particle-{j}'))
     semantic = response['segmentation'][index]
     if semantic is not None:
-        candidates = [(name,tag) for name,tag in parsed_config.items() if tag.get('type','').lower()=='brushlabels']
-        if len(candidates)!=1:
-            raise ValueError('segmentation requires exactly one BrushLabels control')
-        name,tag = candidates[0]
-        # SDK keys are serialized aliases; model classes retain canonical values.
-        aliases = {attrs.get('value', label): label
-                   for label, attrs in tag.get('labels_attrs', {}).items()}
-        labels = [aliases.get(label, label) for label in semantic['classes']]
-        if not set(labels).issubset(tag.get('labels',[])):
-            raise ValueError('BrushLabels must include all configured semantic classes')
+        labels = None
+        for name, tag in parsed_config.items():
+            # SDK keys are serialized aliases; model classes retain canonical values.
+            aliases = {attrs.get('value', label): label
+                    for label, attrs in tag.get('labels_attrs', {}).items()}
+            _labels = [aliases.get(label, label) for label in semantic['classes']]
+            if set(_labels).issubset(tag.get('labels',[])):
+                tagid = tag['type'].lower()
+                labels = [ { tagid: [label] } for label in _labels]
+                break
+        if labels is None:
+            raise ValueError('Labeling config does not include any *Labels tags with matching semantic classes.')
         mask = np.array(Image.open(io.BytesIO(base64.b64decode(semantic['mask_png'].split(',',1)[1]))))
         results.extend(brush_results(mask,labels,name,tag['to_name'][0]))
     scores = response['scores'][index]

@@ -27,9 +27,9 @@ def encode_mask(mask, classes):
 
 
 def brush_results(mask, classes, from_name, to_name):
-    from label_studio_converter.brush import mask2rle
+    from label_studio_sdk.converter.brush import mask2rle
     h,w = mask.shape
     return [dict(id=f'semantic-{i}',from_name=from_name,to_name=to_name,
                  type='brushlabels',original_width=w,original_height=h,image_rotation=0,
-                 value=dict(format='rle',rle=mask2rle((mask==i).astype(np.uint8)*255),brushlabels=[label]))
+                 value=dict(**label, format='rle',rle=mask2rle((mask==i).astype(np.uint8)*255)))
             for i,label in enumerate(classes) if np.any(mask==i)]
