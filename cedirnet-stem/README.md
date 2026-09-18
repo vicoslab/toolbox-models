@@ -224,9 +224,14 @@ server score cutoff. No unsupported localization/NMS knobs are exposed.
 The top row contains task-appropriate downloads:
 
 - **Download detections**: JSON with every returned candidate, unfiltered.
-- **Download mask**: one ZIP containing each sample's original lossless class-ID
-  PNG mask, unfiltered (class names/colors remain in the response/JSON metadata).
-- **Download images**: one ZIP of native-resolution JPEGs (quality 95%) for both
+- **Download mask**: one ZIP with unfiltered native-resolution PNGs per sample:
+  `class-id/` preserves the original class IDs byte-for-byte (small IDs look nearly
+  black in image viewers); `color/` contains opaque full-color companion masks
+  using the display palette, without transparency or display filtering.
+  `classes.json` maps each sample's IDs, class names and RGB colors. ID 0 is a real
+  class; ID 255 means ignore and is shown as neutral gray `[128, 128, 128]`.
+  Use class-ID masks for analysis, color masks for viewing; IDs are never rescaled.
+- **Download visualizations**: one ZIP of native-resolution JPEGs (quality 95%) for both
   modalities of every pair, using the current display filters. JPEG is lossy;
   masks are not. Filenames are sanitized and indexed to avoid collisions.
 

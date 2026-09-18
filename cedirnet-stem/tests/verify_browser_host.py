@@ -37,7 +37,7 @@ with sync_playwright() as pw:
         pending.value.save_as(OUT/filename)
         return OUT/filename
     ready(2)
-    check('top downloads have exact labels',page.locator('#results button').all_text_contents()==['Download detections','Download mask','Download images'])
+    check('top downloads have exact labels',page.locator('#results button').all_text_contents()==['Download detections','Download mask','Download visualizations'])
     check('no inline per-sample mask links',page.locator('#results a').count()==0)
     check('both modalities and samples retain native dimensions and visible proportional layout',dimensions()==[[800,400,512,256],[800,400,512,256],[400,200,400,200],[400,200,400,200]])
     report['image_dimensions']=dimensions();baseline=pixels()
@@ -94,7 +94,7 @@ with sync_playwright() as pw:
     report['filter_requests']=requests[before:];report['filter_costs']=page.evaluate('costs')
     page.screenshot(path=str(OUT/'filtered-settings.png'),full_page=True)
     clicktext('Close');ready(1)
-    archive=zipfile.ZipFile(download('Download images','filtered.zip'))
+    archive=zipfile.ZipFile(download('Download visualizations','filtered.zip'))
     check('ZIP contains all four JPEG modality plots',len(archive.namelist())==4 and all(n.endswith('.jpg') for n in archive.namelist()))
     for i,name in enumerate(archive.namelist()):
         decoded=Image.open(io.BytesIO(archive.read(name))).convert('RGB');displayed=decode(hidden[i])
@@ -106,12 +106,26 @@ with sync_playwright() as pw:
         check(f'{name}: visible other class unchanged',max(abs(a-b) for a,b in zip(decoded.getpixel((30,30)),decode(baseline[i]).getpixel((30,30))))<=3)
         point=(639,200) if i<2 else (319,100)
         check(f'{name}: circle radius and threshold',decode(baseline[i]).getpixel(point)[1]>150 and (decoded.getpixel(point)[1]<150 if i<2 else decoded.getpixel(point)[1]>150))
+    costs_before=page.evaluate('costs');requests_before=len(requests)
     masks=zipfile.ZipFile(download('Download mask','masks.zip'))
-    check('mask ZIP contains every sample',len(masks.namelist())==2)
-    for i,name in enumerate(masks.namelist()):
-        mask=Image.open(io.BytesIO(masks.read(name)))
-        original=Image.open(io.BytesIO(base64.b64decode(response['segmentation'][i]['mask_png'].split(',')[1])))
-        check(f'{name}: raw mask exact unfiltered class IDs and dimensions',mask.size==original.size and mask.tobytes()==original.tobytes() and set(np.asarray(mask).ravel())=={0,1,2})
+    check('color mask download encodes once per sample without decoding or inference',page.evaluate('costs')=={'decode':costs_before['decode'],'encode':costs_before['encode']+2} and len(requests)==requests_before)
+    def verify_masks(masks, label):
+        mapping=json.loads(masks.read('classes.json'))
+        check(label+': ZIP has raw/color pairs for every sample plus mapping',len(masks.namelist())==5 and len(mapping['samples'])==2)
+        check(label+': safe unique filenames',len(set(masks.namelist()))==5 and all('..' not in n.split('/') and not n.startswith('/') for n in masks.namelist()))
+        check(label+': ignore ID and neutral color are explicit',mapping['ignore']=={'id':255,'name':'Ignore','rgb':[128,128,128]})
+        for i,sample in enumerate(mapping['samples']):
+            raw=masks.read(sample['class_id'])
+            original=base64.b64decode(response['segmentation'][i]['mask_png'].split(',')[1])
+            ids=np.asarray(Image.open(io.BytesIO(raw)))
+            color=Image.open(io.BytesIO(masks.read(sample['color'])))
+            rgba=np.asarray(color.convert('RGBA'))
+            check(f'{label} sample {i}: original PNG bytes and all IDs unchanged',raw==original and set(ids.ravel())=={0,1,2,255})
+            check(f'{label} sample {i}: native size and fully opaque color mask',color.size==Image.open(io.BytesIO(original)).size and np.all(rgba[:,:,3]==255))
+            check(f'{label} sample {i}: exact class names IDs and RGB mapping',sample['classes']==[{'id':j,'name':n,'rgb':c} for j,(n,c) in enumerate(zip(response['segmentation'][i]['classes'],response['segmentation'][i]['colors']))])
+            for entry in sample['classes']+[mapping['ignore']]:
+                check(f'{label} sample {i}: exact RGB at every ID {entry["id"]} pixel',np.all(rgba[ids==entry['id'],:3]==entry['rgb']))
+    verify_masks(masks,'filtered combined')
     detections=json.loads(download('Download detections','detections.json').read_text())
     check('JSON retains every unfiltered candidate', [r['scores'] for r in detections]==response['scores'])
     clicktext('STEM visualization settings');control('threshold',0);ready(4);page.keyboard.press('Escape');ready(4)
@@ -121,6 +135,8 @@ with sync_playwright() as pw:
     clicktext('STEM visualization settings');clicktext('None');ready(4)
     check('None hides legend',not page.locator('.stem-class-legend').is_visible())
     clicktext('All');ready(4);check('All restores visibility',all(page.locator('[data-class-name]').evaluate_all('els=>els.map(e=>e.checked)')));clicktext('Close')
+    all_masks=zipfile.ZipFile(download('Download mask','masks-all.zip'))
+    check('raw and color downloads ignore thresholds and class visibility',all_masks.namelist()==masks.namelist() and all(all_masks.read(n)==masks.read(n) for n in masks.namelist()))
     for mode in ['particles','segmentation','empty']:
         page.evaluate('(mode)=>runFixture(mode)',mode);page.wait_for_timeout(300);ready()
         particle=mode!='segmentation';semantic=mode=='segmentation'
@@ -131,7 +147,9 @@ with sync_playwright() as pw:
         check(mode+': class controls only for included segmentation',page.locator('[data-class-name]').count()==(3 if semantic else 0))
         check(mode+': detections download task-aware',page.get_by_role('button',name='Download detections',exact=True).count()==int(particle))
         check(mode+': mask download task-aware',page.get_by_role('button',name='Download mask',exact=True).count()==int(semantic))
-        check(mode+': images download present',page.get_by_role('button',name='Download images',exact=True).count()==1)
+        check(mode+': images download present',page.get_by_role('button',name='Download visualizations',exact=True).count()==1)
+        if semantic:
+            verify_masks(zipfile.ZipFile(download('Download mask','masks-segmentation-only.zip')), 'segmentation only')
         if mode=='empty':
             check('enabled particle task with no detections retains usable controls',not page.locator('[data-control=threshold]').is_disabled())
             empty=json.loads(download('Download detections','empty.json').read_text())

@@ -39,6 +39,16 @@ test('semantic recoloring reuses native pixel storage and clears unknown IDs', (
   assert.deepEqual(Array.from(output), [255,0,0,120,0,0,0,0]);
 });
 
+test('download colors are opaque for every configured ID, including zero; ignore is neutral', () => {
+  const colors = Array.from({length:255}, (_, id) => [id, 255-id, 73]);
+  const ids = new Uint8ClampedArray(Array.from({length:256}, (_, id) => [id,id,id,255]).flat());
+  const original = ids.slice();
+  const pixels = colorMaskPixels(ids, {colors});
+  for (let id=0; id<255; id++) assert.deepEqual(Array.from(pixels.slice(id*4,id*4+4)), [...colors[id],255]);
+  assert.deepEqual(Array.from(pixels.slice(255*4)), [128,128,128,255]);
+  assert.deepEqual(ids, original);
+});
+
 test('all independent task result modes preserve masks without particle output', () => {
   const segmentation = { classes: ['Carbon', 'Film', 'Vacuum'], mask_png: 'data:image/png;base64,AA==' };
   assert.deepEqual(sampleResult({segmentation:[segmentation]}, 0), {centers:[],scores:[],radii:[],segmentation});
@@ -55,6 +65,7 @@ test('explicit task metadata controls availability even with no detections', () 
 
 test('archive filenames are safe, indexed and JPEG', () => {
   assert.equal(annotatedFilename({name:'../../a b.png'},0),'001-..-..-a-b-cedirnet.jpg');
+  assert.notEqual(annotatedFilename({name:'../../a b.png'},0), annotatedFilename({name:'../../a b.png'},1));
 });
 
 function uint32(bytes, offset) {
