@@ -18,23 +18,57 @@
     return table;
   })();
 
-  function createCircle(center, radius, score, image) {
-    const circle = document.createElement("div");
-    const displayRadius = radius * image.clientWidth / image.naturalWidth;
-    circle.style.position = "absolute";
-    circle.style.left = `${center[0] * image.clientWidth - displayRadius}px`;
-    circle.style.top = `${center[1] * image.clientHeight - displayRadius}px`;
-    circle.style.width = `${2 * displayRadius}px`;
-    circle.style.height = `${2 * displayRadius}px`;
-    circle.style.border = "2px solid limegreen";
-    circle.style.borderRadius = "50%";
-    circle.style.boxSizing = "border-box";
-    circle.style.pointerEvents = "none";
-    circle.title = `confidence ${score.toFixed(3)}, radius ${radius.toFixed(1)} px`;
-    return circle;
+  const VIEW_KEY = "toolbox-ui-stem-inference";
+
+  function normalizeView(value, maximum, defaultThreshold = .5) {
+    const bounded = (v, fallback, max) => typeof v === "number" && Number.isFinite(v)
+      ? Math.max(0, Math.min(max, v)) : Math.max(0, Math.min(max, fallback));
+    return {threshold: bounded(value?.threshold, defaultThreshold, maximum),
+      minRadius: bounded(value?.minRadius, 0, 1000000),
+      hiddenClasses: Array.isArray(value?.hiddenClasses) ? value.hiddenClasses.filter(x => typeof x === "string") : []};
   }
 
-  function loadBrowserImage(file) {
+  function filterParticles(result, view) {
+    const selected = {centers: [], scores: [], radii: [], segmentation: result.segmentation};
+    for (let i = 0; i < result.centers.length; i++) {
+      const center = result.centers[i], radius = result.radii[i], score = result.scores[i];
+      if (!center?.slice(0, 2).every(Number.isFinite) || center.length < 2 ||
+          !Number.isFinite(radius) || radius <= 0 || !Number.isFinite(score) ||
+          score < view.threshold || radius < view.minRadius) continue;
+      selected.centers.push(center); selected.scores.push(score); selected.radii.push(radius);
+    }
+    return selected;
+  }
+
+  function semanticPixels(ids, segmentation, hiddenClasses) {
+    const rgba = new Uint8ClampedArray(ids.length);
+    const hidden = new Set(hiddenClasses);
+    for (let p = 0; p < ids.length; p += 4) {
+      const id = ids[p], color = segmentation.colors[id];
+      if (!color) continue;
+      rgba.set(color, p);
+      rgba[p + 3] = hidden.has(segmentation.classes[id]) ? 0 : 120;
+    }
+    return rgba;
+  }
+
+  async function semanticCanvas(segmentation, hiddenClasses) {
+    const mask = await loadDataImage(segmentation.mask_png);
+    const canvas = document.createElement("canvas");
+    canvas.width = mask.naturalWidth; canvas.height = mask.naturalHeight;
+    const context = canvas.getContext("2d", {willReadFrequently: true});
+    context.drawImage(mask, 0, 0);
+    const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+    pixels.data.set(semanticPixels(pixels.data, segmentation, hiddenClasses));
+    context.putImageData(pixels, 0, 0);
+    return canvas;
+  }
+
+  async function loadBrowserImage(file) {
+    if (/\.tiff?$/i.test(file.name)) {
+      if (typeof UTIF === "undefined") throw new Error("TIFF decoding requires the host UTIF decoder");
+      return loadDataImage(UTIF.bufferToURI(await file.arrayBuffer()));
+    }
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
       const image = new Image();
@@ -59,7 +93,7 @@
     });
   }
 
-  async function renderAnnotatedPng(file, centers, scores, radii, segmentation = null) {
+  async function renderAnnotatedPng(file, centers, scores, radii, segmentation = null, hiddenClasses = []) {
     const image = await loadBrowserImage(file);
     const canvas = document.createElement("canvas");
     canvas.width = image.naturalWidth;
@@ -69,7 +103,8 @@
 
     context.drawImage(image, 0, 0);
     if (segmentation) {
-      const overlay = await loadDataImage(segmentation.overlay_png);
+      const overlay = await semanticCanvas(segmentation, hiddenClasses);
+      context.imageSmoothingEnabled = false;
       context.drawImage(overlay, 0, 0, canvas.width, canvas.height);
     }
     context.strokeStyle = "limegreen";
@@ -207,109 +242,183 @@
   }
 
   document.getElementById("infer").onInference = function (request, response) {
-    const group = document.createElement("div");
-    group.classList.add("group");
+    if (response.error) throw new Error(response.error);
     const images = request.getAll("images");
-    const centers = [], scores = [], radii = [];
+    if (images.length % 2) throw new Error("Select matching BF / HAADF pairs");
+    document.getElementById(VIEW_KEY)?.stemDispose?.();
+    const results = images.filter((_, i) => i % 2 === 0).map((_, i) => ({
+      ...sampleResult(response, i), "image-BF": images[2*i].name, "image-HAADF": images[2*i+1].name,
+    }));
+    const group = document.createElement("div");
+    group.className = "group stem-results";
+    group.style.cssText = "display:flex; flex-direction:column; gap:1rem; pointer-events:auto";
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; pointer-events:auto";
+    const status = document.createElement("span");
+    status.setAttribute("role", "status");
+    const jsonDownload = document.createElement("button");
+    jsonDownload.type = "button"; jsonDownload.textContent = "Download JSON (all candidates)";
+    jsonDownload.onclick = () => downloadBlob(new Blob([JSON.stringify(results, null, 2)],
+      {type:"application/json"}), "results-cedirnet.json");
+    const imageDownload = document.createElement("button");
+    imageDownload.type = "button"; imageDownload.textContent = "Download images (.zip)";
+    actions.append(jsonDownload, imageDownload, status);
 
-    const results = [];
-    for (let i = 0; i < images.length / 2; i++) {
-      const result = sampleResult(response, i);
-      centers.push(result.centers); scores.push(result.scores); radii.push(result.radii);
-      result["image-BF"] = images[2 * i].name;
-      result["image-HAADF"] = images[2 * i + 1].name;
-      result.centers = centers[i];
-      result.scores = scores[i];
-      result.radii = radii[i];
-      results.push(result);
-
-      const wrapper = document.createElement("div");
-      wrapper.style.position = "relative";
-      wrapper.style.width = "fit-content";
-
-      const image = document.createElement("img");
-      if (result["image-BF"].endsWith(".tif") || result["image-BF"].endsWith(".tiff")) {
-        images[2 * i].arrayBuffer().then(buf => image.src = UTIF.bufferToURI(buf));
-      } else {
-        image.src = URL.createObjectURL(images[2 * i]);
-      }
-      image.onload = () => {
-        if (result.segmentation) {
-          const overlay = document.createElement("img");
-          overlay.src = result.segmentation.overlay_png;
-          Object.assign(overlay.style, {position: "absolute", left: "0", top: "0", width: "100%", height: "100%", pointerEvents: "none"});
-          wrapper.appendChild(overlay);
-        }
-        for (let j = 0; j < centers[i].length; j++) {
-          wrapper.appendChild(createCircle(centers[i][j], radii[i][j], scores[i][j], image));
-        }
+    const maximum = results.reduce((max, r) => r.scores.reduce((m, s) =>
+      Number.isFinite(s) ? Math.max(m, s + .01) : m, max), 1);
+    let saved;
+    try { saved = JSON.parse(localStorage.getItem(VIEW_KEY)); } catch (_) { /* private/corrupt storage */ }
+    let view = normalizeView(saved, maximum, response.display_score_threshold ?? .5);
+    let accepted = structuredClone(view);
+    const classes = new Map();
+    results.forEach(r => r.segmentation?.classes.forEach((name, id) => classes.set(name, r.segmentation.colors[id])));
+    const hasParticles = results.some(r => r.scores.length);
+    const {button, dialog} = settings(VIEW_KEY);
+    button.type = "button"; button.title = "STEM visualization settings";
+    button.setAttribute("aria-label", button.title);
+    button.disabled = !hasParticles && !classes.size;
+    dialog.setAttribute("aria-label", "STEM visualization settings");
+    const panel = document.createElement("div");
+    panel.style.cssText = "display:flex; flex-direction:column; gap:.75rem; width:min(28rem,70vw)";
+    dialog.style.maxHeight = "90vh";
+    dialog.style.overflow = "auto";
+    const title = document.createElement("h3"); title.textContent = "STEM visualization";
+    panel.append(title);
+    const makeControl = (labelText, name, type, max, step) => {
+      const label = document.createElement("label");
+      const text = document.createElement("span");
+      const input = document.createElement("input");
+      input.type = type; input.min = "0"; input.max = String(max); input.step = step;
+      input.dataset.control = name; input.disabled = !hasParticles;
+      input.style.cssText = "display:block; width:100%";
+      input.setAttribute("aria-label", labelText);
+      label.append(text, input); panel.append(label);
+      const sync = () => { input.value = String(view[name]); text.textContent = `${labelText}: ${view[name].toFixed(2)}`; };
+      input.addEventListener("input", () => {
+        view = normalizeView({...view, [name]: input.valueAsNumber}, maximum, accepted.threshold);
+        sync(); renderAll();
+      });
+      return sync;
+    };
+    const syncThreshold = makeControl("Particle score threshold", "threshold", "range", maximum, "any");
+    const syncRadius = makeControl("Minimum radius (original pixels)", "minRadius", "number", 1000000, "0.1");
+    const note = document.createElement("small");
+    note.textContent = `Display filters only. Candidate score cutoff: ${response.candidate_score_threshold ?? "unknown (older server)"}. Lowering filters cannot recover candidates rejected by the model localizer. Class-ID masks and JSON stay unfiltered.`;
+    panel.append(note);
+    const semanticGroup = document.createElement("fieldset");
+    semanticGroup.disabled = !classes.size;
+    semanticGroup.style.cssText = "display:flex; flex-direction:column; gap:.25rem";
+    const legend = document.createElement("legend"); legend.textContent = "Segmentation classes";
+    semanticGroup.append(legend);
+    const checks = [];
+    for (const [name, color] of classes) {
+      const label = document.createElement("label");
+      label.style.cssText = "display:flex; align-items:center; gap:.5rem; margin:.5rem 0";
+      const check = document.createElement("input"); check.type = "checkbox"; check.dataset.className = name;
+      const swatch = document.createElement("span");
+      swatch.style.cssText = `width:1rem; height:1rem; background:rgb(${color.join(",")}); border:1px solid currentColor`;
+      label.append(check, swatch, document.createTextNode(name)); semanticGroup.append(label);
+      check.onchange = () => {
+        view.hiddenClasses = [...new Set([...view.hiddenClasses.filter(n => n !== name), ...(check.checked ? [] : [name])])];
+        renderAll();
       };
-      wrapper.appendChild(image);
-      group.appendChild(wrapper);
+      checks.push([name, check]);
+    }
+    for (const [label, hidden] of [["All", false], ["None", true]]) {
+      const action = document.createElement("button"); action.type = "button"; action.textContent = label;
+      action.onclick = () => {
+        view.hiddenClasses = view.hiddenClasses.filter(n => !classes.has(n));
+        if (hidden) view.hiddenClasses.push(...classes.keys());
+        syncControls(); renderAll();
+      };
+      semanticGroup.append(action);
+    }
+    panel.append(semanticGroup);
+    const syncControls = () => {
+      syncThreshold(); syncRadius();
+      checks.forEach(([name, check]) => check.checked = !view.hiddenClasses.includes(name));
+    };
+    const buttons = document.createElement("div");
+    buttons.style.cssText = "display:flex; justify-content:end; gap:.5rem";
+    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel";
+    const rollback = () => { view = structuredClone(accepted); syncControls(); renderAll(); };
+    cancel.onclick = () => { rollback(); dialog.close(); };
+    dialog.addEventListener("cancel", rollback);
+    const ok = document.createElement("button"); ok.type = "button"; ok.textContent = "Ok";
+    ok.onclick = () => {
+      accepted = structuredClone(view);
+      try { localStorage.setItem(VIEW_KEY, JSON.stringify(accepted)); } catch (_) { /* storage may be disabled */ }
+      dialog.close();
+    };
+    buttons.append(cancel, ok); panel.append(buttons); dialog.append(panel);
+    (document.querySelector(".toolbar-right") || actions).append(button, dialog);
+    syncControls();
+
+    const rendered = [];
+    results.forEach((result, i) => {
+      const row = document.createElement("div");
+      row.style.cssText = "display:flex; flex-wrap:wrap; gap:1rem";
+      for (let modality = 0; modality < 2; modality++) {
+        const file = images[2*i + modality];
+        const figure = document.createElement("figure");
+        figure.style.cssText = "margin:0; width:512px; max-width:100%";
+        const caption = document.createElement("figcaption");
+        caption.textContent = `${modality ? "HAADF" : "BF"}: ${file.name}`;
+        const image = document.createElement("img"); image.alt = caption.textContent;
+        image.className = "stem-annotated";
+        image.style.cssText = "display:block; max-width:min(512px,100%); height:auto";
+        figure.append(caption, image); row.append(figure);
+        rendered.push({image, file, result, index:2*i+modality});
+      }
+      group.append(row);
       if (result.segmentation) {
-        const legend = document.createElement("div");
-        for (const [id, name] of result.segmentation.classes.entries()) {
-          const label = document.createElement("span");
-          label.textContent = `${id}: ${name}  `;
-          label.style.borderBottom = `4px solid rgb(${result.segmentation.colors[id].join(",")})`;
-          legend.appendChild(label);
-        }
         const maskDownload = document.createElement("a");
-        maskDownload.textContent = "Download class-ID mask PNG";
-        maskDownload.href = result.segmentation.mask_png;
-        maskDownload.download = `${i + 1}-semantic-mask.png`;
-        legend.appendChild(maskDownload);
-        group.appendChild(legend);
+        maskDownload.textContent = `Sample ${i+1}: Download class-ID mask PNG (all classes)`;
+        maskDownload.href = result.segmentation.mask_png; maskDownload.download = `${i+1}-semantic-mask.png`;
+        group.append(maskDownload);
+      }
+    });
+    let revision = 0, disposed = false, entries = [], urls = [];
+    async function renderAll() {
+      const current = ++revision, snapshot = structuredClone(view);
+      imageDownload.disabled = true; status.textContent = "Rendering…";
+      try {
+        const next = await Promise.all(rendered.map(async item => {
+          const r = filterParticles(item.result, snapshot);
+          const blob = await renderAnnotatedPng(item.file, r.centers, r.scores, r.radii, r.segmentation, snapshot.hiddenClasses);
+          return {name: annotatedFilename(item.file, item.index), blob};
+        }));
+        if (current !== revision || disposed) return;
+        urls.forEach(url => URL.revokeObjectURL(url));
+        urls = next.map(e => URL.createObjectURL(e.blob));
+        rendered.forEach((item, i) => item.image.src = urls[i]);
+        entries = next;
+        const count = results.reduce((n, r) => n + filterParticles(r, snapshot).centers.length, 0);
+        status.textContent = `${count} particles shown across ${results.length} samples`;
+        group.dataset.particleCount = String(count);
+        group.dataset.revision = String(current);
+        imageDownload.disabled = !entries.length;
+      } catch (error) {
+        if (current !== revision || disposed) return;
+        status.textContent = `Could not render images: ${error.message}`;
+        console.error(error);
       }
     }
-
-    const actions = document.createElement("div");
-    actions.style.display = "flex";
-    actions.style.gap = "0.75rem";
-    actions.style.alignItems = "center";
-    actions.style.marginBottom = "0.75rem";
-    actions.style.pointerEvents = "auto";
-
-    const jsonDownload = document.createElement("button");
-    jsonDownload.type = "button";
-    jsonDownload.innerText = "Download JSON";
-    jsonDownload.addEventListener("click", () => {
-      downloadBlob(
-        new Blob([JSON.stringify(results, null, 2)], { type: "application/json" }),
-        "results-cedirnet.json",
-      );
-    });
-
-    const imageDownload = document.createElement("button");
-    imageDownload.type = "button";
-    imageDownload.innerText = "Download images (.zip)";
-    imageDownload.addEventListener("click", async () => {
+    imageDownload.onclick = async () => {
       imageDownload.disabled = true;
-      imageDownload.innerText = "Preparing images…";
-      try {
-        const entries = [];
-        for (let i = 0; i < images.length / 2; i++) {
-          const png = await renderAnnotatedPng(
-            images[2 * i],
-            centers[i] || [],
-            scores[i] || [],
-            radii[i] || [],
-            response.segmentation?.[i] || null,
-          );
-          entries.push({ name: annotatedFilename(images[2 * i], i), blob: png });
-        }
-        downloadBlob(await buildZip(entries), "results-cedirnet-images.zip");
-      } catch (error) {
-        console.error("Could not prepare annotated images", error);
-        const message = error instanceof Error ? error.message : String(error);
-        window.alert(`Could not prepare annotated images: ${message}`);
-      } finally {
-        imageDownload.disabled = false;
-        imageDownload.innerText = "Download images (.zip)";
-      }
-    });
-
-    actions.append(jsonDownload, imageDownload);
+      try { downloadBlob(await buildZip(entries), "results-cedirnet-images.zip"); }
+      catch (error) { status.textContent = `Could not prepare images: ${error.message}`; }
+      finally { if (!disposed) imageDownload.disabled = false; }
+    };
+    const form = document.getElementById("infer").closest("form");
+    const dispose = () => {
+      disposed = true; revision++;
+      urls.forEach(url => URL.revokeObjectURL(url)); button.remove(); dialog.remove();
+      for (const event of ["infer", "reset", "softreset"]) form?.removeEventListener(event, dispose);
+    };
+    dialog.stemDispose = dispose;
+    for (const event of ["infer", "reset", "softreset"]) form?.addEventListener(event, dispose);
+    renderAll();
     return [actions, group];
   };
 </script>
