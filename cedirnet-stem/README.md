@@ -197,6 +197,30 @@ original resolution before argmax. The UI supports class-mask PNG, JSON and
 rasterized overlay ZIP downloads. Preannotations preserve configured particle-label ellipses and
 per-class RLE brushes using actual control names.
 
+### Inference visualization controls
+
+The native toolbar **gear** opens a live-preview dialog: particle score threshold,
+minimum radius in **original-image pixels**, and named/color-coded segmentation
+class visibility (including All/None). **Ok** saves the view in browser storage;
+**Cancel** or Escape restores the accepted view. Controls without corresponding
+outputs are disabled. Particle-only, segmentation-only and combined results use
+the same renderer, with proportionally scaled circles on **both BF and HAADF**.
+
+The browser `/infer` endpoint retains localizer candidates at score cutoff **0**,
+then applies the configured `score_threshold` as the initial display threshold.
+The slider can therefore reveal lower-score returned candidates without rerunning
+inference; it cannot recover candidates already rejected by the model localizer.
+Scores are not assumed to be probabilities: the slider range includes observed
+scores above 1. Minimum radius is a client-side size filter, not a new model/NMS
+parameter. CLI prediction and Label Studio preannotations retain the configured
+server score cutoff. No unsupported localization/NMS knobs are exposed.
+
+**Download images (.zip)** exports the exact current filtered view, at original
+resolution, for both modalities of every pair. Hidden semantic classes become
+transparent without hiding particles. **Class-ID mask PNG** and **JSON (all
+candidates)** remain unfiltered, preserving every semantic class and candidate.
+The UI uses the host's TIFF decoder when available and no new CDN dependencies.
+
 ## Installation
 
 `setup.sh` clones published `vicoslab/CeDiRNet-STEM` **master**, applies only the

@@ -10,6 +10,28 @@ const helpers = script.split('document.getElementById("infer").onInference')[0];
 vm.runInThisContext(`${helpers}\nglobalThis.__cedirnetUi = { buildZip, crc32, assertClassicZipLimit, sampleResult };`);
 const { buildZip, crc32, assertClassicZipLimit, sampleResult } = globalThis.__cedirnetUi;
 
+test('view filters reject bad geometry and apply score and original-pixel radius thresholds', () => {
+  assert.equal(typeof filterParticles, 'function');
+  const result = {centers:[[.2,.3],[.5,.6],[.1,.1],[NaN,.3]], scores:[.2,2,.9,3], radii:[4,10,2,6]};
+  assert.deepEqual(filterParticles(result, {threshold:.5,minRadius:3}).scores, [2]);
+  assert.equal(filterParticles(result, {threshold:0,minRadius:0}).scores.length, 3);
+});
+
+test('view normalization bounds numeric controls and handles corrupt saved values', () => {
+  assert.equal(typeof normalizeView, 'function');
+  assert.deepEqual(normalizeView({threshold:Infinity,minRadius:-5,hiddenClasses:['Film',3]}, 2, .5),
+    {threshold:.5,minRadius:0,hiddenClasses:['Film']});
+  assert.equal(normalizeView({threshold:50}, 2).threshold,2);
+  assert.equal(normalizeView({threshold:null}, 2).threshold,.5);
+});
+
+test('semantic class visibility changes only alpha for matching class IDs', () => {
+  assert.equal(typeof semanticPixels, 'function');
+  const pixels = semanticPixels(new Uint8ClampedArray([0,0,0,255,1,1,1,255]),
+    {classes:['Carbon','Film'],colors:[[255,0,0],[0,255,0]]}, ['Film']);
+  assert.deepEqual(Array.from(pixels),[255,0,0,120,0,255,0,0]);
+});
+
 test('all independent task result modes preserve masks without particle output', () => {
   const segmentation = { classes: ['Carbon', 'Film', 'Vacuum'], mask_png: 'data:image/png;base64,AA==' };
   assert.deepEqual(sampleResult({segmentation:[segmentation]}, 0), {centers:[],scores:[],radii:[],segmentation});

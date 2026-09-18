@@ -228,7 +228,7 @@ class PreparedModelFilesTest(unittest.TestCase):
     def test_browser_ui_draws_radius_circles(self):
         ui = (MODEL_DIR / "ui.html").read_text()
         self.assertIn("radii", ui)
-        self.assertIn("borderRadius", ui)
+        self.assertIn("context.arc(x, y, radius", ui)
 
     def test_browser_ui_downloads_json_and_rasterized_images(self):
         ui = (MODEL_DIR / "ui.html").read_text()

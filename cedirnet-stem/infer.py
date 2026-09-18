@@ -12,8 +12,14 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 RUNTIME = load_runtime(CMD_ARGS,DEVICE)
 
 
-def predict(images):
-    return RUNTIME.predict(images,size=(CMD_ARGS['width'],CMD_ARGS['height']),score_threshold=CMD_ARGS['score_threshold'])
+def predict(images, interactive=False):
+    # The browser must retain low-score candidates so its slider is reversible.
+    # CLI and Label Studio preannotations still use the configured cutoff.
+    cutoff = 0 if interactive else CMD_ARGS['score_threshold']
+    response = RUNTIME.predict(images,size=(CMD_ARGS['width'],CMD_ARGS['height']),score_threshold=cutoff)
+    response['candidate_score_threshold'] = cutoff
+    response['display_score_threshold'] = CMD_ARGS['score_threshold']
+    return response
 
 
 if __name__ == '__main__':
@@ -44,6 +50,6 @@ else:
     @app.route('/infer',methods=['POST'])
     def infer():
         try:
-            return predict(load_pairs(request.files.getlist('images')))
+            return predict(load_pairs(request.files.getlist('images')), interactive=True)
         except (ValueError,FileNotFoundError,OSError) as error:
             return {'error':str(error)},400
