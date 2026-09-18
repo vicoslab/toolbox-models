@@ -43,28 +43,46 @@
     return selected;
   }
 
-  function semanticPixels(ids, segmentation, hiddenClasses) {
-    const rgba = new Uint8ClampedArray(ids.length);
-    const hidden = new Set(hiddenClasses);
+  function semanticPixels(ids, segmentation, hiddenClasses, rgba = new Uint8ClampedArray(ids.length)) {
+    // Resolve visibility once per class rather than a string/Set lookup per pixel.
+    const palette = new Uint8ClampedArray(256 * 4);
+    segmentation.colors.forEach((color, id) => {
+      palette.set(color.slice(0, 3), id * 4);
+      palette[id * 4 + 3] = hiddenClasses.includes(segmentation.classes[id]) ? 0 : 120;
+    });
     for (let p = 0; p < ids.length; p += 4) {
-      const id = ids[p], color = segmentation.colors[id];
-      if (!color) continue;
-      rgba.set(color, p);
-      rgba[p + 3] = hidden.has(segmentation.classes[id]) ? 0 : 120;
+      const offset = ids[p] * 4;
+      rgba[p] = palette[offset]; rgba[p + 1] = palette[offset + 1];
+      rgba[p + 2] = palette[offset + 2]; rgba[p + 3] = palette[offset + 3];
     }
     return rgba;
   }
 
-  async function semanticCanvas(segmentation, hiddenClasses) {
+  function enabledTasks(response) {
+    // Explicit worker metadata takes precedence, including enabled-but-empty tasks.
+    return response.tasks || {nanoparticles: Array.isArray(response.centers),
+      segmentation: Boolean(response.segmentation?.some(Boolean))};
+  }
+
+  async function prepareSemantic(segmentation) {
+    if (!segmentation) return null;
     const mask = await loadDataImage(segmentation.mask_png);
     const canvas = document.createElement("canvas");
     canvas.width = mask.naturalWidth; canvas.height = mask.naturalHeight;
     const context = canvas.getContext("2d", {willReadFrequently: true});
     context.drawImage(mask, 0, 0);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
-    pixels.data.set(semanticPixels(pixels.data, segmentation, hiddenClasses));
-    context.putImageData(pixels, 0, 0);
-    return canvas;
+    // Decode once per sample, share the colored overlay between BF and HAADF.
+    return {canvas, context, pixels, ids: pixels.data.slice(), segmentation, key: null};
+  }
+
+  function updateSemantic(cache, hiddenClasses) {
+    if (!cache) return;
+    const key = JSON.stringify(hiddenClasses);
+    if (cache.key === key) return;
+    semanticPixels(cache.ids, cache.segmentation, hiddenClasses, cache.pixels.data);
+    cache.context.putImageData(cache.pixels, 0, 0);
+    cache.key = key;
   }
 
   async function loadBrowserImage(file) {
@@ -92,37 +110,34 @@
       canvas.toBlob((blob) => {
         if (blob) resolve(blob);
         else reject(new Error("Could not rasterize inference plot"));
-      }, "image/png");
+      }, "image/jpeg", .95);
     });
   }
 
-  async function renderAnnotatedPng(file, centers, scores, radii, segmentation = null, hiddenClasses = []) {
-    const image = await loadBrowserImage(file);
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
+  function drawAnnotated(item, view) {
+    const {canvas, source, semantic, result} = item;
     const context = canvas.getContext("2d");
-    if (!context) throw new Error("Canvas rendering is unavailable");
-
-    context.drawImage(image, 0, 0);
-    if (segmentation) {
-      const overlay = await semanticCanvas(segmentation, hiddenClasses);
+    context.clearRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(source, 0, 0);
+    if (semantic) {
+      updateSemantic(semantic, view.hiddenClasses);
       context.imageSmoothingEnabled = false;
-      context.drawImage(overlay, 0, 0, canvas.width, canvas.height);
+      context.drawImage(semantic.canvas, 0, 0, canvas.width, canvas.height);
     }
     context.strokeStyle = "limegreen";
     context.lineWidth = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) / 512 * 2));
-
+    const {centers, radii} = filterParticles(result, view);
     for (let i = 0; i < centers.length; i++) {
-      const x = centers[i][0] * canvas.width;
-      const y = centers[i][1] * canvas.height;
-      const radius = radii[i];
       context.beginPath();
-      context.arc(x, y, radius, 0, 2 * Math.PI);
+      context.arc(centers[i][0] * canvas.width, centers[i][1] * canvas.height, radii[i], 0, 2 * Math.PI);
       context.stroke();
     }
+  }
 
-    return canvasToBlob(canvas);
+  function maskBlob(segmentation) {
+    // Preserve the worker's original PNG bytes, not the colored display canvas.
+    const binary = atob(segmentation.mask_png.split(",")[1]);
+    return new Blob([Uint8Array.from(binary, c => c.charCodeAt(0))], {type:"image/png"});
   }
 
   function crc32(bytes) {
@@ -215,7 +230,7 @@
 
   function annotatedFilename(file, index) {
     const base = file.name.replace(/\.[^.]+$/, "").replace(/[^a-zA-Z0-9._-]+/g, "-");
-    return `${String(index + 1).padStart(3, "0")}-${base}-cedirnet.png`;
+    return `${String(index + 1).padStart(3, "0")}-${base}-cedirnet.jpg`;
   }
 
   function downloadBlob(blob, filename) {
@@ -249,6 +264,7 @@
     const images = request.getAll("images");
     if (images.length % 2) throw new Error("Select matching BF / HAADF pairs");
     document.getElementById(VIEW_KEY)?.stemDispose?.();
+    const tasks = enabledTasks(response);
     const results = images.filter((_, i) => i % 2 === 0).map((_, i) => ({
       ...sampleResult(response, i), "image-BF": images[2*i].name, "image-HAADF": images[2*i+1].name,
     }));
@@ -259,19 +275,39 @@
     actions.style.cssText = "display:flex; gap:.75rem; align-items:center; flex-wrap:wrap; pointer-events:auto";
 
     const jsonDownload = document.createElement("button");
-    jsonDownload.type = "button"; jsonDownload.textContent = "Download JSON (all candidates)";
+    jsonDownload.type = "button"; jsonDownload.textContent = "Download detections";
+    jsonDownload.title = "JSON: all returned candidates, without display filtering";
     jsonDownload.onclick = () => downloadBlob(new Blob([JSON.stringify(results, null, 2)],
       {type:"application/json"}), "results-cedirnet.json");
+    const maskDownload = document.createElement("button");
+    maskDownload.type = "button"; maskDownload.textContent = "Download mask";
+    maskDownload.title = "ZIP: original class-ID PNG masks, all classes";
+    maskDownload.disabled = !results.some(r => r.segmentation);
+    maskDownload.onclick = async () => {
+      maskDownload.disabled = true;
+      try {
+        const entries = results.flatMap((r, i) => r.segmentation ? [{
+          name: annotatedFilename(images[2*i], i).replace(/-cedirnet\.jpg$/, "-mask.png"),
+          blob: maskBlob(r.segmentation),
+        }] : []);
+        downloadBlob(await buildZip(entries), "results-cedirnet-masks.zip");
+      } catch (error) { showToast("error", `Could not prepare masks: ${error.message}`); }
+      finally { if (!disposed) maskDownload.disabled = false; }
+    };
     const imageDownload = document.createElement("button");
-    imageDownload.type = "button"; imageDownload.textContent = "Download images (.zip)";
-    actions.append(jsonDownload, imageDownload);
+    imageDownload.type = "button"; imageDownload.textContent = "Download images";
+    imageDownload.title = "ZIP: native-resolution JPEG images (quality 95%), current display filters";
+    imageDownload.disabled = true;
+    if (tasks.nanoparticles) actions.append(jsonDownload);
+    if (tasks.segmentation) actions.append(maskDownload);
+    if (tasks.nanoparticles || tasks.segmentation) actions.append(imageDownload);
 
     const maximum = results.reduce((max, r) => r.scores.reduce((m, s) =>
       Number.isFinite(s) ? Math.max(m, s + .01) : m, max), 1);
     let saved;
     try { saved = JSON.parse(localStorage.getItem(VIEW_KEY)); } catch (_) { /* private/corrupt storage */ }
     let view = normalizeView(saved, maximum, response.display_score_threshold ?? .5);
-    let accepted = structuredClone(view);
+
     const classes = new Map();
     results.forEach(r => r.segmentation?.classes.forEach((name, id) => classes.set(name, r.segmentation.colors[id])));
     const classLegend = document.createElement("div");
@@ -293,12 +329,19 @@
       classLegend.style.display = classLegend.childElementCount ? "flex" : "none";
     };
     if (classes.size) group.append(classLegend);
-    const hasParticles = results.some(r => r.scores.length);
+    const hasParticles = tasks.nanoparticles;
     const {button, dialog} = settings(VIEW_KEY);
     button.type = "button"; button.title = "STEM visualization settings";
     button.setAttribute("aria-label", button.title);
     button.disabled = !hasParticles && !classes.size;
     dialog.setAttribute("aria-label", "STEM visualization settings");
+    // The native dialog sits inside the inference form. Enter in a number input
+    // otherwise activates the host's default form button (reset/inference).
+    dialog.addEventListener("keydown", event => {
+      if (event.key === "Enter" && event.target.matches("input")) {
+        event.preventDefault(); event.stopPropagation();
+      }
+    });
     const panel = document.createElement("div");
     panel.style.cssText = "display:flex; flex-direction:column; gap:.75rem; width:min(28rem,70vw)";
     dialog.style.maxHeight = "90vh";
@@ -316,15 +359,16 @@
       label.append(text, input); panel.append(label);
       const sync = () => { input.value = String(view[name]); text.textContent = `${labelText}: ${view[name].toFixed(2)}`; };
       input.addEventListener("input", () => {
-        view = normalizeView({...view, [name]: input.valueAsNumber}, maximum, accepted.threshold);
+        view = normalizeView({...view, [name]: input.valueAsNumber}, maximum, view.threshold);
         sync(); renderAll();
       });
       return sync;
     };
-    const syncThreshold = makeControl("Particle score threshold", "threshold", "range", maximum, "any");
-    const syncRadius = makeControl("Minimum radius (original pixels)", "minRadius", "number", 1000000, "0.1");
+    const syncThreshold = hasParticles ? makeControl("Particle score threshold", "threshold", "range", maximum, "any") : () => {};
+    const syncRadius = hasParticles ? makeControl("Minimum radius (original pixels)", "minRadius", "number", 1000000, "0.1") : () => {};
     const note = document.createElement("small");
-    note.textContent = `Display filters only. Candidate score cutoff: ${response.candidate_score_threshold ?? "unknown (older server)"}. Lowering filters cannot recover candidates rejected by the model localizer. Class-ID masks and JSON stay unfiltered.`;
+    note.textContent = "Display filters apply immediately in this browser. Downloads of raw results stay unfiltered.";
+    if (hasParticles) note.textContent += ` Candidate score cutoff: ${response.candidate_score_threshold ?? "unknown (older server)"}. Lowering filters cannot recover candidates rejected by the model localizer.`;
     panel.append(note);
     const semanticGroup = document.createElement("fieldset");
     semanticGroup.disabled = !classes.size;
@@ -354,24 +398,14 @@
       };
       semanticGroup.append(action);
     }
-    panel.append(semanticGroup);
+    if (tasks.segmentation) panel.append(semanticGroup);
     const syncControls = () => {
       syncThreshold(); syncRadius();
       checks.forEach(([name, check]) => check.checked = !view.hiddenClasses.includes(name));
     };
-    const buttons = document.createElement("div");
-    buttons.style.cssText = "display:flex; justify-content:end; gap:.5rem";
-    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel";
-    const rollback = () => { view = structuredClone(accepted); syncControls(); renderAll(); };
-    cancel.onclick = () => { rollback(); dialog.close(); };
-    dialog.addEventListener("cancel", rollback);
-    const ok = document.createElement("button"); ok.type = "button"; ok.textContent = "Ok";
-    ok.onclick = () => {
-      accepted = structuredClone(view);
-      try { localStorage.setItem(VIEW_KEY, JSON.stringify(accepted)); } catch (_) { /* storage may be disabled */ }
-      dialog.close();
-    };
-    buttons.append(cancel, ok); panel.append(buttons); dialog.append(panel);
+    const close = document.createElement("button"); close.type = "button"; close.textContent = "Close";
+    close.onclick = () => dialog.close();
+    panel.append(close); dialog.append(panel);
     (document.querySelector(".toolbar-right") || actions).append(button, dialog);
     syncControls();
 
@@ -383,64 +417,85 @@
         const file = images[2*i + modality];
         const figure = document.createElement("figure");
         figure.style.cssText = "margin:0; width:512px; max-width:100%";
-        const image = document.createElement("img");
-        image.alt = `${modality ? "HAADF" : "BF"} inference overlay`;
-        image.className = "stem-annotated";
-        image.style.cssText = "display:block; max-width:min(512px,100%); height:auto";
-        figure.append(image); row.append(figure);
-        rendered.push({image, file, result, index:2*i+modality});
+        const canvas = document.createElement("canvas");
+        canvas.setAttribute("role", "img");
+        canvas.setAttribute("aria-label", `${modality ? "HAADF" : "BF"} inference overlay`);
+        canvas.className = "stem-annotated";
+        canvas.style.cssText = "display:block; max-width:min(512px,100%); height:auto";
+        figure.append(canvas); row.append(figure);
+        rendered.push({canvas, file, result, sample:i, index:2*i+modality});
       }
       group.append(row);
-      if (result.segmentation) {
-        const maskDownload = document.createElement("a");
-        maskDownload.textContent = `Sample ${i+1}: Download class-ID mask PNG (all classes)`;
-        maskDownload.href = result.segmentation.mask_png; maskDownload.download = `${i+1}-semantic-mask.png`;
-        group.append(maskDownload);
-      }
     });
-    let revision = 0, disposed = false, entries = [], urls = [];
-    async function renderAll() {
-      const current = ++revision, snapshot = structuredClone(view);
-      imageDownload.disabled = true; group.setAttribute("aria-busy", "true");
+    let revision = 0, disposed = false, prepared = false, frame = null, downloading = false;
+    group.setAttribute("aria-busy", "true");
+    function drawAll() {
+      frame = null;
+      if (disposed || !prepared) return;
+      rendered.forEach(item => drawAnnotated(item, view));
+      updateLegend(view.hiddenClasses);
+      group.dataset.particleCount = String(results.reduce((n, r) => n + filterParticles(r, view).centers.length, 0));
+      group.dataset.revision = String(++revision);
+      group.setAttribute("aria-busy", "false");
+    }
+    function renderAll() {
+      if (disposed) return;
+      // Inputs update local state immediately; at most one draw per animation frame.
+      try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch (_) { /* private storage */ }
+      if (prepared && frame === null) {
+        group.setAttribute("aria-busy", "true");
+        frame = requestAnimationFrame(drawAll);
+      }
+    }
+    async function prepare() {
       try {
-        const next = await Promise.all(rendered.map(async item => {
-          const r = filterParticles(item.result, snapshot);
-          const blob = await renderAnnotatedPng(item.file, r.centers, r.scores, r.radii, r.segmentation, snapshot.hiddenClasses);
-          return {name: annotatedFilename(item.file, item.index), blob};
-        }));
-        if (current !== revision || disposed) return;
-        urls.forEach(url => URL.revokeObjectURL(url));
-        urls = next.map(e => URL.createObjectURL(e.blob));
-        rendered.forEach((item, i) => item.image.src = urls[i]);
-        entries = next;
-        const count = results.reduce((n, r) => n + filterParticles(r, snapshot).centers.length, 0);
-        updateLegend(snapshot.hiddenClasses);
-        group.setAttribute("aria-busy", "false");
-        group.dataset.particleCount = String(count);
-        group.dataset.revision = String(current);
-        imageDownload.disabled = !entries.length;
+        const semantics = await Promise.all(results.map(r => prepareSemantic(r.segmentation)));
+        const sources = await Promise.all(rendered.map(item => loadBrowserImage(item.file)));
+        if (disposed) return;
+        rendered.forEach((item, i) => {
+          item.source = sources[i]; item.semantic = semantics[item.sample];
+          item.canvas.width = item.source.naturalWidth; item.canvas.height = item.source.naturalHeight;
+        });
+        prepared = true;
+        drawAll();
+        imageDownload.disabled = !rendered.length;
       } catch (error) {
-        if (current !== revision || disposed) return;
+        if (disposed) return;
         group.setAttribute("aria-busy", "false");
         showToast("error", `Could not render images: ${error.message}`);
         console.error(error);
       }
     }
     imageDownload.onclick = async () => {
-      imageDownload.disabled = true;
-      try { downloadBlob(await buildZip(entries), "results-cedirnet-images.zip"); }
-      catch (error) { showToast("error", `Could not prepare images: ${error.message}`); }
-      finally { if (!disposed) imageDownload.disabled = false; }
+      if (!prepared || disposed || downloading) return;
+      downloading = true; imageDownload.disabled = true;
+      try {
+        // Flush pending inputs, then invoke every encoder synchronously. toBlob snapshots
+        // each canvas now, so later inputs cannot mix settings within the archive.
+        if (frame !== null) cancelAnimationFrame(frame);
+        drawAll();
+        const entries = await Promise.all(rendered.map(async item => ({
+          name: annotatedFilename(item.file, item.index), blob: await canvasToBlob(item.canvas),
+        })));
+        const archive = await buildZip(entries);
+        if (!disposed) downloadBlob(archive, "results-cedirnet-images.zip");
+      } catch (error) { showToast("error", `Could not prepare images: ${error.message}`); }
+      finally { downloading = false; if (!disposed) imageDownload.disabled = false; }
     };
     const form = document.getElementById("infer").closest("form");
     const dispose = () => {
-      disposed = true; revision++;
-      urls.forEach(url => URL.revokeObjectURL(url)); button.remove(); dialog.remove();
+      disposed = true;
+      if (frame !== null) cancelAnimationFrame(frame);
+      rendered.forEach(item => {
+        item.source = null; item.semantic = null;
+        item.canvas.width = item.canvas.height = 0;
+      });
+      button.remove(); dialog.remove();
       for (const event of ["infer", "reset", "softreset"]) form?.removeEventListener(event, dispose);
     };
     dialog.stemDispose = dispose;
     for (const event of ["infer", "reset", "softreset"]) form?.addEventListener(event, dispose);
-    renderAll();
+    prepare();
     return [actions, group];
   };
 </script>

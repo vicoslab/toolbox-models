@@ -228,15 +228,15 @@ class PreparedModelFilesTest(unittest.TestCase):
     def test_browser_ui_draws_radius_circles(self):
         ui = (MODEL_DIR / "ui.html").read_text()
         self.assertIn("radii", ui)
-        self.assertIn("context.arc(x, y, radius", ui)
+        self.assertIn("context.arc(centers[i][0] * canvas.width", ui)
 
     def test_browser_ui_downloads_json_and_rasterized_images(self):
         ui = (MODEL_DIR / "ui.html").read_text()
-        self.assertIn("Download JSON", ui)
-        self.assertIn("Download images (.zip)", ui)
+        self.assertIn("Download detections", ui)
+        self.assertIn("Download images", ui)
         self.assertIn("canvas.toBlob", ui)
         self.assertIn('type: "application/zip"', ui)
-        self.assertIn("renderAnnotatedPng", ui)
+        self.assertIn("drawAnnotated", ui)
 
 
 if __name__ == "__main__":

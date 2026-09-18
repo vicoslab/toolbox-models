@@ -199,12 +199,18 @@ per-class RLE brushes using actual control names.
 
 ### Inference visualization controls
 
-The native toolbar **gear** opens a live-preview dialog: particle score threshold,
+The native toolbar **gear** opens live controls: particle score threshold,
 minimum radius in **original-image pixels**, and named/color-coded segmentation
-class visibility (including All/None). **Ok** saves the view in browser storage;
-**Cancel** or Escape restores the accepted view. Controls without corresponding
-outputs are disabled. Particle-only, segmentation-only and combined results use
-the same renderer, with proportionally scaled circles on **both BF and HAADF**.
+class visibility (including All/None). Every input immediately updates the browser
+view and saves it locally; Close or Escape simply closes the panel, without rollback.
+There is no confirmation step or inference/network request on settings changes.
+Images and masks decode once per response; cached native-resolution canvases redraw
+on the next animation frame, coalescing rapid inputs. Encoding happens only on download.
+
+Controls and downloads for tasks excluded by the worker's explicit `tasks` metadata
+are omitted. An enabled particle task with zero detections still has thresholds and
+a valid empty detection download. Both BF and HAADF remain visible, with no counts or
+captions; the compact legend reflects visible segmentation classes.
 
 The browser `/infer` endpoint retains localizer candidates at score cutoff **0**,
 then applies the configured `score_threshold` as the initial display threshold.
@@ -215,10 +221,16 @@ scores above 1. Minimum radius is a client-side size filter, not a new model/NMS
 parameter. CLI prediction and Label Studio preannotations retain the configured
 server score cutoff. No unsupported localization/NMS knobs are exposed.
 
-**Download images (.zip)** exports the exact current filtered view, at original
-resolution, for both modalities of every pair. Hidden semantic classes become
-transparent without hiding particles. **Class-ID mask PNG** and **JSON (all
-candidates)** remain unfiltered, preserving every semantic class and candidate.
+The top row contains task-appropriate downloads:
+
+- **Download detections**: JSON with every returned candidate, unfiltered.
+- **Download mask**: one ZIP containing each sample's original lossless class-ID
+  PNG mask, unfiltered (class names/colors remain in the response/JSON metadata).
+- **Download images**: one ZIP of native-resolution JPEGs (quality 95%) for both
+  modalities of every pair, using the current display filters. JPEG is lossy;
+  masks are not. Filenames are sanitized and indexed to avoid collisions.
+
+Hidden semantic classes reveal the source image without hiding particles.
 The UI uses the host's TIFF decoder when available and no new CDN dependencies.
 
 ## Installation
