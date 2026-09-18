@@ -28,7 +28,11 @@ The previous free-standing-form harness missed fieldset's `auto 1fr` grid. Absol
 slotted content has no intrinsic width: plugin images decoded successfully but had
 zero client width/height. Require both natural and layout dimensions, viewport
 screenshots and independent ZIP/JPEG (lossy tolerance) and class-ID PNG (exact) pixel
-checks. Synchronize on completed animation frames, not only particle count: class
+checks. Mask ZIP checks decode every raw/color pair independently with Pillow, compare
+raw PNG bytes and all IDs exactly, and assert every color pixel against classes.json,
+including opaque class 0 and neutral ignore 255. Safe unique output names,
+filtered/unfiltered byte equality, segmentation-only downloads and on-demand-only
+encoding are covered. Synchronize on completed animation frames, not only particle count: class
 changes can retain the same count. The regression instruments requests and image
 `src`/canvas `toBlob` calls to prove that display filtering neither reruns inference
 nor decodes or encodes images. A burst of inputs must draw the latest state exactly

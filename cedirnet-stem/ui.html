@@ -58,6 +58,32 @@
     return rgba;
   }
 
+  const MASK_IGNORE_COLOR = [128, 128, 128];
+
+  function colorMaskPixels(ids, segmentation) {
+    // Independent of the translucent/filtered display overlay. ID 0 is a class.
+    const rgba = new Uint8ClampedArray(ids.length);
+    for (let p = 0; p < ids.length; p += 4) {
+      const id = ids[p];
+      const color = id === 255 ? MASK_IGNORE_COLOR : segmentation.colors[id];
+      if (!color) throw new Error(`No color configured for mask class ID ${id}`);
+      rgba[p] = color[0]; rgba[p + 1] = color[1]; rgba[p + 2] = color[2]; rgba[p + 3] = 255;
+    }
+    return rgba;
+  }
+
+  async function colorMaskBlob(cache) {
+    const canvas = document.createElement("canvas");
+    canvas.width = cache.canvas.width; canvas.height = cache.canvas.height;
+    canvas.getContext("2d").putImageData(new ImageData(
+      colorMaskPixels(cache.ids, cache.segmentation), canvas.width, canvas.height), 0, 0);
+    return new Promise((resolve, reject) => canvas.toBlob(blob => {
+      canvas.width = canvas.height = 0;
+      if (blob) resolve(blob);
+      else reject(new Error("Could not encode color mask"));
+    }, "image/png"));
+  }
+
   function enabledTasks(response) {
     // Explicit worker metadata takes precedence, including enabled-but-empty tasks.
     return response.tasks || {nanoparticles: Array.isArray(response.centers),
@@ -281,21 +307,33 @@
       {type:"application/json"}), "results-cedirnet.json");
     const maskDownload = document.createElement("button");
     maskDownload.type = "button"; maskDownload.textContent = "Download mask";
-    maskDownload.title = "ZIP: original class-ID PNG masks, all classes";
-    maskDownload.disabled = !results.some(r => r.segmentation);
+    maskDownload.title = "ZIP: original class-ID PNGs + full-color PNGs and classes.json, all classes unfiltered";
+    maskDownload.disabled = true;
     maskDownload.onclick = async () => {
+      if (!prepared || disposed) return;
       maskDownload.disabled = true;
       try {
-        const entries = results.flatMap((r, i) => r.segmentation ? [{
-          name: annotatedFilename(images[2*i], i).replace(/-cedirnet\.jpg$/, "-mask.png"),
-          blob: maskBlob(r.segmentation),
-        }] : []);
-        downloadBlob(await buildZip(entries), "results-cedirnet-masks.zip");
+        const entries = [], samples = [];
+        for (const [i, r] of results.entries()) {
+          if (!r.segmentation) continue;
+          const name = annotatedFilename(images[2*i], i).replace(/-cedirnet\.jpg$/, "-mask.png");
+          const classId = `class-id/${name}`, color = `color/${name}`;
+          entries.push({name: classId, blob: maskBlob(r.segmentation)},
+            {name: color, blob: await colorMaskBlob(rendered[2*i].semantic)});
+          samples.push({class_id: classId, color, classes: r.segmentation.classes.map((name, id) =>
+            ({id, name, rgb: r.segmentation.colors[id]}))});
+        }
+        entries.push({name: "classes.json", blob: new Blob([JSON.stringify({
+          description: "Unfiltered native-resolution masks. class-id/ preserves original IDs; color/ is an opaque visualization. Class 0 is not implicit background.",
+          ignore: {id: 255, name: "Ignore", rgb: MASK_IGNORE_COLOR}, samples,
+        }, null, 2)], {type: "application/json"})});
+        const archive = await buildZip(entries);
+        if (!disposed) downloadBlob(archive, "results-cedirnet-masks.zip");
       } catch (error) { showToast("error", `Could not prepare masks: ${error.message}`); }
       finally { if (!disposed) maskDownload.disabled = false; }
     };
     const imageDownload = document.createElement("button");
-    imageDownload.type = "button"; imageDownload.textContent = "Download images";
+    imageDownload.type = "button"; imageDownload.textContent = "Download visualizations";
     imageDownload.title = "ZIP: native-resolution JPEG images (quality 95%), current display filters";
     imageDownload.disabled = true;
     if (tasks.nanoparticles) actions.append(jsonDownload);
@@ -367,8 +405,7 @@
     const syncThreshold = hasParticles ? makeControl("Particle score threshold", "threshold", "range", maximum, "any") : () => {};
     const syncRadius = hasParticles ? makeControl("Minimum radius (original pixels)", "minRadius", "number", 1000000, "0.1") : () => {};
     const note = document.createElement("small");
-    note.textContent = "Display filters apply immediately in this browser. Downloads of raw results stay unfiltered.";
-    if (hasParticles) note.textContent += ` Candidate score cutoff: ${response.candidate_score_threshold ?? "unknown (older server)"}. Lowering filters cannot recover candidates rejected by the model localizer.`;
+    note.textContent = "Display settings do not affect downloaded detections or masks; these contain unfiltered data.";
     panel.append(note);
     const semanticGroup = document.createElement("fieldset");
     semanticGroup.disabled = !classes.size;
@@ -459,6 +496,7 @@
         prepared = true;
         drawAll();
         imageDownload.disabled = !rendered.length;
+        maskDownload.disabled = !results.some(r => r.segmentation);
       } catch (error) {
         if (disposed) return;
         group.setAttribute("aria-busy", "false");

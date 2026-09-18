@@ -9,7 +9,11 @@ HOST = Path(os.environ['TOOLBOX_HOST']) / 'apps/nexus'
 sys.path.insert(0, str(PLUGIN))
 from stem_plugin.semantic_results import encode_mask
 response = dict(centers=[[[.25,.5],[.75,.5]], [[.25,.5],[.75,.5]]], scores=[[.2,.9],[.4,1.2]], radii=[[24,40],[12,20]], candidate_score_threshold=0,display_score_threshold=.5, tasks={'nanoparticles':True,'segmentation':True})
-response['segmentation'] = [encode_mask(np.tile((np.arange(w)*3//w).astype(np.uint8), (h,1)), ['Carbon','Film','Vacuum']) for w,h in [(800,400),(400,200)]]
+response['segmentation'] = []
+for w,h in [(800,400),(400,200)]:
+    mask = np.tile((np.arange(w)*3//w).astype(np.uint8), (h,1))
+    mask[-8:, -8:] = 255  # Ignore is not a class or background.
+    response['segmentation'].append(encode_mask(mask, ['Carbon','Film','Vacuum']))
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         self.rfile.read(int(self.headers['Content-Length']))
