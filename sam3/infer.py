@@ -55,7 +55,7 @@ else:
         """Custom ML Backend model
         """
 
-        def get_results(self, masks, probs, width, height, from_name, to_name, label, extra):
+        def get_results(self, masks, probs, width, height, from_name, to_name, labels, extra):
             results = []
             total_prob = 0
             for mask, prob in zip(masks, probs):
@@ -73,9 +73,9 @@ else:
                     'original_height': height,
                     'image_rotation': 0,
                     'value': {
+                        **labels,
                         'format': 'rle',
                         'rle': rle,
-                        'labels': [label],
                     },
                     'score': float(prob),
                     'type': 'labels',
@@ -92,12 +92,7 @@ else:
         def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
             """ Returns the predicted mask for a smart bbox that has been placed."""
 
-            from_name, to_name, value = self.get_first_tag_occurence('Labels', 'Image')
-            labels = None
-            for tag_name, tag in self.parsed_label_config.items():
-                if len(tag['labels']) > 0:
-                    labels = tag['labels']
-                    break
+            from_name, to_name, value = self.get_first_tag_occurence(('BrushLabels', 'Labels'), 'Image')
 
             if not context or not (regions := context.get('regions')):
                 # if there is no context, no interaction has happened yet
@@ -150,7 +145,7 @@ else:
                 height=image_height,
                 from_name=from_name,
                 to_name=to_name,
-                label=labels[0],
+                labels=context['labels'],
                 extra=extra,
             )
 
