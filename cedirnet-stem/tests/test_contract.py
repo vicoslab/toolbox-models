@@ -61,7 +61,7 @@ class AnnotationContractTest(unittest.TestCase):
             Image.new("L", (3, 2), color=17).save(bf_path)
             Image.new("L", (3, 2), color=91).save(haadf_path)
 
-            image = self.annotations.load_stem_image(bf_path, haadf_path)
+            image = self.annotations.load_stem_image(bf_path)
             self.assertEqual(image.mode, "RGB")
             self.assertEqual(image.getpixel((1, 1)), (17, 91, 0))
 
@@ -69,8 +69,19 @@ class AnnotationContractTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             bf_path = pathlib.Path(directory) / "particle_BF.png"
             Image.new("L", (3, 2), color=17).save(bf_path)
-            with self.assertRaisesRegex(TypeError, "required positional argument"):
+            with self.assertRaisesRegex(FileNotFoundError, "HAADF"):
                 self.annotations.load_stem_image(bf_path)
+
+    def test_haadf_primary_still_composes_bf_then_haadf(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            bf_path = root / "particle_BF.png"
+            haadf_path = root / "particle_HAADF.png"
+            Image.new("L", (3, 2), color=17).save(bf_path)
+            Image.new("L", (3, 2), color=91).save(haadf_path)
+
+            image = self.annotations.load_stem_image(haadf_path)
+            self.assertEqual(image.getpixel((1, 1)), (17, 91, 0))
 
 
 class InferenceContractTest(unittest.TestCase):
@@ -180,7 +191,8 @@ class PreparedModelFilesTest(unittest.TestCase):
         self.assertTrue(model_json.exists(), "missing model.json")
         schema = json.loads(model_json.read_text())
         description = schema["properties"]["manifest"]["description"]
-        self.assertIn("[cx,cy,rx,ry]", description)
+        self.assertIn("[x, y, radius]", description)
+        self.assertIn("[x, y, radius_x, radius_y]", description)
         self.assertIn("BF", description)
         self.assertIn("HAADF", description)
 

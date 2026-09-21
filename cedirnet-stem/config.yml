@@ -18,5 +18,5 @@ config: |
       <Label value="Particle" background="rgba(20, 200, 80, 0.7)" />
     </Labels>
     <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
-    <Ellipse name="circle" toName="image"></Ellipse>
+    <Vector name="radius" toName="image" smart="true" />
   </View>

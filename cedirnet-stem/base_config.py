@@ -96,17 +96,17 @@ def get_args(width=512, height=512, batch_size=2, workers=2):
 
     args = {
         "cuda": torch.cuda.is_available(),
-        "display": True,
+        "display": False,
         "save": True,
         "n_epochs": 100,
         "save_interval": 10,
         "pretrained_model_path": None,
         "pretrained_center_model_path": None,
-        "dataset": {
+        "train_dataset": {
             "name": "generic_point_radius",
             "kwargs": {
-                "root": None,
                 "manifest": None,
+                "split": "train",
                 "fixed_bbox_size": 15,
                 "max_num_centers": MAX_NUM_CENTERS,
                 "transform": transform,
@@ -121,6 +121,7 @@ def get_args(width=512, height=512, batch_size=2, workers=2):
             "batch_size": batch_size,
             "hard_samples_size": 0,
             "workers": workers,
+            "shuffle": True,
         },
         "model": {
             "name": "fpn",
