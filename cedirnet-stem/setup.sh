@@ -23,9 +23,6 @@ fi
 if [[ ${CEDIRNET_STEM_DOWNLOAD_PARTICLES:-1} == 1 ]]; then
     curl --fail --location --retry 3 --output "$model_dir/localization_checkpoint.pth" \
         https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth
-    curl --fail --location --retry 3 --output "$model_dir/stem_checkpoint.pt" \
-        https://data.vicos.si/skokec/STEM/checkpoint.pth
-    printf '%s  %s\n' b77a30d6346309aeb64a7646d851db74d974758bf7d8e5f2cfcfd9f081637980 "$model_dir/stem_checkpoint.pt" | sha256sum -c -
 fi
 if [[ -n "${CEDIRNET_STEM_ENV:-}" ]]; then
     # Explicit local verified-environment override; does not alter that environment.

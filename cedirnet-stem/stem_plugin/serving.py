@@ -15,11 +15,14 @@ from .semantic_results import brush_results
 def load_runtime(options, device):
     tasks = task_config(options)
     path = options.get('model')
-    if not path:
-        if tasks.segmentation:
-            raise ValueError('segmentation inference requires trained semantic weights')
-        path = os.path.join(os.environ['TOOLBOX_CACHE'],'cedirnet-stem','stem_checkpoint.pt')
-    state = safe_torch_load(path,map_location=device)
+    if path:
+        state = safe_torch_load(path,map_location=device)
+    elif tasks.segmentation:
+        raise ValueError('segmentation inference requires trained semantic weights')
+    else:
+        url = "https://data.vicos.si/skokec/STEM/checkpoint.pth"
+        print(f'Loading CeDiRNet-STEM model from "{url}"')
+        state = torch.hub.load_state_dict_from_url(url,map_location=device)
     backbone = state.get('backbone',state.get('metadata',{}).get('backbone','tu-convnext_base'))
     runtime = StemRuntime(tasks,device,backbone,pretrained=False)
     if tasks.nanoparticles and options.get('localisation'):
