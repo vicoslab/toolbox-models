@@ -5,7 +5,7 @@ _ = modelargs.parse("./model.json")
 import os
 import site
 CACHE = os.environ["TOOLBOX_CACHE"]
-os.chdir(f'{CACHE}/sam')
+os.chdir(f'{CACHE}/sam3')
 
 import torch
 import numpy as np
@@ -17,7 +17,7 @@ sys.path.insert(0, ROOT_DIR)
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 
-MODEL_CHECKPOINT = f'{CACHE}/sam/sam3.pt'
+MODEL_CHECKPOINT = f'{CACHE}/sam3/sam3.pt'
 
 if torch.cuda.is_available():
     # use bfloat16 for the entire notebook
