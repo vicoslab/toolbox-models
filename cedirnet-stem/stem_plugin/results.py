@@ -52,12 +52,12 @@ def label_studio_ellipse_result(
         "original_height": int(original_height),
         "image_rotation": 0,
         "value": {
+            **label,
             "x": center_x * 100,
             "y": center_y * 100,
             "radiusX": float(radius) / original_width * 100,
             "radiusY": float(radius) / original_height * 100,
             "rotation": 0,
-            "ellipselabels": [label],
         },
         "score": float(score),
         "type": "ellipselabels",
