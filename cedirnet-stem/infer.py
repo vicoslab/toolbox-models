@@ -35,6 +35,10 @@ else:
 
     class CeDiRNetSTEM(LabelStudioMLBase):
         def predict(self,tasks,context=None,**kwargs):
+            # don't return interactive predictions
+            if context is not None:
+                return
+
             predictions = []
             for task in tasks:
                 paths = task['data'].get('images')

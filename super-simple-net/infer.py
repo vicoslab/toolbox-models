@@ -97,6 +97,9 @@ else:
             }]
 
         def predict(self, tasks: List[Dict], context: Optional[Dict] = None, **kwargs) -> ModelResponse:
+            # don't return interactive predictions
+            if context is not None:
+                return
 
             from_name, to_name, value = self.get_first_tag_occurence('Labels', 'Image')
             labels = None
