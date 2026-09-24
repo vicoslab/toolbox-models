@@ -41,15 +41,7 @@ config: |
         </Collapse>
         <Collapse open="true" bordered="true">
           <Panel value="Smart tools">
-            <Header size="5" value="Bounding box based models that return segmentations of instances similar to selected region." />
-            <RectangleLabels name="models-bbox" toName="image" smartOnly="true">
-              <Label value="GeCo2" background="rgba(20, 200, 20, 0.7)" hotkey=" "/>
-              <Label value="SAM3" background="rgba(20, 20, 200, 0.7)" hotkey=" " />
-            </RectangleLabels>
-            <Header size="5" value="Keypoint based segmentation assistance. Hold down alt (or option) for negative examples." />
-            <KeypointLabels name="models-keypoint" toName="image" smartOnly="true" dynamic="true">
-              <Label value="SAM3" background="rgba(20, 20, 200, 0.7)" hotkey=" "/>
-            </KeypointLabels>
+            @SMART_TOOLS@
           </Panel>
         </Collapse>
       </View>
