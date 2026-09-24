@@ -6,6 +6,7 @@ RUN --mount=target=/var/lib/apt/lists,type=cache,sharing=locked --mount=target=/
     apt update && apt install -y python3 python3-pip curl
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
+ENV TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;8.9;9.0+PTX"
 ENTRYPOINT ["bash", "-ic", "\
     cd /cache/geco2/Deformable-DETR/models/ops && \
     uv run python setup.py build && \
