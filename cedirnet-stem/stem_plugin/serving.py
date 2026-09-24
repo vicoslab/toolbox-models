@@ -10,6 +10,7 @@ from .runtime import StemRuntime
 from .task_options import task_config
 from .results import label_studio_ellipse_result
 from .semantic_results import brush_results
+import torch
 
 
 def load_runtime(options, device):
