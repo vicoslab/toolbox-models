@@ -20,6 +20,7 @@ def load_runtime(options, device):
     elif tasks.segmentation:
         raise ValueError('segmentation inference requires trained semantic weights')
     else:
+        import torch
         url = "https://data.vicos.si/skokec/STEM/checkpoint.pth"
         print(f'Loading CeDiRNet-STEM model from "{url}"')
         state = torch.hub.load_state_dict_from_url(url,map_location=device)
