@@ -30,10 +30,10 @@ config: |
           <Panel value="Segmentation">
             <Header size="5" value="Select a class, then paint its region." />
             <BrushLabels name="semantic" toName="image">
-              <Label value="Carbon" background="#f24949" hotkey="1" />
-              <Label value="Film" background="#49f249" hotkey="2" />
-              <Label value="Vacuum" background="#4949f2" hotkey="3" />
-              <Label value="Ignore" background="#808080" hotkey="4" hint="Use when unsure which category." />
+              <Label value="Carbon" background="#f24949" hotkey="1" category="0" />
+              <Label value="Film" background="#49f249" hotkey="2" category="1" />
+              <Label value="Vacuum" background="#4949f2" hotkey="3" category="2" />
+              <Label value="Ignore" background="#808080" hotkey="4" category="255" hint="Use when unsure which category." />
             </BrushLabels>
             <Header size="6" value="Pres ESC before selecting next class." />
             <Magicwand name="wand" toName="image" />
