@@ -6,7 +6,7 @@ import vm from "node:vm";
 const html = fs.readFileSync(new URL("../ui.html", import.meta.url), "utf8");
 const script = html.match(/<script>([\s\S]*?)<\/script>/)?.[1];
 assert.ok(script, "ui.html must contain a script");
-const helpers = script.split('document.getElementById("infer").onInference')[0];
+const helpers = script.split('document.getElementById("@ALIAS@").onInference')[0];
 vm.runInThisContext(`${helpers}\nglobalThis.__cedirnetUi = { buildZip, crc32, assertClassicZipLimit, sampleResult };`);
 const { buildZip, crc32, assertClassicZipLimit, sampleResult } = globalThis.__cedirnetUi;
 

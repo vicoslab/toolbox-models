@@ -1,7 +1,8 @@
 <!-- The host fieldset is an auto/1fr grid. Slotted results have no intrinsic
      width because infer-image puts its slot in an absolute overlay. Span both
      tracks so percentage-constrained result images cannot collapse to zero. -->
-<infer-image style="grid-column:1 / -1; display:block; width:100%; min-width:0" id="infer" name="images" multiple placeholder="Select pairs of STEM images (first BF, then HAADF)">
+<infer-image style="grid-column:1 / -1; display:block; width:100%; min-width:0" id="@ALIAS@" name="images" multiple
+  placeholder="Select pairs of STEM images (first BF, then HAADF)">
   <div id="results"></div>
 </infer-image>
 
@@ -26,18 +27,20 @@
   function normalizeView(value, maximum, defaultThreshold = .5) {
     const bounded = (v, fallback, max) => typeof v === "number" && Number.isFinite(v)
       ? Math.max(0, Math.min(max, v)) : Math.max(0, Math.min(max, fallback));
-    return {threshold: bounded(value?.threshold, defaultThreshold, maximum),
+    return {
+      threshold: bounded(value?.threshold, defaultThreshold, maximum),
       minRadius: bounded(value?.minRadius, 0, 1000000),
-      hiddenClasses: Array.isArray(value?.hiddenClasses) ? value.hiddenClasses.filter(x => typeof x === "string") : []};
+      hiddenClasses: Array.isArray(value?.hiddenClasses) ? value.hiddenClasses.filter(x => typeof x === "string") : []
+    };
   }
 
   function filterParticles(result, view) {
-    const selected = {centers: [], scores: [], radii: [], segmentation: result.segmentation};
+    const selected = { centers: [], scores: [], radii: [], segmentation: result.segmentation };
     for (let i = 0; i < result.centers.length; i++) {
       const center = result.centers[i], radius = result.radii[i], score = result.scores[i];
       if (!center?.slice(0, 2).every(Number.isFinite) || center.length < 2 ||
-          !Number.isFinite(radius) || radius <= 0 || !Number.isFinite(score) ||
-          score < view.threshold || radius < view.minRadius) continue;
+        !Number.isFinite(radius) || radius <= 0 || !Number.isFinite(score) ||
+        score < view.threshold || radius < view.minRadius) continue;
       selected.centers.push(center); selected.scores.push(score); selected.radii.push(radius);
     }
     return selected;
@@ -86,8 +89,10 @@
 
   function enabledTasks(response) {
     // Explicit worker metadata takes precedence, including enabled-but-empty tasks.
-    return response.tasks || {nanoparticles: Array.isArray(response.centers),
-      segmentation: Boolean(response.segmentation?.some(Boolean))};
+    return response.tasks || {
+      nanoparticles: Array.isArray(response.centers),
+      segmentation: Boolean(response.segmentation?.some(Boolean))
+    };
   }
 
   async function prepareSemantic(segmentation) {
@@ -95,11 +100,11 @@
     const mask = await loadDataImage(segmentation.mask_png);
     const canvas = document.createElement("canvas");
     canvas.width = mask.naturalWidth; canvas.height = mask.naturalHeight;
-    const context = canvas.getContext("2d", {willReadFrequently: true});
+    const context = canvas.getContext("2d", { willReadFrequently: true });
     context.drawImage(mask, 0, 0);
     const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
     // Decode once per sample, share the colored overlay between BF and HAADF.
-    return {canvas, context, pixels, ids: pixels.data.slice(), segmentation, key: null};
+    return { canvas, context, pixels, ids: pixels.data.slice(), segmentation, key: null };
   }
 
   function updateSemantic(cache, hiddenClasses) {
@@ -141,7 +146,7 @@
   }
 
   function drawAnnotated(item, view) {
-    const {canvas, source, semantic, result} = item;
+    const { canvas, source, semantic, result } = item;
     const context = canvas.getContext("2d");
     context.clearRect(0, 0, canvas.width, canvas.height);
     context.drawImage(source, 0, 0);
@@ -152,7 +157,7 @@
     }
     context.strokeStyle = "limegreen";
     context.lineWidth = Math.max(2, Math.round(Math.min(canvas.width, canvas.height) / 512 * 2));
-    const {centers, radii} = filterParticles(result, view);
+    const { centers, radii } = filterParticles(result, view);
     for (let i = 0; i < centers.length; i++) {
       context.beginPath();
       context.arc(centers[i][0] * canvas.width, centers[i][1] * canvas.height, radii[i], 0, 2 * Math.PI);
@@ -163,7 +168,7 @@
   function maskBlob(segmentation) {
     // Preserve the worker's original PNG bytes, not the colored display canvas.
     const binary = atob(segmentation.mask_png.split(",")[1]);
-    return new Blob([Uint8Array.from(binary, c => c.charCodeAt(0))], {type:"image/png"});
+    return new Blob([Uint8Array.from(binary, c => c.charCodeAt(0))], { type: "image/png" });
   }
 
   function crc32(bytes) {
@@ -281,18 +286,20 @@
   }
 
   function sampleResult(response, i) {
-    return { centers: response.centers?.[i] || [], scores: response.scores?.[i] || [],
-      radii: response.radii?.[i] || [], segmentation: response.segmentation?.[i] || null };
+    return {
+      centers: response.centers?.[i] || [], scores: response.scores?.[i] || [],
+      radii: response.radii?.[i] || [], segmentation: response.segmentation?.[i] || null
+    };
   }
 
-  document.getElementById("infer").onInference = function (request, response) {
+  document.getElementById("@ALIAS@").onInference = function (request, response) {
     if (response.error) throw new Error(response.error);
     const images = request.getAll("images");
     if (images.length % 2) throw new Error("Select matching BF / HAADF pairs");
     document.getElementById(VIEW_KEY)?.stemDispose?.();
     const tasks = enabledTasks(response);
     const results = images.filter((_, i) => i % 2 === 0).map((_, i) => ({
-      ...sampleResult(response, i), "image-BF": images[2*i].name, "image-HAADF": images[2*i+1].name,
+      ...sampleResult(response, i), "image-BF": images[2 * i].name, "image-HAADF": images[2 * i + 1].name,
     }));
     const group = document.createElement("div");
     group.className = "group stem-results";
@@ -304,7 +311,7 @@
     jsonDownload.type = "button"; jsonDownload.textContent = "Download detections";
     jsonDownload.title = "JSON: all returned candidates, without display filtering";
     jsonDownload.onclick = () => downloadBlob(new Blob([JSON.stringify(results, null, 2)],
-      {type:"application/json"}), "results-cedirnet.json");
+      { type: "application/json" }), "results-cedirnet.json");
     const maskDownload = document.createElement("button");
     maskDownload.type = "button"; maskDownload.textContent = "Download mask";
     maskDownload.title = "ZIP: original class-ID PNGs + full-color PNGs and classes.json, all classes unfiltered";
@@ -316,17 +323,21 @@
         const entries = [], samples = [];
         for (const [i, r] of results.entries()) {
           if (!r.segmentation) continue;
-          const name = annotatedFilename(images[2*i], i).replace(/-cedirnet\.jpg$/, "-mask.png");
+          const name = annotatedFilename(images[2 * i], i).replace(/-cedirnet\.jpg$/, "-mask.png");
           const classId = `class-id/${name}`, color = `color/${name}`;
-          entries.push({name: classId, blob: maskBlob(r.segmentation)},
-            {name: color, blob: await colorMaskBlob(rendered[2*i].semantic)});
-          samples.push({class_id: classId, color, classes: r.segmentation.classes.map((name, id) =>
-            ({id, name, rgb: r.segmentation.colors[id]}))});
+          entries.push({ name: classId, blob: maskBlob(r.segmentation) },
+            { name: color, blob: await colorMaskBlob(rendered[2 * i].semantic) });
+          samples.push({
+            class_id: classId, color, classes: r.segmentation.classes.map((name, id) =>
+              ({ id, name, rgb: r.segmentation.colors[id] }))
+          });
         }
-        entries.push({name: "classes.json", blob: new Blob([JSON.stringify({
-          description: "Unfiltered native-resolution masks. class-id/ preserves original IDs; color/ is an opaque visualization. Class 0 is not implicit background.",
-          ignore: {id: 255, name: "Ignore", rgb: MASK_IGNORE_COLOR}, samples,
-        }, null, 2)], {type: "application/json"})});
+        entries.push({
+          name: "classes.json", blob: new Blob([JSON.stringify({
+            description: "Unfiltered native-resolution masks. class-id/ preserves original IDs; color/ is an opaque visualization. Class 0 is not implicit background.",
+            ignore: { id: 255, name: "Ignore", rgb: MASK_IGNORE_COLOR }, samples,
+          }, null, 2)], { type: "application/json" })
+        });
         const archive = await buildZip(entries);
         if (!disposed) downloadBlob(archive, "results-cedirnet-masks.zip");
       } catch (error) { showToast("error", `Could not prepare masks: ${error.message}`); }
@@ -368,7 +379,7 @@
     };
     if (classes.size) group.append(classLegend);
     const hasParticles = tasks.nanoparticles;
-    const {button, dialog} = settings(VIEW_KEY);
+    const { button, dialog } = settings(VIEW_KEY);
     button.type = "button"; button.title = "STEM visualization settings";
     button.setAttribute("aria-label", button.title);
     button.disabled = !hasParticles && !classes.size;
@@ -397,13 +408,13 @@
       label.append(text, input); panel.append(label);
       const sync = () => { input.value = String(view[name]); text.textContent = `${labelText}: ${view[name].toFixed(2)}`; };
       input.addEventListener("input", () => {
-        view = normalizeView({...view, [name]: input.valueAsNumber}, maximum, view.threshold);
+        view = normalizeView({ ...view, [name]: input.valueAsNumber }, maximum, view.threshold);
         sync(); renderAll();
       });
       return sync;
     };
-    const syncThreshold = hasParticles ? makeControl("Particle score threshold", "threshold", "range", maximum, "any") : () => {};
-    const syncRadius = hasParticles ? makeControl("Minimum radius (original pixels)", "minRadius", "number", 1000000, "0.1") : () => {};
+    const syncThreshold = hasParticles ? makeControl("Particle score threshold", "threshold", "range", maximum, "any") : () => { };
+    const syncRadius = hasParticles ? makeControl("Minimum radius (original pixels)", "minRadius", "number", 1000000, "0.1") : () => { };
     const note = document.createElement("small");
     note.textContent = "Display settings do not affect downloaded detections or masks; these contain unfiltered data.";
     panel.append(note);
@@ -451,7 +462,7 @@
       const row = document.createElement("div");
       row.style.cssText = "display:flex; flex-wrap:wrap; gap:1rem";
       for (let modality = 0; modality < 2; modality++) {
-        const file = images[2*i + modality];
+        const file = images[2 * i + modality];
         const figure = document.createElement("figure");
         figure.style.cssText = "margin:0; width:512px; max-width:100%";
         const canvas = document.createElement("canvas");
@@ -460,7 +471,7 @@
         canvas.className = "stem-annotated";
         canvas.style.cssText = "display:block; max-width:min(512px,100%); height:auto";
         figure.append(canvas); row.append(figure);
-        rendered.push({canvas, file, result, sample:i, index:2*i+modality});
+        rendered.push({ canvas, file, result, sample: i, index: 2 * i + modality });
       }
       group.append(row);
     });
@@ -520,7 +531,7 @@
       } catch (error) { showToast("error", `Could not prepare images: ${error.message}`); }
       finally { downloading = false; if (!disposed) imageDownload.disabled = false; }
     };
-    const form = document.getElementById("infer").closest("form");
+    const form = document.getElementById("@ALIAS@").closest("form");
     const dispose = () => {
       disposed = true;
       if (frame !== null) cancelAnimationFrame(frame);

@@ -1,12 +1,12 @@
 <soft-reset></soft-reset>
 <infer-image name="image">
-    <infer-bbox id="infer" name="boxes">
+    <infer-bbox id="@ALIAS@" name="boxes">
         <div id="results"></div>
     </infer-bbox>
 </infer-image>
 
 <script>
-    document.getElementById("infer").onInference = function (request, response) {
+    document.getElementById("@ALIAS@").onInference = function (request, response) {
         const showDetections = document.createElement("show-detections");
         showDetections.boxes = response.boxes;
         showDetections.exemplars = JSON.parse(request.get("boxes"));

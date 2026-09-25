@@ -1,4 +1,4 @@
-<infer-image id="infer" name="images" multiple>
+<infer-image id="@ALIAS@" name="images" multiple>
     <div id="results"></div>
 </infer-image>
 <template id="template-marker">
@@ -23,7 +23,7 @@
         marker.dataset.score = score;
         return marker;
     }
-    document.getElementById("infer").onInference = function (request, response) {
+    document.getElementById("@ALIAS@").onInference = function (request, response) {
         const group = document.createElement("div");
         group.classList.add("group");
         const images = request.getAll("images");

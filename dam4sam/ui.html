@@ -1,7 +1,7 @@
 <soft-reset></soft-reset>
 <infer-video name="image">
     <input type="hidden" id="uuid" name="id">
-    <infer-bbox name="box" id="infer"></infer-bbox>
+    <infer-bbox name="box" id="@ALIAS@"></infer-bbox>
     <div id="results"></div>
 </infer-video>
 <style>
@@ -63,7 +63,7 @@
     function b64(text) {
         return `data: image/webp; base64, ${text}`
     }
-    document.getElementById("infer").onInference = (request, response) => {
+    document.getElementById("@ALIAS@").onInference = (request, response) => {
         let showDetections;
         if (toggleLive.value === "true") {
             let first = true;
