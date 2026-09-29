@@ -81,7 +81,7 @@ def _draw_detections(axis, centers, scores, angles, *, distance=30):
                 path_effects=[SimpleLineShadow(shadow_color="black", linewidth=1, offset=(0, 0), alpha=0.7), Normal()],
             )
         else:
-            axis.scatter(x, y, s=45, c="#1677ff", edgecolors="white", linewidths=1.5, alpha=0.5, zorder=3)
+            axis.scatter(x, y, s=11.25, c="#1677ff", edgecolors="white", linewidths=1.5, alpha=0.75, zorder=3)
 
 
 def plot_training_diagnostics(

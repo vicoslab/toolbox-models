@@ -105,7 +105,7 @@ test("inference callback rerenders markers immediately when threshold changes", 
     const marker = group.querySelectorAll(".cedirnet-marker")[0];
     assert.equal(marker.style.transform, "translate(-50%, -50%)");
     assert.ok(Number.parseInt(marker.style.width) >= 36);
-    assert.match(html, /<circle cx="25" cy="25" r="8" fill="#1677ff"[^>]*opacity="0\.5"/);
+    assert.match(html, /<circle cx="25" cy="25" r="4" fill="#1677ff"[^>]*opacity="0\.75"/);
     assert.match(html, /const SHOW_3DOF = false/);
     assert.match(html, /template-marker-3dof/);
 
