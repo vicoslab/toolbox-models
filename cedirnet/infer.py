@@ -23,17 +23,18 @@ DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 cmd_args = modelargs.parse("model.json")
 
-width, height = map(cmd_args.__getitem__, ["width", "height"])
+width, height, enable_3dof = map(cmd_args.__getitem__, ['width', 'height', 'orientation'])
 
 from base_config import get_args
-args = get_args(width, height)
+print('Orientation enabled?', enable_3dof)
+args = get_args(width, height, enable_3dof=enable_3dof)
 
 args['checkpoint_path'] = cmd_args["model"]
 if path := cmd_args.get("localization_model", ""):
     args['center_checkpoint_path'] = path
 
 model = get_model(args['model']['name'], args['model']['kwargs'])
-model.init_output(args['loss_opts']['num_vector_fields'])
+model.init_output(args['num_vector_fields'])
 model = torch.nn.DataParallel(model).to(DEVICE)
 model.eval()
 
@@ -124,32 +125,48 @@ else:
     class CeDiRNet(LabelStudioMLBase):
         def get_results(self, centers, scores, angles, width, height, from_name, to_name, label, dist = 5):
             results = []
+            make_result = lambda extra: {
+                'id': str(uuid4())[:6],
+                'from_name': from_name,
+                'to_name': to_name,
+                'original_width': width,
+                'original_height': height,
+                'image_rotation': 0,
+                'readonly': False,
+                **extra
+            }
+            if angles is None:
+                for (x, y, _), score in zip(centers, scores):
+                    if score < 0.5:
+                        continue
+                    results.append(make_result({
+                        'value': {
+                            'x': x,
+                            'y': y,
+                            'labels': [label],
+                        },
+                        'score': float(score),
+                        'type': 'keypoint',
+                    }))
+            else:
+                for (x, y, _), score, angle in zip(centers, scores, np.deg2rad(angles)):
+                    if score < 0.5:
+                        continue
+                    x, y = x * 100, y * 100
+                    dx, dy = np.cos(angle)*dist, np.sin(angle)*dist
 
-            for (x, y, _), score, angle in zip(centers, scores, np.deg2rad(angles)):
-                if score < 0.5:
-                    continue
-                x, y = x * 100, y * 100
-                dx, dy = np.cos(angle)*dist, np.sin(angle)*dist
-
-                results.append({
-                    'id': str(uuid4())[:6],
-                    'from_name': from_name,
-                    'to_name': to_name,
-                    'original_width': width,
-                    'original_height': height,
-                    'image_rotation': 0,
-                    'value': {
-                        'closed': False,
-                        'vertices': [
-                            { 'x': x, 'y': y, 'id': str(uuid4())[:21]},
-                            { 'x': x+dx, 'y': y+dy, 'id': str(uuid4())[:21]},
-                        ],
-                        'labels': [label],
-                    },
-                    'score': float(score),
-                    'type': 'labels',
-                    'readonly': False
-                })
+                    results.append(make_result({
+                        'value': {
+                            'closed': False,
+                            'vertices': [
+                                { 'x': x, 'y': y, 'id': str(uuid4())[:21]},
+                                { 'x': x+dx, 'y': y+dy, 'id': str(uuid4())[:21]},
+                            ],
+                            'labels': [label],
+                        },
+                        'score': float(score),
+                        'type': 'vector',
+                    }))
 
             return {
                 'result': results,
@@ -177,7 +194,7 @@ else:
                 predictions.append(self.get_results(
                     centers=centers,
                     scores=scores,
-                    angles=angles,
+                    angles=angles if enable_3dof else None,
                     width=w,
                     height=h,
                     from_name=from_name,
@@ -196,8 +213,9 @@ else:
         images = list(map(load, request.files.getlist('images')))
         centers, scores, angles = predict(transform(images))
 
+        angles = { 'angles': angles } if enable_3dof else { }
         return {
             'centers': centers,
             'scores': scores,
-            'angles': angles,
+            **angles,
         }

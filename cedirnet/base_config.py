@@ -5,7 +5,9 @@ import torch
 from utils import transforms as my_transforms
 from torchvision.transforms import InterpolationMode
 
-def get_args(width, height, enable_6dof=False, enable_symmetries=False, use_depth=False):
+def get_args(width, height, enable_6dof=False, enable_3dof=None, enable_symmetries=False, use_depth=False):
+	if enable_3dof is None:
+		enable_3dof = enable_6dof
 	num_fields = 3 + (6 if enable_6dof else 2)
 	args = dict(
 
@@ -24,6 +26,7 @@ def get_args(width, height, enable_6dof=False, enable_symmetries=False, use_dept
 		train_dataset = {
 			'name': 'screw',
 			'kwargs': {
+				'check_consistency': False,
 				'normalize': False,
 				'type': 'train_pbr',
 				'scene_id': '000000',
@@ -195,10 +198,32 @@ def get_args(width, height, enable_6dof=False, enable_symmetries=False, use_dept
 			lr=0,#1e-4,
 			weight_decay=0,
 		),
+		num_vector_fields=num_fields,
+		orientation=enable_3dof,
+		# loss_w={
+		# 	'w_inst': 1,
+		# 	'w_var': 1,
+		# 	'w_seed': 1,
+		# 	'w_cls': 1,
+		# 	'w_r': 1,
+		# 	'w_cos': 1,
+		# 	'w_sin': 1,
+		# 	'w_magnitude': 1,
+		# 	'w_cent': 0.1,
+		# 	'w_orientation': 4,
+		# },
+		loss_w={
+			'w_r': 1,
+			'w_cos': 1,
+			'w_sin': 1,
+			'w_cent': 0.1,
+			'w_orientation': 1,
+		},
 
-		# loss options
-		loss_type='OrientationLoss',
-		loss_opts={
+	)
+	if enable_3dof:
+		args['loss_type'] = 'OrientationLoss'
+		args['loss_opts'] = {
 			'num_vector_fields': num_fields,
 			'foreground_weight': 1,  # 1000,
 			# Adding loss at bg pixels for center predictions
@@ -262,28 +287,17 @@ def get_args(width, height, enable_6dof=False, enable_symmetries=False, use_dept
 				enable_6dof=enable_6dof,
 				symmetries=[6,0,0] if enable_6dof and enable_symmetries else None,
 			)
-	},
-		# loss_w={
-		# 	'w_inst': 1,
-		# 	'w_var': 1,
-		# 	'w_seed': 1,
-		# 	'w_cls': 1,
-		# 	'w_r': 1,
-		# 	'w_cos': 1,
-		# 	'w_sin': 1,
-		# 	'w_magnitude': 1,
-		# 	'w_cent': 0.1,
-		# 	'w_orientation': 4,
-		# },
-		loss_w={
-			'w_r': 1,
-			'w_cos': 1,
-			'w_sin': 1,
-			'w_cent': 0.1,
-			'w_orientation': 1,
-		},
+		}
+	else:
+		args['loss_type'] = 'CenterDirectionLoss'
+		args['loss_opts'] = {
+			'regression_loss': 'l1',
 
-	)
+			'enable_localization_loss':False,
+			'localization_loss':'l1',
+
+			'enable_direction_loss': True,
+		}
 
 	# Original scheduler used by SpatialEmbedding method
 	args['lambda_scheduler_fn']=lambda _args: (lambda epoch: pow((1-((epoch)/_args['n_epochs'])), 0.9))

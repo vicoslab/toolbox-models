@@ -10,19 +10,24 @@ def plot_results(image, centers, scores, angles, dist=30):
     ax.axis('off')
     fig.tight_layout()
     # ax.scatter(*zip(*centers[:,:2]), c='lime', marker='+')
-    for (x, y, _), score, angle in zip(centers, scores, np.deg2rad(angles)):
-        dx, dy = np.cos(angle)*dist, np.sin(angle)*dist
-        ax.annotate('', xytext=(x, y), xy=(x+dx, y+dy), arrowprops=dict(color='lime', arrowstyle='->'))
-        ax.annotate(f'{score:.2f}', xy=(x-dx/4, y-dy/4), size='xx-small', ha='center', va='center', c='lime', path_effects=[
-            SimpleLineShadow(shadow_color="black", linewidth=1, offset=(0,0), alpha=0.7),
-            Normal()
-        ])
+    if angles is None:
+        ax.scatter(*zip(*centers[:,:2]), c='lime', marker='+')
+        for (x, y, _), score in zip(centers, scores):
+            ax.annotate(f'{score:.2f}', xy=(x, y + 10), size='xx-small', ha='center', va='center', c='lime')
+    else:
+        for (x, y, _), score, angle in zip(centers, scores, np.deg2rad(angles)):
+            dx, dy = np.cos(angle)*dist, np.sin(angle)*dist
+            ax.annotate('', xytext=(x, y), xy=(x+dx, y+dy), arrowprops=dict(color='lime', arrowstyle='->'))
+            ax.annotate(f'{score:.2f}', xy=(x-dx/4, y-dy/4), size='xx-small', ha='center', va='center', c='lime', path_effects=[
+                SimpleLineShadow(shadow_color="black", linewidth=1, offset=(0,0), alpha=0.7),
+                Normal()
+            ])
     return fig, ax
 
 # center model likely supports 6dof so we may need to load only a subset of weights
 def load_center_model(args, state, device):
     center_model = get_center_model(args['center_model']['name'], args['center_model']['kwargs'], is_learnable=True)
-    center_model.init_output(args['loss_opts']['num_vector_fields'])
+    center_model.init_output(args['num_vector_fields'])
     center_model = torch.nn.DataParallel(center_model.to(device), device_ids=[0], dim=0)
 
     if state is None:

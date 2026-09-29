@@ -9,6 +9,7 @@ import json
 import shutil
 import tempfile
 from collections import OrderedDict
+from urllib.parse import urlparse
 
 import numpy as np
 import pandas as pd
@@ -76,14 +77,14 @@ class Trainer:
                                                     collate_fn=variable_len_collate)
 
         self.model = get_model(args['model']['name'], args['model']['kwargs'])
-        self.model.init_output(args['loss_opts']['num_vector_fields'])
+        self.model.init_output(args['num_vector_fields'])
 
         self.center_model = get_center_model(args['center_model']['name'], args['center_model']['kwargs'], is_learnable=args['center_model'].get('use_learnable_center_estimation', True))
         # so we can use it as center estimator with orientation even though it isn't
         self.center_model.enable_6dof = args.get('enable_6dof')
         self.center_model.use_orientation_confidence_score = args.get('use_orientation_confidence_score')
 
-        self.center_model.init_output(args['loss_opts']['num_vector_fields'])
+        self.center_model.init_output(args['num_vector_fields'])
 
         self.criterion = get_criterion(args.get('loss_type'), args.get('loss_opts'), self.model, self.center_model)
 
@@ -151,7 +152,11 @@ class Trainer:
         
         if center_model_path := args.get('pretrained_center_model_path'):
             print('Loading pre-trained center model from {}'.format(center_model_path))
-            state = torch.load(center_model_path, weights_only=False)
+            result = urlparse(x)
+            if all([result.scheme, result.netloc]):
+                state = torch.hub.load_state_dict_from_url(url, weights_only=False)
+            else:
+                state = torch.load(center_model_path, weights_only=False)
 
             INPUT_WEIGHTS_KEY = 'module.instance_center_estimator.conv_start.0.weight'
             if (checkpoint_input_weights := state['center_model_state_dict'].get(INPUT_WEIGHTS_KEY)) is not None:
@@ -366,7 +371,7 @@ class Trainer:
                             valid = centers[:, 0] == 1
                             scores = centers[valid, -1]
 
-                            fig, _ = plot_results(im.cpu().numpy().transpose((1,2,0)), centers[valid, 1:-1], scores, angles[valid])
+                            fig, _ = plot_results(im.cpu().numpy().transpose((1,2,0)), centers[valid, 1:-1], scores, angles[valid] if args['orientation'] else None)
                             mlflow.log_figure(fig, name)
                             plt.close(fig)
 
@@ -398,7 +403,7 @@ if __name__ == '__main__':
     cmd_args = modelargs.parse('./model.json')
 
     from base_config import get_args
-    args = get_args(cmd_args['width'], cmd_args['height'])
+    args = get_args(cmd_args['width'], cmd_args['height'], enable_3dof=cmd_args['orientation'])
 
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']

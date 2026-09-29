@@ -23,6 +23,7 @@
         "localisation": {
             "title": "Localisation weights",
             "description": "Path to localisation model checkpoint.",
+            "default": "https://box.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth",
             "type": "string"
         },
         "save_interval": {
@@ -30,6 +31,12 @@
             "description": "Epoch count between checkpoints.",
             "type": "integer",
             "default": 4
+        },
+        "orientation": {
+            "title": "Enable orientations",
+            "description": "Whether to use orientations during training/inference.",
+            "type": "boolean",
+            "default": false
         },
         "display_interval": {
             "title": "Visualisation interval",

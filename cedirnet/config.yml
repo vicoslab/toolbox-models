@@ -1,18 +1,37 @@
-title: Orientation Detection
+title: Point Detection
 type: community
-group: Orientation Detection
+group: Point Detection
 image:
 details: |
-  <h1>Annotate object position and orientation</h1>
+  <h1>Annotate object position (and optionally orientation)</h1>
   <dl>
     <dt>Industry Applications</dt>
     <dt>Material sciences</dt>
   </dl>
 config: |
-  <View>
-    <Labels name="labels" toName="image">
-        <Label value="Object" background="rgba(20, 20, 200, 0.7)" />
-    </Labels>
-    <Image name="image" value="$image" zoom="true" />
-    <Vector name="vector" toName="image" smart="true" />
+  <View className="stem-annotation">
+    <Style>
+      .stem-annotation h4 {font-size:13px;line-height:18px;font-weight:normal;margin:6px 0 !important;}
+      .ant-collapse { width: 100%; }
+    </Style>
+    <View style="display: grid; grid-template-columns: 1fr minmax(0, 256px); gap: 16px;">
+      <Image name="image" value="$image" zoom="true" gallery="true" shared="true" />
+      <View style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 0 0 380px;">
+        <Collapse open="true" bordered="true">
+          <Panel value="Particle instances">
+            <Header size="5" value="Select object class, then place keypoints (for point only annotation) or line segments (for center + direction annotations)." />
+            <Labels name="labels" toName="image" strokeWidth="2">
+              <Label value="Object" background="rgba(20, 20, 200, 0.5)" hotkey="o" />
+            </Labels>
+            <KeyPoint name="keypoint" toName="image" />
+            <Vector name="vector" toName="image" />
+          </Panel>
+        </Collapse>
+        <Collapse open="true" bordered="true">
+          <Panel value="Smart tools">
+            @SMART_TOOLS@
+          </Panel>
+        </Collapse>
+      </View>
+    </View>
   </View>
