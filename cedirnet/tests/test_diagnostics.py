@@ -1,0 +1,211 @@
+import ast
+import importlib.util
+import pathlib
+import tempfile
+import unittest
+
+import matplotlib
+matplotlib.use("Agg")
+import numpy as np
+
+
+MODEL_DIR = pathlib.Path(__file__).resolve().parents[1]
+
+
+def load_module():
+    path = MODEL_DIR / "diagnostics.py"
+    spec = importlib.util.spec_from_file_location("cedirnet_diagnostics", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load diagnostics.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def load_localization_module():
+    path = MODEL_DIR / "localization_checkpoint.py"
+    spec = importlib.util.spec_from_file_location("cedirnet_localization_checkpoint", path)
+    if spec is None or spec.loader is None:
+        raise AssertionError("cannot load localization_checkpoint.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class DiagnosticMapsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.module = load_module()
+
+    def test_center_direction_map_uses_atan2_sin_cos(self):
+        output = np.zeros((5, 2, 2), dtype=np.float32)
+        output[0] = [[0, 1], [0, -1]]
+        output[1] = [[1, 0], [-1, 0]]
+        actual = self.module.center_direction_angle_map(output)
+        expected = np.array([[0, np.pi / 2], [np.pi, -np.pi / 2]])
+        np.testing.assert_allclose(actual, expected, atol=1e-6)
+
+    def test_localization_probability_is_clipped_to_unit_interval(self):
+        response = np.array([[-2.0, 0.25], [0.8, 3.0]])
+        actual = self.module.localization_probability_map(response)
+        np.testing.assert_allclose(actual, [[0.0, 0.25], [0.8, 1.0]])
+
+    def test_artifact_path_is_nested_and_sanitized(self):
+        actual = self.module.training_artifact_path(3, "../board/tile.jpg", "training")
+        self.assertEqual(actual, "visualizations/epoch_0004/training/board_tile-diagnostics.png")
+
+    def test_validation_artifact_path_uses_separate_subfolder(self):
+        actual = self.module.training_artifact_path(3, "../board/tile.jpg", "validation")
+        self.assertEqual(actual, "visualizations/epoch_0004/validation/board_tile-diagnostics.png")
+
+    def test_artifact_path_rejects_unknown_subset(self):
+        with self.assertRaisesRegex(ValueError, "subset"):
+            self.module.training_artifact_path(3, "tile.jpg", "testing")
+
+    def test_diagnostic_figure_contains_four_named_panels_and_jet_direction_map(self):
+        image = np.zeros((16, 24, 3), dtype=np.uint8)
+        output = np.zeros((5, 16, 24), dtype=np.float32)
+        heatmap = np.full((16, 24), 0.5, dtype=np.float32)
+        fig = self.module.plot_training_diagnostics(
+            image=image,
+            centers=np.array([[8, 6, 1]], dtype=np.float32),
+            scores=np.array([0.9], dtype=np.float32),
+            angles=np.array([0.0], dtype=np.float32),
+            direction_output=output,
+            localization_response=heatmap,
+            ground_truth_centers=np.array([[5, 4]], dtype=np.float32),
+        )
+        titles = [axis.get_title() for axis in fig.axes]
+        self.assertIn("Input + ground truth", titles)
+        self.assertIn("Final detections", titles)
+        self.assertIn("Center-direction angle", titles)
+        self.assertIn("Localization probability", titles)
+        direction_axis = next(axis for axis in fig.axes if axis.get_title() == "Center-direction angle")
+        self.assertEqual(direction_axis.images[0].get_cmap().name, "jet")
+        detections_axis = next(axis for axis in fig.axes if axis.get_title() == "Final detections")
+        self.assertEqual(len(detections_axis.collections), 1)
+        marker = detections_axis.collections[0]
+        np.testing.assert_allclose(marker.get_offsets(), [[8, 6]])
+        np.testing.assert_allclose(marker.get_facecolors()[0][:3], [22 / 255, 119 / 255, 1])
+        self.assertEqual(marker.get_sizes().tolist(), [180])
+        self.assertEqual(len(detections_axis.texts), 0)
+        with tempfile.TemporaryDirectory() as directory:
+            target = pathlib.Path(directory) / "diagnostics.png"
+            fig.savefig(target)
+            self.assertGreater(target.stat().st_size, 0)
+
+    def test_cli_inference_result_is_a_blue_point_without_orientation(self):
+        from matplotlib import pyplot as plt
+
+        source = (MODEL_DIR / "extras.py").read_text(encoding="utf-8")
+        plot_function = next(
+            node for node in ast.parse(source).body
+            if isinstance(node, ast.FunctionDef) and node.name == "plot_results"
+        )
+        namespace = {"plt": plt, "np": np}
+        exec(compile(ast.Module(body=[plot_function], type_ignores=[]), source, "exec"), namespace)
+        fig, axis = namespace["plot_results"](
+            np.zeros((20, 20, 3), dtype=np.uint8),
+            [(7, 8, 1)], [0.9], [90],
+        )
+        try:
+            self.assertEqual(len(axis.collections), 1)
+            np.testing.assert_allclose(axis.collections[0].get_offsets(), [[7, 8]])
+            np.testing.assert_allclose(axis.collections[0].get_facecolors()[0][:3], [22 / 255, 119 / 255, 1])
+            self.assertEqual(len(axis.texts), 0)
+        finally:
+            plt.close(fig)
+
+
+class PreparedModelContractTest(unittest.TestCase):
+    def test_missing_default_checkpoint_is_downloaded_and_verified_at_runtime(self):
+        helper = load_localization_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "source.pth"
+            source.write_bytes(b"verified checkpoint")
+            expected = __import__("hashlib").sha256(source.read_bytes()).hexdigest()
+            destination = root / "cache" / "localization_checkpoint.pth"
+
+            actual = helper.ensure_localization_checkpoint(
+                destination, url=source.as_uri(), expected_sha256=expected
+            )
+
+            self.assertEqual(actual, destination)
+            self.assertEqual(destination.read_bytes(), source.read_bytes())
+            self.assertEqual(list(destination.parent.glob("*.part")), [])
+
+    def test_valid_cached_checkpoint_does_not_require_network(self):
+        helper = load_localization_module()
+        with tempfile.TemporaryDirectory() as directory:
+            destination = pathlib.Path(directory) / "localization_checkpoint.pth"
+            destination.write_bytes(b"cached checkpoint")
+            expected = __import__("hashlib").sha256(destination.read_bytes()).hexdigest()
+            actual = helper.ensure_localization_checkpoint(
+                destination, url="file:///does-not-exist", expected_sha256=expected
+            )
+            self.assertEqual(actual, destination)
+
+    def test_bad_download_is_rejected_without_publishing_final_file(self):
+        helper = load_localization_module()
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            source = root / "source.pth"
+            source.write_bytes(b"wrong checkpoint")
+            destination = root / "cache" / "localization_checkpoint.pth"
+            with self.assertRaisesRegex(ValueError, "SHA-256"):
+                helper.ensure_localization_checkpoint(
+                    destination, url=source.as_uri(), expected_sha256="0" * 64
+                )
+            self.assertFalse(destination.exists())
+            self.assertEqual(list(destination.parent.glob("*.part")), [])
+
+    def test_setup_downloads_default_localization_checkpoint(self):
+        setup = (MODEL_DIR / "setup.sh").read_text(encoding="utf-8")
+        self.assertIn("localization_checkpoint.pth", setup)
+        self.assertIn("https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth", setup)
+        self.assertIn("cffcfde184a22c03a67ecc741f3943d0325d4aabe812cb1787796f236403df84", setup)
+        self.assertIn("sha256sum --check --status", setup)
+        self.assertIn("localization_checkpoint.pth.part", setup)
+        self.assertIn("mv --", setup)
+        self.assertIn("trap", setup)
+
+    def test_training_uses_default_localization_checkpoint_when_not_provided(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("default_localisation_checkpoint", train)
+        self.assertIn("cmd_args.get('localisation') or default_localisation_checkpoint", train)
+        self.assertIn("ensure_localization_checkpoint(default_localisation_checkpoint)", train)
+
+    def test_inference_uses_default_localization_checkpoint_when_not_provided(self):
+        infer = (MODEL_DIR / "infer.py").read_text(encoding="utf-8")
+        self.assertIn("default_localisation_checkpoint", infer)
+        self.assertIn("cmd_args.get(\"localisation\") or default_localisation_checkpoint", infer)
+        self.assertIn("ensure_localization_checkpoint(default_localisation_checkpoint)", infer)
+
+    def test_localization_option_is_a_checkpoint_file_and_optional(self):
+        schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))
+        option = schema["properties"]["localisation"]
+        self.assertEqual(option["format"], "file:localization_checkpoint.pth")
+        self.assertNotIn("localisation", schema.get("required", []))
+
+    def test_training_logs_nested_diagnostics_and_limits_sample_count(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("training_artifact_path", train)
+        self.assertIn("visualization_samples", train)
+        self.assertIn("visualized >=", train)
+
+    def test_training_visualizes_train_and_validation_loaders_separately(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn("self.validation_dataset_it", train)
+        self.assertIn("validation_kwargs['split'] = 'test'", train)
+        self.assertIn("self.visualize_training_samples(epoch)", train)
+        self.assertIn("self.validate(epoch)", train)
+
+    def test_checkpoints_are_stored_under_checkpoint_subfolder(self):
+        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
+        self.assertIn('"checkpoints", "checkpoint.pth"', train)
+        self.assertIn("artifacts/checkpoints/checkpoint.pth", train)
+
+
+if __name__ == "__main__":
+    unittest.main()

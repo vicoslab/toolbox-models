@@ -22,8 +22,8 @@
         },
         "localisation": {
             "title": "Localisation weights",
-            "description": "Path to localisation model checkpoint.",
-            "default": "https://box.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth",
+            "description": "Optional path to localisation model checkpoint. If omitted, the checkpoint downloaded during model installation is used.",
+            "format": "file:localization_checkpoint.pth",
             "type": "string"
         },
         "save_interval": {
@@ -39,11 +39,28 @@
             "default": false
         },
         "display_interval": {
-            "title": "Visualisation interval",
-            "description": "Epoch count between visualisations.",
+            "title": "Validation interval",
+            "description": "Epoch count between full validation/test evaluation passes and diagnostic visualisations.",
             "type": "integer",
-            "default": 4
+            "default": 4,
+            "minimum": 1
         },
+        "visualization_samples": {
+            "title": "Training samples to visualise",
+            "description": "Maximum number of training samples saved at each validation step. Every validation/test image is always visualised.",
+            "type": "integer",
+            "default": 4,
+            "minimum": 1,
+            "maximum": 16
+        },
+        "validation_score_threshold": {
+            "title": "Validation score threshold",
+            "description": "Minimum center confidence used to calculate validation point and orientation metrics.",
+            "type": "number",
+            "default": 0.5,
+            "minimum": 0
+        },
+
         "width": {
             "title": "Image width",
             "description": "Width to transform image to (should be divisible by 32).",

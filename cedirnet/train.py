@@ -10,6 +10,7 @@ import shutil
 import tempfile
 from collections import OrderedDict
 from urllib.parse import urlparse
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -31,7 +32,30 @@ from criterions.loss_weighting.weight_methods import get_weight_method
 import modelargs
 import mlflow
 from mlflow.entities import RunStatus
-from extras import plot_results, load_center_model
+from diagnostics import plot_training_diagnostics, training_artifact_path
+from detection_threshold import center_detection_threshold
+from extras import load_center_model
+from localization_checkpoint import ensure_localization_checkpoint
+from scheduling import should_validate
+from validation_metrics import POINT_MATCH_DISTANCE_PX, ValidationMetrics, extract_ground_truth
+
+
+def log_figure_artifact(fig, artifact_file):
+    """Write directly to a local MLflow artifact store, or use its API."""
+    run = mlflow.active_run()
+    artifacts = os.getenv("MLFLOW_ARTIFACTS_DESTINATION")
+    if artifacts and run:
+        destination = (
+            Path(artifacts)
+            / run.info.experiment_id
+            / run.info.run_id
+            / "artifacts"
+            / artifact_file
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(destination)
+    else:
+        mlflow.log_figure(fig, artifact_file=artifact_file)
 
 class Trainer:
     def __init__(self, args):
@@ -76,6 +100,47 @@ class Trainer:
                                                     num_workers=dataset_workers, pin_memory=True if args['cuda'] else False,
                                                     collate_fn=variable_len_collate)
 
+        visualization_kwargs = dict(args['train_dataset']['kwargs'])
+        validation_transform = visualization_kwargs.get('transform')
+        validation_transforms = getattr(validation_transform, 'transforms', None)
+        if validation_transforms is not None:
+            deterministic = [
+                transform for transform in validation_transforms
+                if type(transform).__name__ in {'ToTensor', 'Resize', 'Normalize'}
+            ]
+            visualization_kwargs['transform'] = my_transforms.Compose(deterministic)
+
+        training_visualization_kwargs = dict(visualization_kwargs)
+        training_visualization_kwargs['split'] = 'train'
+        training_visualization_dataset, _ = get_centerdir_dataset(
+            '', training_visualization_kwargs, args['train_dataset'].get('centerdir_gt_opts'),
+            centerdir_groundtruth_op=self.centerdir_groundtruth_op,
+        )
+        self.training_visualization_dataset_it = torch.utils.data.DataLoader(
+            training_visualization_dataset,
+            batch_size=self.dataset_batch,
+            shuffle=False,
+            drop_last=False,
+            num_workers=0,
+            pin_memory=False,
+            collate_fn=variable_len_collate,
+        )
+
+        validation_kwargs = dict(visualization_kwargs)
+        validation_kwargs['split'] = 'test'
+        validation_dataset, _ = get_centerdir_dataset(
+            '', validation_kwargs, args['train_dataset'].get('centerdir_gt_opts'),
+            centerdir_groundtruth_op=self.centerdir_groundtruth_op,
+        )
+        self.validation_dataset_it = torch.utils.data.DataLoader(
+            validation_dataset,
+            batch_size=self.dataset_batch,
+            shuffle=False,
+            drop_last=False,
+            num_workers=0,
+            pin_memory=False,
+            collate_fn=variable_len_collate,
+        ) if len(validation_dataset) > 0 else None
         self.model = get_model(args['model']['name'], args['model']['kwargs'])
         self.model.init_output(args['num_vector_fields'])
 
@@ -152,9 +217,9 @@ class Trainer:
         
         if center_model_path := args.get('pretrained_center_model_path'):
             print('Loading pre-trained center model from {}'.format(center_model_path))
-            result = urlparse(x)
+            result = urlparse(center_model_path)
             if all([result.scheme, result.netloc]):
-                state = torch.hub.load_state_dict_from_url(url, weights_only=False)
+                state = torch.hub.load_state_dict_from_url(center_model_path, weights_only=False)
             else:
                 state = torch.load(center_model_path, weights_only=False)
 
@@ -298,7 +363,7 @@ class Trainer:
             iter+=1
 
         all_samples_total_loss = {k:v['loss'] for k,v in all_samples_metrics.items()}
-        mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), epoch)
+        mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), step=epoch + 1)
 
         return np.array(list(all_samples_total_loss.values())).mean() * self.dataset_batch
 
@@ -350,6 +415,137 @@ class Trainer:
 
         return stored_results
 
+    def visualize_sample(self, epoch, subset, name, image, centers, angles,
+                         direction_map, localization_response, ground_truth_centers,
+                         detection_score_threshold=None):
+        valid = centers[:, 0] == 1
+        if detection_score_threshold is not None:
+            valid = np.logical_and(valid, centers[:, -1] >= detection_score_threshold)
+        scores = centers[valid, -1]
+        fig = plot_training_diagnostics(
+            image=image,
+            centers=centers[valid, 1:-1],
+            scores=scores,
+            angles=angles[valid],
+            direction_output=direction_map,
+            localization_response=localization_response,
+            ground_truth_centers=ground_truth_centers,
+        )
+        try:
+            log_figure_artifact(fig, training_artifact_path(epoch, name, subset))
+        finally:
+            plt.close(fig)
+
+    def visualize_samples(self, loader, epoch, subset, limit=None,
+                          detection_score_threshold=None):
+        if loader is None:
+            return
+
+        total = len(loader.dataset) if limit is None else min(limit, len(loader.dataset))
+        visualized = 0
+        progress = tqdm(total=total, desc='visualise', dynamic_ncols=True)
+        try:
+            for sample in loader:
+                center_output = self.center_model(self.model(sample['image']), **sample)
+                direction_maps, center_pred, center_heatmap, angle_pred = map(
+                    lambda key: center_output[key].detach().cpu().numpy(),
+                    ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
+                )
+                for values in zip(
+                        sample['name'], sample['image'], center_pred, angle_pred,
+                        direction_maps, center_heatmap, sample['center']):
+                    self.visualize_sample(
+                        epoch, subset, *values,
+                        detection_score_threshold=detection_score_threshold,
+                    )
+                    visualized += 1
+                    progress.update()
+                    if visualized >= total:
+                        break
+                if visualized >= total:
+                    break
+        finally:
+            progress.close()
+
+    def visualize_training_samples(self, epoch):
+        with torch.no_grad():
+            self.visualize_samples(
+                self.training_visualization_dataset_it,
+                epoch,
+                'training',
+                limit=self.args['visualization_samples'],
+            )
+
+    def validate(self, epoch):
+        if self.validation_dataset_it is None:
+            return None
+
+        self.model.eval()
+        self.center_model.eval()
+        center_evaluator = CenterGlobalMinimizationEval(tau_thr=POINT_MATCH_DISTANCE_PX)
+        metrics = ValidationMetrics(
+            score_threshold=self.args['validation_score_threshold'],
+            match_centers=center_evaluator._assign_detections_to_groundtruth,
+        )
+        with tqdm(
+                total=len(self.validation_dataset_it.dataset),
+                desc='eval',
+                dynamic_ncols=True,
+        ) as progress, center_detection_threshold(
+                self.center_model, self.args['validation_score_threshold']), torch.no_grad():
+            for sample in self.validation_dataset_it:
+                center_output = self.center_model(self.model(sample['image']), **sample)
+                direction_maps, center_pred, center_heatmap, angle_pred = map(
+                    lambda key: center_output[key].detach().cpu().numpy(),
+                    ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
+                )
+                orientation_maps = sample['orientation'].detach().cpu().numpy()
+                ground_truth_batch = sample['center'].detach().cpu().numpy()
+
+                for name, image, centers, angles, direction_map, heatmap, ground_truth, orientation_map in zip(
+                        sample['name'], sample['image'], center_pred, angle_pred,
+                        direction_maps, center_heatmap, ground_truth_batch, orientation_maps):
+                    valid = centers[:, 0] == 1
+                    predicted_centers = centers[valid, 1:3]
+                    predicted_scores = centers[valid, -1]
+                    predicted_angles = angles[valid]
+                    ground_truth_centers, ground_truth_angles = extract_ground_truth(
+                        ground_truth, orientation_map
+                    )
+                    metrics.update(
+                        predicted_centers=predicted_centers,
+                        predicted_scores=predicted_scores,
+                        predicted_angles_deg=predicted_angles,
+                        ground_truth_centers=ground_truth_centers,
+                        ground_truth_angles_deg=ground_truth_angles,
+                    )
+                    self.visualize_sample(
+                        epoch=epoch,
+                        subset='validation',
+                        name=name,
+                        image=image,
+                        centers=centers,
+                        angles=angles,
+                        direction_map=direction_map,
+                        localization_response=heatmap,
+                        ground_truth_centers=ground_truth,
+                        detection_score_threshold=self.args['validation_score_threshold'],
+                    )
+                    progress.update()
+
+        validation_metrics = {
+            f"validation/{name}": value for name, value in metrics.compute().items()
+        }
+        mlflow.log_metrics(validation_metrics, step=epoch + 1)
+        print(
+            "Validation: "
+            f"F1@20px={validation_metrics['validation/point_f1_at_20px']:.4f}, "
+            f"localization MAE={validation_metrics['validation/localization_mae_px']:.2f}px, "
+            f"orientation MAE={validation_metrics['validation/orientation_mae_deg']:.2f}deg",
+            flush=True,
+        )
+        return validation_metrics
+
     def run(self):
         args = self.args
 
@@ -360,20 +556,20 @@ class Trainer:
             if self.scheduler: self.scheduler.step()
             if self.center_scheduler: self.center_scheduler.step()
 
-            if args['display'] and (epoch + 1) % args['display_it'] == 0:
-                with torch.no_grad():
-                    for sample in tqdm(self.train_dataset_it, desc='visualise', dynamic_ncols=True):
-
-                        center_output = self.center_model(self.model(sample['image']), **sample)
-                        direction_maps, center_pred, center_heatmap, angle_pred = map(lambda k: center_output[k].detach().cpu().numpy(), ['output', 'center_pred', 'center_heatmap', 'pred_angle'])
-                        
-                        for name, im, centers, angles, dirs in zip(sample['name'], sample['image'], center_pred, angle_pred, direction_maps):
-                            valid = centers[:, 0] == 1
-                            scores = centers[valid, -1]
-
-                            fig, _ = plot_results(im.cpu().numpy().transpose((1,2,0)), centers[valid, 1:-1], scores, angles[valid] if args['orientation'] else None)
-                            mlflow.log_figure(fig, name)
-                            plt.close(fig)
+            if args['display'] and should_validate(
+                    epoch, args['n_epochs'], args['display_it']):
+                print(
+                    f"Validation step {epoch + 1}/{args['n_epochs']} started",
+                    flush=True,
+                )
+                self.model.eval()
+                self.center_model.eval()
+                self.validate(epoch)
+                self.visualize_training_samples(epoch)
+                print(
+                    f"Validation step {epoch + 1}/{args['n_epochs']} completed",
+                    flush=True,
+                )
 
             if args['save'] and ((epoch + 1) % args.get('save_interval',10) == 0 or epoch + 1 == args['n_epochs']):
                 print('Saving checkpoint', flush=True)
@@ -387,16 +583,17 @@ class Trainer:
                 }
 
                 if (ARTIFACTS := os.getenv("MLFLOW_ARTIFACTS_DESTINATION")) and (run := mlflow.active_run()):
-                    filename = os.path.join(ARTIFACTS, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoint.pth")
+                    filename = os.path.join(ARTIFACTS, run.info.experiment_id, run.info.run_id, "artifacts", "checkpoints", "checkpoint.pth")
+                    os.makedirs(os.path.dirname(filename), exist_ok=True)
                     torch.save(state, filename)
-                    modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoint.pth")
+                    modelargs.emit_action("Weights", f"mlflow-artifacts:/{run.info.experiment_id}/{run.info.run_id}/artifacts/checkpoints/checkpoint.pth")
                 else:
                     with tempfile.TemporaryDirectory() as d:
                         filename = os.path.join(d, "checkpoint.pth")
                         torch.save(state, filename)
-                        mlflow.log_artifact(filename)
+                        mlflow.log_artifact(filename, artifact_path="checkpoints")
                         info = mlflow.active_run().info
-                        modelargs.emit_action("Weights", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoint.pth")
+                        modelargs.emit_action("Weights", f"mlflow-artifacts:/{info.experiment_id}/{info.run_id}/artifacts/checkpoints/checkpoint.pth")
 
 if __name__ == '__main__':
 
@@ -408,8 +605,18 @@ if __name__ == '__main__':
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']
     args['pretrained_model_path'] = cmd_args['model']
-    args['pretrained_center_model_path'] = cmd_args['localisation']
+    default_localisation_checkpoint = os.path.join(
+        os.environ['TOOLBOX_CACHE'], 'cedirnet', 'localization_checkpoint.pth'
+    )
+    localisation_checkpoint = cmd_args.get('localisation') or default_localisation_checkpoint
+    if localisation_checkpoint == default_localisation_checkpoint:
+        localisation_checkpoint = str(
+            ensure_localization_checkpoint(default_localisation_checkpoint)
+        )
+    args['pretrained_center_model_path'] = localisation_checkpoint
     args['display_it'] = cmd_args['display_interval']
+    args['visualization_samples'] = cmd_args['visualization_samples']
+    args['validation_score_threshold'] = cmd_args['validation_score_threshold']
     args['save_interval'] = cmd_args['save_interval']
     
     mlflow.set_tracking_uri('http://localhost:8081')
@@ -426,6 +633,7 @@ if __name__ == '__main__':
         modelargs.emit_action('Experiment', run.info.experiment_id)
         modelargs.emit_action('Run', run.info.run_id)
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: '<not serializable>')))
+        mlflow.log_param('validation_match_distance_px', POINT_MATCH_DISTANCE_PX)
 
         trainer = Trainer(args)
 

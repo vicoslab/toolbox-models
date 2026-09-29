@@ -1,63 +1,187 @@
 <infer-image id="@ALIAS@" name="images" multiple>
     <div id="results"></div>
 </infer-image>
-<template id="template-arrow">
+<template id="template-marker">
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50">
+        <circle cx="25" cy="25" r="16" fill="#1677ff" stroke="white" stroke-width="2" />
+    </svg>
+</template>
+<!-- Retained for a future explicit 3DoF display option. -->
+<template id="template-marker-3dof">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" stroke="limegreen" stroke-width="4px"
         stroke-linecap="round" stroke-linejoin="round" fill="none">
         <path d="M0 25 H45 L35 15 L45 25 L35 35" />
     </svg>
 </template>
-<template id="template-cross">
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" stroke="limegreen" stroke-width="4px"
-        stroke-linecap="round" stroke-linejoin="round" fill="none">
-        <path d="M 5 25 H 45 L 45 25 M 25 5 V 45" />
-    </svg>
-</template>
 
 <script>
-    const arrow = document.getElementById("template-arrow");
-    const cross = document.getElementById("template-cross");
+    const template = document.getElementById("template-marker");
+    const SETTINGS_KEY = "toolbox-ui-cedirnet-detection-dialog";
+    const SHOW_3DOF = false; // Reserved for a future training/inference option.
+
+    function filterDetectionIndices(scores, threshold) {
+        const selected = [];
+        for (let index = 0; index < scores.length; index++) {
+            if (Number(scores[index]) >= threshold) selected.push(index);
+        }
+        return selected;
+    }
+
+    function thresholdSliderMaximum(scoreGroups) {
+        const scores = scoreGroups.flat().map(Number).filter(Number.isFinite);
+        return Math.max(1, ...scores);
+    }
 
     function createMarker(markerSize, center, score, angle) {
-        let marker;
-        if (angle) {
-            marker = document.importNode(arrow.content.children[0], true);
-            marker.style.transformOrigin = "left center";
-            marker.style.transform = `translateY(-50%) rotate(${Math.round(angle)}deg)`;
-        } else {
-            marker = document.importNode(cross.content.children[0], true);
-            marker.style.transform = `translate(-50%, -50%)`;
-        }
+        const markerTemplate = SHOW_3DOF && angle != null ? document.getElementById("template-marker-3dof") : template;
+        const marker = document.importNode(markerTemplate.content.children[0], true);
+        marker.classList.add("cedirnet-marker");
         marker.style.width = markerSize;
         marker.style.height = markerSize;
         marker.style.left = center[0] * 100 + "%";
         marker.style.top = center[1] * 100 + "%";
         marker.style.position = "absolute";
+        if (SHOW_3DOF && angle != null) {
+            marker.style.transformOrigin = "left center";
+            marker.style.transform = `translateY(-50%) rotate(${Math.round(angle)}deg)`;
+        } else {
+            marker.style.transform = "translate(-50%, -50%)";
+        }
         marker.dataset.score = score;
+        marker.title = `confidence ${Number(score).toFixed(3)}`;
         return marker;
     }
+
+    function renderDetections(wrapper, image, centers, scores, angles, threshold) {
+        wrapper.querySelectorAll(".cedirnet-marker").forEach(marker => marker.remove());
+        const markerSize = Math.max(36, Math.round(Math.max(image.clientWidth, image.clientHeight) * 0.06)) + "px";
+        for (const index of filterDetectionIndices(scores, threshold)) {
+            const [x, y] = centers[index];
+            wrapper.appendChild(createMarker(markerSize, [x, y], scores[index], angles?.[index]));
+        }
+    }
+
+    function readSavedThreshold(maximum) {
+        try {
+            const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY));
+            const threshold = Number(saved?.threshold);
+            if (Number.isFinite(threshold)) return Math.min(maximum, Math.max(0, threshold));
+        } catch (_) {
+            // Ignore invalid stale browser settings and use the default.
+        }
+        return Math.min(0.5, maximum);
+    }
+
+    function configureThresholdSettings(scoreGroups, onThreshold) {
+        const maximum = thresholdSliderMaximum(scoreGroups);
+        let dialog = document.getElementById(SETTINGS_KEY);
+        if (!dialog) {
+            const controls = settings(SETTINGS_KEY);
+            const button = controls.button;
+            dialog = controls.dialog;
+
+            const wrapper = document.createElement("div");
+            wrapper.style = "display: flex; flex-direction: column; min-width: min(24rem, 70vw);";
+            const thresholdLabel = document.createElement("label");
+            const thresholdInput = document.createElement("input");
+            thresholdInput.type = "range";
+            thresholdInput.min = "0";
+            thresholdInput.step = "0.01";
+
+            const update = () => {
+                const threshold = Number(thresholdInput.value);
+                thresholdLabel.textContent = `Confidence threshold: ${threshold.toFixed(2)}`;
+                dialog.cedirnetRender?.(threshold);
+            };
+            thresholdInput.addEventListener("input", update);
+
+            button.addEventListener("click", () => {
+                thresholdInput.value = String(readSavedThreshold(Number(thresholdInput.max)));
+                update();
+            });
+
+            const cancel = document.createElement("button");
+            cancel.innerText = "Cancel";
+            cancel.addEventListener("click", event => {
+                event.preventDefault();
+                thresholdInput.value = String(readSavedThreshold(Number(thresholdInput.max)));
+                update();
+                dialog.close();
+            });
+
+            const submit = document.createElement("button");
+            submit.innerText = "Ok";
+            submit.addEventListener("click", event => {
+                event.preventDefault();
+                localStorage.setItem(SETTINGS_KEY, JSON.stringify({ threshold: thresholdInput.value }));
+                update();
+                dialog.close();
+            });
+
+            const actions = document.createElement("div");
+            actions.style = "display: flex; justify-content: end; gap: 0.5rem; margin-top: 1rem;";
+            actions.append(cancel, submit);
+            wrapper.append(thresholdLabel, thresholdInput, actions);
+            dialog.append(wrapper);
+            dialog.cedirnetSlider = thresholdInput;
+            dialog.cedirnetLabel = thresholdLabel;
+            document.querySelector(".toolbar-right").append(button, dialog);
+
+            const form = document.getElementById("@ALIAS@").closest?.("form");
+            const removeSettings = () => {
+                button.remove();
+                dialog.remove();
+            };
+            form?.addEventListener("infer", removeSettings, { once: true });
+            form?.addEventListener("reset", removeSettings, { once: true });
+        }
+
+        dialog.cedirnetRender = onThreshold;
+        dialog.cedirnetSlider.max = String(maximum);
+        dialog.cedirnetSlider.value = String(readSavedThreshold(maximum));
+        dialog.cedirnetLabel.textContent = `Confidence threshold: ${Number(dialog.cedirnetSlider.value).toFixed(2)}`;
+        onThreshold(Number(dialog.cedirnetSlider.value));
+    }
+
     document.getElementById("@ALIAS@").onInference = function (request, response) {
         const group = document.createElement("div");
         group.classList.add("group");
         const images = request.getAll("images");
         const { centers, scores, angles } = response;
+        const rendered = [];
+
+        let threshold = 0.5;
+        const renderAll = () => {
+            for (const item of rendered) {
+                renderDetections(
+                    item.wrapper,
+                    item.image,
+                    centers[item.index],
+                    scores[item.index],
+                    angles?.[item.index],
+                    threshold,
+                );
+            }
+        };
+        configureThresholdSettings(scores, value => {
+            threshold = value;
+            renderAll();
+        });
+
         for (let i = 0; i < images.length; i++) {
             const wrapper = document.createElement("div");
             wrapper.style.position = "relative";
             wrapper.style.width = "fit-content";
 
-            const im = document.createElement("img");
-            im.src = URL.createObjectURL(images[i]);
-            im.onload = () => {
-                const { clientWidth: width, naturalWidth, clientHeight: height, naturalHeight } = im;
-                const markerSize = Math.round(Math.max(width, height) * 0.05) + "px";
-                for (let j = 0; j < centers[i].length; j++) {
-                    if (scores[i][j] < 0.5) continue;
-                    const [x, y, _] = centers[i][j];
-                    wrapper.appendChild(createMarker(markerSize, [x, y], scores[i][j], angles && angles[i][j]));
-                }
+            const image = document.createElement("img");
+            const imageUrl = URL.createObjectURL(images[i]);
+            image.src = imageUrl;
+            image.onload = () => {
+                rendered.push({ index: i, wrapper, image });
+                renderDetections(wrapper, image, centers[i], scores[i], angles?.[i], threshold);
+                URL.revokeObjectURL(imageUrl);
             };
-            wrapper.appendChild(im);
+            wrapper.appendChild(image);
             group.appendChild(wrapper);
         }
         return group;
