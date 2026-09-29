@@ -20,7 +20,7 @@ def plot_results(image, centers, scores, angles, dist=30):
                 Normal()
             ])
         else:
-            ax.scatter(x, y, s=180, c='#1677ff', edgecolors='white', linewidths=1.5, zorder=3)
+            ax.scatter(x, y, s=45, c='#1677ff', edgecolors='white', linewidths=1.5, alpha=0.5, zorder=3)
     return fig, ax
 
 # center model likely supports 6dof so we may need to load only a subset of weights

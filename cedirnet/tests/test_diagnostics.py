@@ -87,7 +87,8 @@ class DiagnosticMapsTest(unittest.TestCase):
         marker = detections_axis.collections[0]
         np.testing.assert_allclose(marker.get_offsets(), [[8, 6]])
         np.testing.assert_allclose(marker.get_facecolors()[0][:3], [22 / 255, 119 / 255, 1])
-        self.assertEqual(marker.get_sizes().tolist(), [180])
+        self.assertEqual(marker.get_sizes().tolist(), [45])
+        self.assertEqual(marker.get_alpha(), 0.5)
         self.assertEqual(len(detections_axis.texts), 0)
         with tempfile.TemporaryDirectory() as directory:
             target = pathlib.Path(directory) / "diagnostics.png"
@@ -112,6 +113,8 @@ class DiagnosticMapsTest(unittest.TestCase):
             self.assertEqual(len(axis.collections), 1)
             np.testing.assert_allclose(axis.collections[0].get_offsets(), [[7, 8]])
             np.testing.assert_allclose(axis.collections[0].get_facecolors()[0][:3], [22 / 255, 119 / 255, 1])
+            self.assertEqual(axis.collections[0].get_sizes().tolist(), [45])
+            self.assertEqual(axis.collections[0].get_alpha(), 0.5)
             self.assertEqual(len(axis.texts), 0)
         finally:
             plt.close(fig)
