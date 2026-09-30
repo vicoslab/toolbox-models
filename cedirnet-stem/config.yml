@@ -5,7 +5,7 @@ image:
 details: |
   <h1>STEM nanoparticles and semantic regions</h1>
   <p>Create groups of two registered images in BF, HAADF order. The model combines BF grayscale, HAADF grayscale, and a zero third channel.</p>
-  <p>Use the Particle instances and Segmentation panels beside the image. Annotation tools do not change training options. This interface has no explicit particle-negative confirmation; empty submissions remain missing supervision.</p>
+  <p>Use the Particle instances and Segmentation panels beside the image. Annotation tools do not change training options. Submit an annotation without particle regions for a particle-free pair; images with no submitted annotation remain missing supervision.</p>
   <p>Draw particle ellipses and paint semantic classes. Ellipses train the existing circle model using the mean of their two pixel radii. Export creates the paired-image manifest and class-ID masks; overlaps and unpainted pixels are ignored.</p>
 config: |
   <View className="stem-annotation">

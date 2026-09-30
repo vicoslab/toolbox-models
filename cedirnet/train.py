@@ -57,6 +57,34 @@ def log_figure_artifact(fig, artifact_file):
     else:
         mlflow.log_figure(fig, artifact_file=artifact_file)
 
+def omit_negative_distance_loss(losses, sample):
+    """Keep null S/C regression, but do not invent distance to an absent center.
+
+    The upstream direction/orientation criteria return per-image components:
+    total, class, direction-total, localization, sin, cos, distance, magnitude,
+    followed optionally by orientation-total and its diagnostic components.
+    Presence is taken from generated direction targets, not padded center
+    coordinates or the support raster (which can be empty for border points).
+    This is loss validity, not an additional model output.
+    """
+    # The upstream groundtruth matrix stores S/C in channels 2/3. Inspect the
+    # actual targets consumed by the criterion after augmentation/GT generation.
+    directions = sample['centerdir_groundtruth'][0][:, 2:4]
+    has_objects = directions.ne(0).flatten(1).any(1)
+    if losses[0].ndim != 1 or losses[0].shape != has_objects.shape:
+        raise ValueError('negative supervision requires per-image loss reduction')
+    has_objects = has_objects.to(losses[0].device)
+    adjusted = list(losses)
+    adjusted[6] = torch.where(has_objects, losses[6], torch.zeros_like(losses[6]))
+    negative_direction = losses[4] + losses[5] + losses[7]
+    adjusted[2] = torch.where(has_objects, losses[2], negative_direction)
+    negative_total = losses[1] + negative_direction + losses[3]
+    if len(losses) > 8:
+        negative_total = negative_total + losses[8]  # orientation total, not its diagnostics
+    adjusted[0] = torch.where(has_objects, losses[0], negative_total)
+    return tuple(adjusted)
+
+
 class Trainer:
     def __init__(self, args):
         self.args = args
@@ -309,6 +337,8 @@ class Trainer:
             losses = self.criterion(output, sample,
                             centerdir_responses=(center_pred, center_heatmap), centerdir_gt=centerdir_gt, ignore_mask=loss_ignore,
                             difficult_mask=difficult, reduction_dims=(1,2,3), epoch_percent=epoch/n_epochs, **self.args['loss_w'])
+            # Empty annotations regress S/C to (0,0); their distance is undefined.
+            losses = omit_negative_distance_loss(losses, sample)
 
             sample_metrics = None
             if self.batch_sampler.has_hard_samples():

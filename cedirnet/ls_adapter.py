@@ -6,11 +6,15 @@ def convert_point(width, height, value):
 
 # todo: differentiate between grouped images, +when shared/not
 def export(annotations, export_dir, relpaths, shared):
+    if not annotations:
+        return None
     points = []
     for tag in annotations[0] or []:
         value = tag['value']
         kind = tag['type']
-        if kind == 'keypoint':
+        if kind == 'choices':
+            continue
+        elif kind == 'keypoint':
             points.append(convert_point(tag['original_width'], tag['original_height'], tag['value']))
         elif kind == 'vector':
             pts = []
@@ -20,7 +24,5 @@ def export(annotations, export_dir, relpaths, shared):
             points.append(pts)
         # todo: from segmentation/rectangle
 
-    if not points:
-        return None
-
+    # A present submission without points is a negative; no submission stays missing.
     return dict(points=points)

@@ -11,6 +11,44 @@ from .results import restore_prediction
 from .semantic_results import encode_mask
 
 
+class NegativeImageShapeLoss(torch.nn.Module):
+    """Apply the same distance-validity policy as CeDiRNet's train.py helper."""
+    def __init__(self, criterion):
+        super().__init__()
+        self.criterion = criterion
+
+    def forward(self, prediction, sample, **kwargs):
+        # ParticleGroundtruth fills every map before this call, even on empty
+        # images, so stock ShapeLoss can run without missing-key errors.
+        losses = self.criterion(prediction, sample, **kwargs)
+        targets = sample['centerdir_groundtruth']
+        directions = torch.cat((targets['gt_sin_th'], targets['gt_cos_th']), dim=1)
+        has_objects = directions.ne(0).flatten(1).any(1)
+        if losses[0].ndim != 1 or losses[0].shape != has_objects.shape:
+            raise ValueError('negative supervision requires per-image loss reduction')
+        has_objects = has_objects.to(losses[0].device)
+        adjusted = list(losses)
+        adjusted[6] = torch.where(has_objects, losses[6], torch.zeros_like(losses[6]))
+
+        # Same weighted tuple as CeDiRNet through index 7; index 8 is shape total
+        # instead of orientation total. Reconstruct rather than subtracting a
+        # large undefined R, which could cancel retained S/C loss numerically.
+        negative_direction = losses[4] + losses[5] + losses[7]
+        adjusted[2] = torch.where(has_objects, losses[2], negative_direction)
+        negative_total = losses[1] + negative_direction + losses[3] + losses[8]
+        adjusted[0] = torch.where(has_objects, losses[0], negative_total)
+        return tuple(adjusted)
+
+    def get_loss_dict(self, losses):
+        return self.criterion.get_loss_dict(losses)
+
+    def __getattr__(self, name):
+        try:
+            return super().__getattr__(name)
+        except AttributeError:
+            return getattr(self.criterion, name)
+
+
 class StemRuntime(torch.nn.Module):
     def __init__(self, tasks, device='cpu', backbone='tu-convnext_base', pretrained=False):
         super().__init__()
@@ -51,7 +89,8 @@ class StemRuntime(torch.nn.Module):
                     return maps
 
             self.groundtruth = ParticleGroundtruth(**args['train_dataset']['centerdir_gt_opts']).to(self.device)
-            self.particle_criterion = get_criterion(args['loss_type'],args['loss_opts'],model,center).to(self.device)
+            self.particle_criterion = NegativeImageShapeLoss(
+                get_criterion(args['loss_type'],args['loss_opts'],model,center)).to(self.device)
             self.loss_w = args['loss_w']
         if tasks.segmentation:
             from .semantic_loss import MulticlassCrossEntropyDiceLoss

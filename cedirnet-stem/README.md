@@ -16,16 +16,16 @@ tested against the host parser.
    particle label is its alias **nanoparticle**. Paint **Carbon (1)**, **Film (2)**,
    **Vacuum (3)**, or **Ignore (4)**; the segmentation panel also includes Magicwand.
    Regions are shared across the aligned pair. There are no N/S visibility toggles.
-3. Submit one annotation per pair. This selected interface intentionally has no
-   **No nanoparticles** checkbox. An empty submission could mean a reviewed negative
-   or unfinished work: export cannot distinguish them and keeps particle supervision
-   missing, just as for segmentation-only annotations. Use an explicitly reviewed
-   legacy annotation or an existing reviewed manifest for particle negatives; this
-   UI cannot record that confirmation. Resolve multiple annotators before export;
-   the adapter rejects multiple annotations rather than guessing a consensus.
+3. Submit one annotation per pair. A submitted annotation without particle regions
+   exports `points: []`, including semantic-only submissions. No additional
+   labeling control is required. Images with no submitted annotation remain
+   unlabeled. Treat submissions as complete: do not submit partially labeled
+   particles if the particle task will be enabled. Resolve multiple annotators
+   before export; the adapter rejects multiple annotations rather than guessing
+   a consensus.
 4. Assign Train, Validation, or Test splits and use Toolbox **Export**. The host
    imports this plugin's `ls_adapter.export(annotations, export_dir, relpaths,
-   shared)` and writes the version-4 manifest. The adapter writes lossless class-ID
+   shared, config)` and writes the version-4 manifest. The adapter writes lossless class-ID
    PNGs and attaches their paths and class order to each item. **No manually
    authored manifest or host modification is needed.**
 5. Select that manifest for training, enable the tasks you annotated, and set
@@ -43,12 +43,11 @@ configuration to the adapter. Unknown classes are rejected, not reindexed.
   is a real class, **not** implicit background. 255 is ignored.
 - Unpainted pixels, explicit Ignore, and overlapping *different* classes become
   255. Same-class overlaps are unions. Region order does not change the mask.
-- No annotation, an empty submitted annotation, and task-selection-only annotations
-  remain **missing supervision**. Only explicit **No nanoparticles** (or legacy
-  `reviewed: Nanoparticles`) creates `points: []`. Brush-only annotations do not
-  invent particle labels. **Migration:** older empty submissions were treated as
-  negatives; review and explicitly confirm them before re-export. Existing exported
-  manifests with `points: []` remain valid and unchanged.
+- No submitted annotation means **missing supervision**. Any submitted annotation
+  without particle regions exports `points: []`, including empty, choices-only
+  and semantic-only submissions. Existing manifests with `points: []` remain
+  valid. Missing semantic masks remain missing: an empty submission does not
+  imply an annotated segmentation background.
 - Missing labels for an enabled task fail training. An all-ignore brush is allowed
   and has zero semantic loss; it does not teach the model a background class.
 - Shared pair region duplicates are deduplicated. Coordinates remain subpixel
@@ -96,8 +95,21 @@ contains this plugin revision, not only the training cache: the older main
 exporter reads vector `vertices` only and drops ellipse/semantic results. Then
 re-export the reviewed task; existing manifests are not retroactively repaired.
 The current combined `ellipselabels` + `nanoparticle` alias schema is supported.
-Do not replace missing points with `[]` unless the image is an explicitly confirmed
-negative. Segmentation-only/empty submissions must not become particle negatives.
+Do not replace missing points with `[]` on tasks that have no submitted annotation.
+Submitted empty and semantic-only annotations are particle negatives by design.
+
+### Negative-image loss
+
+Negative particle images regress the existing S/C outputs to **(0,0)** over
+non-ignored pixels. No additional head or presence mask is predicted.
+`ParticleGroundtruth` in `stem_plugin/runtime.py` fills the missing, correctly
+shaped upstream maps before collation, so stock `ShapeLoss` can run on empty
+and mixed batches. `NegativeImageShapeLoss` in the same file then excludes only
+undefined center-distance R, using generated S/C targets to determine validity,
+just like `omit_negative_distance_loss()` in CeDiRNet's `train.py`. Both rebuild
+retained weighted components instead of subtracting R, preserve positive losses
+and gradients, and update distance diagnostics. Existing foreground-only shape
+supervision, reduction, and upstream code are unchanged.
 
 ### Ellipse geometry and model compatibility
 
@@ -138,6 +150,13 @@ Image interpolation is bilinear; class masks use nearest-neighbor. Training flip
 are synchronized across modalities, centers, radius targets and semantic masks.
 
 The particle model keeps the stock FPN/ShapeLoss and localization checkpoint layout.
+Confirmed negative images use deterministic direction targets **S/C = (0, 0)**.
+Only undefined center-distance **R** is excluded from their weighted loss and
+diagnostics; S/C retain gradients on nonignored pixels, and particle radius remains
+foreground-masked by the stock ShapeLoss. Positive targets/losses and the existing
+batch mean are unchanged. There is no new predicted positive/negative mask, head,
+or detection objective. Update existing project XML to include the confirmation
+control before labeling new negatives; empty submissions are not retroactively reviewed.
 The semantic model instantiates the **same published upstream FPN primitive** with
 class logits; its small constructor and ignore-safe cross-entropy + Dice criterion
 are plugin-local. **No new upstream branch or research code is required.**

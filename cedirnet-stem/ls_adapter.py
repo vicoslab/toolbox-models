@@ -11,6 +11,8 @@ def export(annotations, export_dir, relpaths, shared, config):
     categories = { x.attrib["value"]: int(x.attrib["category"]) for x in config.findall(".//Label[@category]") }
     if len(relpaths) != 2:
         raise ValueError('STEM export requires a registered [BF, HAADF] image pair')
+    if not annotations:
+        return {}
     if len(annotations or []) != 1:
         raise ValueError('STEM export requires one exactly annotation per task')
     tags = annotations[0]
@@ -20,6 +22,9 @@ def export(annotations, export_dir, relpaths, shared, config):
     for tag in tags:
         value = tag.get('value', {})
         kind = tag.get('type')
+        # Image-level choices have no region dimensions.
+        if kind == 'choices':
+            continue
         size = (tag.get('original_width'), tag.get('original_height'))
         if dimensions is not None and size != dimensions:
             raise ValueError('all regions in the registered image pair must have equal dimensions')
@@ -53,11 +58,11 @@ def export(annotations, export_dir, relpaths, shared, config):
                 points.append([*map(int, center[::-1]), int(radius)])
         else:
             print("Warning: skipped", tag)
-    result = {}
+    # Match CeDiRNet: a submitted annotation without particles is a negative.
+    # No submission returned above, leaving particle supervision missing.
+    result = {'points': points}
     if dimensions is not None:
         result['annotation_size'] = list(dimensions)
-    if points:
-        result['points'] = points
     if brushes:
         w, h = dimensions
         mask = np.full((h, w), 255, dtype=np.uint8)
