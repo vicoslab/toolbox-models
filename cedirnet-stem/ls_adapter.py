@@ -46,7 +46,7 @@ def export(annotations, export_dir, relpaths, shared, config):
                     for item in items:
                         if (id := categories.get(item)) is not None:
                             label = id
-            rgba = np.asarray(decode_rle(value['rle']), dtype=np.uint8)
+            rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
             mask = rgba.reshape(h, w, 4)[:, :, 3] > 0
             # no brush category -> particle
             if label is not None:
