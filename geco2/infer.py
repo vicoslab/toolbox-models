@@ -125,7 +125,7 @@ else:
     from flask import request
 
     class GeCo2(LabelStudioMLBase):
-        def get_results(self, masks, probs, width, height, from_name, to_name, label, extra):
+        def get_results(self, masks, probs, width, height, from_name, to_name, labels, extra):
             results = []
             total_prob = 0
             for mask, prob in zip(masks, probs):
@@ -143,10 +143,10 @@ else:
                     'value': {
                         'format': 'rle',
                         'rle': rle,
-                        'labels': [label],
+                        'labels': labels,
                     },
                     'score': float(prob),
-                    'type': 'labels',
+                    'type': 'brushlabels',
                     'readonly': False,
                     **extra,
                 })
@@ -200,7 +200,7 @@ else:
                 height=image_height,
                 from_name=from_name,
                 to_name=to_name,
-                label=labels[0],
+                labels=context['labels'],
                 extra=extra)
 
             return ModelResponse(predictions=predictions)
