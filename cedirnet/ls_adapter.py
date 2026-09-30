@@ -15,18 +15,18 @@ def export(annotations, export_dir, relpaths, shared, config):
         kind, value, w, h = map(tag.__getitem__, ['type', 'value', 'original_width', 'original_height'])
         if kind == 'choices':
             continue
-        elif kind == 'keypoint':
+        elif kind in ('keypointlabels', 'keypoint'):
             points.append(convert_point(w, h, tag['value']))
-        elif kind == 'vector':
+        elif kind in ('vectorlabels', 'vector'):
             pts = []
             for vert in value['vertices']:
                 pts.extend(convert_point(w, h, vert))
             points.append(pts)
-        elif kind == 'rectangle':
+        elif kind in ('rectanglelabels', 'rectangle'):
             x = int((value['x'] + value['width']/2) / 100 * w)
             y = int((value['y'] + value['height']/2) / 100 * h)
             points.append([x, y])
-        elif kind == 'brush':
+        elif kind == ('brushlabels', 'brush'):
             if rle := value.get('rle'):
                 rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
                 mask = rgba.reshape(h, w, 4)[:, :, 3] > 0

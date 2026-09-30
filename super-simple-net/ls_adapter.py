@@ -7,7 +7,7 @@ def export(annotations, export_dir, relpaths, shared):
     mask = width = height = None
     for tag in annotations[0] or []:
         value = tag['value']
-        if rle := value.get('rle'):
+        if tag['type'] in ('brushlabels', 'brush') and (rle := value.get('rle')):
             if mask is None:
                 width = tag['original_width']
                 height = tag['original_height']

@@ -18,6 +18,7 @@ def export(annotations, export_dir, relpaths, shared, config):
     tags = annotations[0]
     points, brushes = [], []
     dimensions = None
+    labels = { tag['id']: l for tag in tags if (l := tag['value'].get('labels')) }
     seen = set()
     for tag in tags:
         value = tag.get('value', {})
@@ -33,19 +34,18 @@ def export(annotations, export_dir, relpaths, shared, config):
         if kind in ('ellipselabels', 'ellipse'):
             x, y, rx, ry, rotation = map(float, [value['x'], value['y'], value['radiusX'], value['radiusY'], value.get('rotation', 0)])
             points.append([x * w / 100, y * h / 100, (rx * w + ry * h) / 200])
-        elif vertices := value.get('vertices'):
-            if len(vertices) != 2:
+        elif kind in ('vectorlabels', 'vector'):
+            if len(vertices := value['vertices']) != 2:
                 raise ValueError('particle vectors need exactly two vertices')
             coords = np.array([[v['x'], v['y']] for v in vertices], dtype=float)
             coords *= [w / 100, h / 100]
             points.append(coords.flatten().tolist())
-        elif rle := value.get('rle'):
+        elif kind in ('brushlabels', 'brush'):
             label = None
-            for k in value:
-                if k.endswith("labels") and (items := value[k]):
-                    for item in items:
-                        if (id := categories.get(item)) is not None:
-                            label = id
+            if items := labels.get(tag['id'], value.get(kind)):
+                for item in items:
+                    if (id := categories.get(item)) is not None:
+                        label = id
             rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
             mask = rgba.reshape(h, w, 4)[:, :, 3] > 0
             # no brush category -> particle
