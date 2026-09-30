@@ -7,6 +7,12 @@ import numpy as np
 from PIL import Image
 from stem_plugin.ls_geometry import normalize_results, shape_mask
 
+def label_id(categories, items):
+    for item in items:
+        if (id := categories.get(item)) is not None: # id can be 0
+            return id
+    return None
+
 def export(annotations, export_dir, relpaths, shared, config):
     categories = { x.attrib["value"]: int(x.attrib["category"]) for x in config.findall(".//Label[@category]") }
     if len(relpaths) != 2:
@@ -19,7 +25,6 @@ def export(annotations, export_dir, relpaths, shared, config):
     points, brushes = [], []
     dimensions = None
     labels = { tag['id']: l for tag in tags if (l := tag['value'].get('labels')) }
-    seen = set()
     for tag in tags:
         value = tag.get('value', {})
         kind = tag.get('type')
@@ -41,26 +46,31 @@ def export(annotations, export_dir, relpaths, shared, config):
             coords *= [w / 100, h / 100]
             points.append(coords.flatten().tolist())
         elif kind in ('brushlabels', 'brush'):
-            label = None
-            if items := labels.get(tag['id'], value.get(kind)):
-                for item in items:
-                    if (id := categories.get(item)) is not None:
-                        label = id
-            rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
-            mask = rgba.reshape(h, w, 4)[:, :, 3] > 0
-            # no brush category -> particle
-            if label is not None:
+            if rle := value.get('rle'):
+                rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
+                mask = rgba.reshape(h, w, 4)[:, :, 3] > 0
+                # no brush category -> particle
+                if (items := value.get(kind, labels.get(tag['id']))) and (label := label_id(categories, items)) is not None:
+                    brushes.append((label, mask))
+                else:
+                    locations = np.argwhere(mask)
+                    center = locations.mean(axis=0)
+                    radius = np.sqrt(len(locations)/np.pi)
+                    points.append([*map(int, center[::-1]), int(radius)])
+            else:
+                print('Warning: unsupported brush format')
+        elif kind in ('polygonlabels', 'polygon'):
+            if (items := value.get(kind, labels.get(tag['id']))) and (label := label_id(categories, items)) is not None:
+                mask = shape_mask(kind, value, w, h)
                 brushes.append((label, mask))
             else:
-                locations = np.argwhere(mask)
-                center = locations.mean(axis=0)
-                radius = np.sqrt(len(locations)/np.pi)
-                points.append([*map(int, center[::-1]), int(radius)])
+                print('Warning: skipping polygon without label')
+        elif kind == 'labels': pass # labels are handled at the start
         else:
-            print("Warning: skipped", tag)
-    # Match CeDiRNet: a submitted annotation without particles is a negative.
-    # No submission returned above, leaving particle supervision missing.
-    result = {'points': points}
+            # print('Warning: skipped', tag)
+            pass
+    # if points are empty, it is treated as a negative in cedirnet
+    result = { 'points': points }
     if dimensions is not None:
         result['annotation_size'] = list(dimensions)
     if brushes:
