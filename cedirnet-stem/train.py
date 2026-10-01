@@ -172,6 +172,7 @@ def main():
         modelargs.emit_action('Experiment',run.info.experiment_id)
         modelargs.emit_action('Run',run.info.run_id)
         mlflow.log_params({k:v for k,v in args.items() if v is not None})
+        mlflow.log_param('manfest', cmd_args['manifest'])
         trainer.initialize(); trainer.run()
 
 
