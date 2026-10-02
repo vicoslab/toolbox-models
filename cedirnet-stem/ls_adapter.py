@@ -42,7 +42,7 @@ def export(annotations, export_dir, relpaths, shared, config, **kwargs):
             coords = np.array([[v['x'], v['y']] for v in vertices], dtype=float)
             coords *= [w / 100, h / 100]
             points.append(coords.flatten().tolist())
-        elif kind in ('brushlabels', 'brush'):
+        elif kind in ('brushlabels', 'brush', 'magicwand'):
             if rle := value.get('rle'):
                 rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
                 mask = rgba.reshape(h, w, 4)[:, :, 3] > 0
