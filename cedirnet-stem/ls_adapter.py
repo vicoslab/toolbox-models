@@ -13,19 +13,16 @@ def label_id(categories, items):
             return id
     return None
 
-def export(annotations, export_dir, relpaths, shared, config):
+def export(annotations, export_dir, relpaths, shared, config, **kwargs):
     categories = { x.attrib["value"]: int(x.attrib["category"]) for x in config.findall(".//Label[@category]") }
     if len(relpaths) != 2:
         raise ValueError('STEM export requires a registered [BF, HAADF] image pair')
     if not annotations:
         return {}
-    if len(annotations or []) != 1:
-        raise ValueError('STEM export requires one exactly annotation per task')
-    tags = annotations[0]
     points, brushes = [], []
     dimensions = None
-    labels = { tag['id']: l for tag in tags if (l := tag['value'].get('labels')) }
-    for tag in tags:
+    labels = { tag['id']: l for tag in annotations if (l := tag['value'].get('labels')) }
+    for tag in annotations:
         value = tag.get('value', {})
         kind = tag.get('type')
         # Image-level choices have no region dimensions.

@@ -7,11 +7,11 @@ def convert_point(width, height, value):
     return x, y
 
 # todo: differentiate between grouped images, +when shared/not
-def export(annotations, export_dir, relpaths, shared, config):
+def export(annotations, export_dir, relpaths, shared, config, **kwargs):
     if not annotations:
         return None
     points = []
-    for tag in annotations[0] or []:
+    for tag in annotations:
         kind, value, w, h = map(tag.__getitem__, ['type', 'value', 'original_width', 'original_height'])
         if kind == 'choices':
             continue

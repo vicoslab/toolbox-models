@@ -3,9 +3,11 @@ import numpy as np
 from label_studio_sdk.converter import brush
 
 # todo: differentiate between grouped images, +when shared/not
-def export(annotations, export_dir, relpaths, shared, config):
+def export(annotations, export_dir, relpaths, shared, config, **kwargs):
+    if annotations is None:
+        return None
     mask = width = height = None
-    for tag in annotations[0] or []:
+    for tag in annotations:
         value = tag['value']
         if tag['type'] in ('brushlabels', 'brush') and (rle := value.get('rle')):
             if mask is None:
