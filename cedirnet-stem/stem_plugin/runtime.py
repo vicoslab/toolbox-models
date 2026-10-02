@@ -99,9 +99,11 @@ class StemRuntime(torch.nn.Module):
             self.semantic_criterion = MulticlassCrossEntropyDiceLoss([1.0]*len(tasks.classes)).to(self.device)
 
     def train(self, mode=True):
-        # The estimator's training path preserves log-radius regression targets;
-        # eval mutates them for display. Frozen parameters do not imply eval here.
         super().train(mode)
+        if self.center_model is not None:
+            # Keep pretrained normalization fixed even during training. The outer
+            # estimator must still follow mode: eval decodes raw regression/GT.
+            self.center_model.module.instance_center_estimator.eval()
         return self
 
     def forward(self, image):

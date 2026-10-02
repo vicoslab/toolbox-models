@@ -80,6 +80,7 @@ def transform(images: List[np.array]) -> torch.tensor:
         transformed.append(torch.tensor(im))
     return torch.stack(transformed)
 
+@torch.no_grad()
 def predict(tensor: torch.tensor):
     center_output = center_model(model(tensor), detect_centers=True)
 
