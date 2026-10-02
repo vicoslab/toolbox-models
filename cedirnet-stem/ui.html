@@ -2,7 +2,7 @@
      width because infer-image puts its slot in an absolute overlay. Span both
      tracks so percentage-constrained result images cannot collapse to zero. -->
 <infer-image style="grid-column:1 / -1; display:block; width:100%; min-width:0" id="@ALIAS@" name="images" multiple
-  placeholder="Select pairs of STEM images (first BF, then HAADF)">
+  placeholder="Select a BF / HAADF pair, or one image and choose its modality">
   <div id="results"></div>
 </infer-image>
 
@@ -292,14 +292,93 @@
     };
   }
 
+  function inferenceSamples(images, modality = "paired") {
+    if (!["paired", "BF", "HAADF"].includes(modality)) throw new Error("Unknown STEM modality");
+    if (!images.length) throw new Error("Select STEM images");
+    if (images.length === 1) {
+      if (modality === "paired") throw new Error("Choose whether the single image is BF or HAADF");
+      return [{ BF: modality === "BF" ? images[0] : null, HAADF: modality === "HAADF" ? images[0] : null }];
+    }
+    if (modality !== "paired") throw new Error("BF / HAADF selection requires a single image");
+    if (images.length % 2) throw new Error("Select matching BF / HAADF pairs, or a single image");
+    return images.filter((_, i) => i % 2 === 0).map((file, i) => ({ BF: file, HAADF: images[2 * i + 1] }));
+  }
+
+  function installModalityPrompt(element) {
+    const form = element.closest("form");
+    const mode = document.createElement("input");
+    mode.type = "hidden"; mode.name = "modality"; mode.value = "paired";
+    const dialog = document.createElement("dialog");
+    dialog.setAttribute("aria-label", "STEM image modality");
+    dialog.style.cssText = "max-width:min(28rem,80vw); padding:1.5rem";
+    const title = document.createElement("h3"); title.textContent = "Which modality is this image?";
+    const note = document.createElement("p");
+    note.textContent = "Choose the detector used for this image. The missing detector is filled with zeros; use weights trained with modality dropout.";
+    const choices = document.createElement("div");
+    choices.style.cssText = "display:flex; gap:1.5rem; margin:1rem 0";
+    const radios = ["HAADF", "BF"].map(modality => {
+      const label = document.createElement("label");
+      const radio = document.createElement("input");
+      radio.type = "radio"; radio.name = `stem-modality-choice-${element.id}`; radio.value = modality;
+      label.append(radio, document.createTextNode(modality)); choices.append(label);
+      return radio;
+    });
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex; gap:.75rem; justify-content:flex-end";
+    const cancel = document.createElement("button"); cancel.type = "button"; cancel.textContent = "Cancel";
+    const run = document.createElement("button"); run.type = "button"; run.textContent = "Run inference"; run.disabled = true;
+    actions.append(cancel, run); dialog.append(title, note, choices, actions); form.append(mode, dialog);
+    // Capture the existing input's change before its host auto-submit listener.
+    // Resume that same listener after explicit selection; do not replace host JS.
+    customElements.whenDefined("infer-image").then(() => {
+      const input = element.shadowRoot.querySelector('input[type="file"]');
+      let pending = false, resuming = false;
+      const discard = () => {
+        if (!pending) return;
+        pending = false; input.value = ""; mode.value = "paired";
+      };
+      cancel.onclick = () => dialog.close();
+      dialog.addEventListener("cancel", discard);
+      dialog.addEventListener("close", discard);
+      dialog.addEventListener("keydown", event => {
+        if (event.key === "Enter" && event.target.matches("input")) event.preventDefault();
+      });
+      radios.forEach(radio => radio.addEventListener("change", () => run.disabled = !radios.some(r => r.checked)));
+      run.onclick = () => {
+        const selected = radios.find(r => r.checked);
+        if (!pending || !selected) return;
+        mode.value = selected.value; pending = false; dialog.close();
+        resuming = true;
+        try { input.dispatchEvent(new Event("change")); } finally { resuming = false; }
+      };
+      input.addEventListener("change", event => {
+        if (resuming) return;
+        mode.value = "paired";
+        if (input.files.length !== 1) {
+          if (input.files.length % 2) {
+            event.stopImmediatePropagation(); input.value = "";
+            showToast("error", "Select matching BF / HAADF pairs, or a single image");
+          }
+          return;
+        }
+        event.stopImmediatePropagation(); pending = true;
+        radios.forEach(r => r.checked = false); run.disabled = true; dialog.showModal();
+      }, true);
+      form.addEventListener("reset", () => {
+        discard(); mode.value = "paired";
+        if (dialog.open) dialog.close();
+      });
+    });
+  }
+
   document.getElementById("@ALIAS@").onInference = function (request, response) {
     if (response.error) throw new Error(response.error);
     const images = request.getAll("images");
-    if (images.length % 2) throw new Error("Select matching BF / HAADF pairs");
+    const samples = inferenceSamples(images, request.get("modality") || "paired");
     document.getElementById(VIEW_KEY)?.stemDispose?.();
     const tasks = enabledTasks(response);
-    const results = images.filter((_, i) => i % 2 === 0).map((_, i) => ({
-      ...sampleResult(response, i), "image-BF": images[2 * i].name, "image-HAADF": images[2 * i + 1].name,
+    const results = samples.map((sample, i) => ({
+      ...sampleResult(response, i), "image-BF": sample.BF?.name || null, "image-HAADF": sample.HAADF?.name || null,
     }));
     const group = document.createElement("div");
     group.className = "group stem-results";
@@ -320,14 +399,14 @@
       if (!prepared || disposed) return;
       maskDownload.disabled = true;
       try {
-        const entries = [], samples = [];
+        const entries = [], maskSamples = [];
         for (const [i, r] of results.entries()) {
           if (!r.segmentation) continue;
-          const name = annotatedFilename(images[2 * i], i).replace(/-cedirnet\.jpg$/, "-mask.png");
+          const name = annotatedFilename(samples[i].BF || samples[i].HAADF, i).replace(/-cedirnet\.jpg$/, "-mask.png");
           const classId = `class-id/${name}`, color = `color/${name}`;
           entries.push({ name: classId, blob: maskBlob(r.segmentation) },
-            { name: color, blob: await colorMaskBlob(rendered[2 * i].semantic) });
-          samples.push({
+            { name: color, blob: await colorMaskBlob(rendered.find(item => item.sample === i).semantic) });
+          maskSamples.push({
             class_id: classId, color, classes: r.segmentation.classes.map((name, id) =>
               ({ id, name, rgb: r.segmentation.colors[id] }))
           });
@@ -335,7 +414,7 @@
         entries.push({
           name: "classes.json", blob: new Blob([JSON.stringify({
             description: "Unfiltered native-resolution masks. class-id/ preserves original IDs; color/ is an opaque visualization. Class 0 is not implicit background.",
-            ignore: { id: 255, name: "Ignore", rgb: MASK_IGNORE_COLOR }, samples,
+            ignore: { id: 255, name: "Ignore", rgb: MASK_IGNORE_COLOR }, samples: maskSamples,
           }, null, 2)], { type: "application/json" })
         });
         const archive = await buildZip(entries);
@@ -461,17 +540,18 @@
     results.forEach((result, i) => {
       const row = document.createElement("div");
       row.style.cssText = "display:flex; flex-wrap:wrap; gap:1rem";
-      for (let modality = 0; modality < 2; modality++) {
-        const file = images[2 * i + modality];
+      for (const modality of ["BF", "HAADF"]) {
+        const file = samples[i][modality];
+        if (!file) continue;
         const figure = document.createElement("figure");
         figure.style.cssText = "margin:0; width:512px; max-width:100%";
         const canvas = document.createElement("canvas");
         canvas.setAttribute("role", "img");
-        canvas.setAttribute("aria-label", `${modality ? "HAADF" : "BF"} inference overlay`);
+        canvas.setAttribute("aria-label", `${modality} inference overlay`);
         canvas.className = "stem-annotated";
         canvas.style.cssText = "display:block; max-width:min(512px,100%); height:auto";
         figure.append(canvas); row.append(figure);
-        rendered.push({ canvas, file, result, sample: i, index: 2 * i + modality });
+        rendered.push({ canvas, file, result, sample: i, index: rendered.length });
       }
       group.append(row);
     });
@@ -547,4 +627,5 @@
     prepare();
     return [actions, group];
   };
+  installModalityPrompt(document.getElementById("@ALIAS@"));
 </script>
