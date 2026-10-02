@@ -9,19 +9,39 @@ details: |
     <dt>Anomaly detection</dt>
   </dl>
 config: |
-  <View>
-    <Header style="margin-bottom: -1rem">Split</Header>
-    <Choices name="split" toName="image" showInline="true" >
-      <Choice value="train">Train</Choice>
-      <Choice value="val">Validation</Choice>
-      <Choice value="test">Test</Choice>
-      <Choice value="auto" selected="true">Auto</Choice>
-    </Choices>
-    <Labels name="labels" toName="image">
-      <Label value="Anomaly" background="rgba(200, 20, 20, 0.7)" />
-    </Labels>
-    <Image name="image" value="$image" zoom="true" />
-    <Brush name="brush" toName="image" />
-    <MagicWand name="wand" toName="image" />
-    <Rectangle name="rect" toName="image" smart="true" />
+  <View className="toolbox-annotation">
+    <Style>
+      .toolbox-annotation h4 {font-size:13px;line-height:18px;font-weight:normal;margin:6px 0 !important;}
+      .ant-collapse { width: 100%; }
+    </Style>
+    <View style="display: grid; grid-template-columns: 1fr minmax(0, 256px); gap: 16px;">
+      <Image name="image" value="$image" zoom="true" />
+      <View style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 0 0 380px;">
+        <Collapse open="true" bordered="true">
+          <Panel value="Split">
+            <Choices name="split" showInline="true" choice="single-radio">
+              <Choice value="Train"/>
+              <Choice value="Validation"/>
+              <Choice value="Test"/>
+              <Choice value="Auto" selected="true" />
+            </Choices>
+          </Panel>
+        </Collapse>
+        <Collapse open="true" bordered="true">
+          <Panel value="Particle instances">
+            <Header size="5" value="Select anomaly class, and use brush or magic wand to fill in the anomalies." />
+            <Labels name="labels" toName="image">
+              <Label value="Anomaly" background="rgba(200, 20, 20, 0.7)" />
+            </Labels>
+            <Brush name="brush" toName="image" />
+            <MagicWand name="wand" toName="image" />
+          </Panel>
+        </Collapse>
+        <Collapse open="true" bordered="true">
+          <Panel value="Smart tools">
+            @SMART_TOOLS@
+          </Panel>
+        </Collapse>
+      </View>
+    </View>
   </View>

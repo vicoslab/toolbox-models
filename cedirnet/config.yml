@@ -9,14 +9,24 @@ details: |
     <dt>Material sciences</dt>
   </dl>
 config: |
-  <View className="stem-annotation">
+  <View className="toolbox-annotation">
     <Style>
-      .stem-annotation h4 {font-size:13px;line-height:18px;font-weight:normal;margin:6px 0 !important;}
+      .toolbox-annotation h4 {font-size:13px;line-height:18px;font-weight:normal;margin:6px 0 !important;}
       .ant-collapse { width: 100%; }
     </Style>
     <View style="display: grid; grid-template-columns: 1fr minmax(0, 256px); gap: 16px;">
-      <Image name="image" value="$image" zoom="true" gallery="true" shared="true" />
+      <Image name="image" value="$image" zoom="true" />
       <View style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 0 0 380px;">
+        <Collapse open="true" bordered="true">
+          <Panel value="Split">
+            <Choices name="split" showInline="true" choice="single-radio">
+              <Choice value="Train"/>
+              <Choice value="Validation"/>
+              <Choice value="Test"/>
+              <Choice value="Auto" selected="true" />
+            </Choices>
+          </Panel>
+        </Collapse>
         <Collapse open="true" bordered="true">
           <Panel value="Particle instances">
             <Header size="5" value="Select object class, then place keypoints (for point only annotation) or line segments (for center + direction annotations)." />

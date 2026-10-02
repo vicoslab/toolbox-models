@@ -3,7 +3,7 @@ import numpy as np
 from label_studio_sdk.converter import brush
 
 # todo: differentiate between grouped images, +when shared/not
-def export(annotations, export_dir, relpaths, shared):
+def export(annotations, export_dir, relpaths, shared, config):
     mask = width = height = None
     for tag in annotations[0] or []:
         value = tag['value']

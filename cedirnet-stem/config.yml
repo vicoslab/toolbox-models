@@ -8,14 +8,24 @@ details: |
   <p>Use the Particle instances and Segmentation panels beside the image. Annotation tools do not change training options. Submit an annotation without particle regions for a particle-free pair; images with no submitted annotation remain missing supervision.</p>
   <p>Draw particle ellipses and paint semantic classes. Ellipses train the existing circle model using the mean of their two pixel radii. Export creates the paired-image manifest and class-ID masks; overlaps and unpainted pixels are ignored.</p>
 config: |
-  <View className="stem-annotation">
+  <View className="toolbox-annotation">
     <Style>
-      .stem-annotation h4 {font-size:13px;line-height:18px;font-weight:normal;margin:6px 0 !important;}
+      .toolbox-annotation h4 {font-size:13px;line-height:18px;font-weight:normal;margin:6px 0 !important;}
       .ant-collapse { width: 100%; }
     </Style>
     <View style="display: grid; grid-template-columns: 1fr minmax(0, 256px); gap: 16px;">
       <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
       <View style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 0 0 380px;">
+        <Collapse open="true" bordered="true">
+          <Panel value="Split">
+            <Choices name="split" showInline="true" choice="single-radio">
+              <Choice value="Train"/>
+              <Choice value="Validation"/>
+              <Choice value="Test"/>
+              <Choice value="Auto" selected="true" />
+            </Choices>
+          </Panel>
+        </Collapse>
         <Collapse open="true" bordered="true">
           <Panel value="Particle instances">
             <Header size="5" value="Select particle class, then draw an ellipse (center click first)." />
