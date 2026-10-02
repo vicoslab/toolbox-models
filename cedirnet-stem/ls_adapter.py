@@ -7,6 +7,19 @@ import numpy as np
 from PIL import Image
 from stem_plugin.ls_geometry import normalize_results, shape_mask
 
+def annotation_results(annotations):
+    """Accept flat results or one Toolbox annotation; never merge annotators."""
+    if not isinstance(annotations, list):
+        raise ValueError('annotation results must be a list')
+    if annotations and isinstance(annotations[0], list):
+        if len(annotations) != 1:
+            raise ValueError('export requires exactly one annotation per task')
+        annotations = annotations[0]
+    if any(not isinstance(tag, dict) for tag in annotations):
+        raise ValueError('annotation results must contain region dictionaries')
+    return annotations
+
+
 def label_id(categories, items):
     for item in items:
         if (id := categories.get(item)) is not None: # id can be 0
@@ -19,6 +32,7 @@ def export(annotations, export_dir, relpaths, shared, config, **kwargs):
         raise ValueError('STEM export requires a registered [BF, HAADF] image pair')
     if not annotations:
         return {}
+    annotations = annotation_results(annotations)
     points, brushes = [], []
     dimensions = None
     labels = { tag['id']: l for tag in annotations if (l := tag['value'].get('labels')) }
@@ -47,7 +61,7 @@ def export(annotations, export_dir, relpaths, shared, config, **kwargs):
                 rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
                 mask = rgba.reshape(h, w, 4)[:, :, 3] > 0
                 # no brush category -> particle
-                if (items := value.get(kind, labels.get(tag['id']))) and (label := label_id(categories, items)) is not None:
+                if (items := value.get(kind, labels.get(tag.get('id')))) and (label := label_id(categories, items)) is not None:
                     brushes.append((label, mask))
                 else:
                     locations = np.argwhere(mask)
@@ -57,7 +71,7 @@ def export(annotations, export_dir, relpaths, shared, config, **kwargs):
             else:
                 print('Warning: unsupported brush format')
         elif kind in ('polygonlabels', 'polygon'):
-            if (items := value.get(kind, labels.get(tag['id']))) and (label := label_id(categories, items)) is not None:
+            if (items := value.get(kind, labels.get(tag.get('id')))) and (label := label_id(categories, items)) is not None:
                 mask = shape_mask(kind, value, w, h)
                 brushes.append((label, mask))
             else:
