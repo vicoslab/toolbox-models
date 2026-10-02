@@ -170,6 +170,15 @@ starts the FPNs randomly (no implicit backbone-weight download). Particle and jo
 training still load the setup-installed `localization_checkpoint.pth` by default;
 semantic-only training neither reads nor requires localization weights.
 
+The pretrained particle localizer stays in evaluation mode during training,
+validation, and inference: its weights **and BatchNorm running statistics** remain
+fixed. The enclosing estimator still follows train/eval mode so the training loss
+receives raw log-distance/log-radius outputs and unchanged targets. Trainable
+particle/semantic FPNs retain their normal training behavior. Regression tests
+exercise optimizer steps, train/eval transitions, validation and serving reload.
+Previously trained checkpoints with drifted statistics are not repaired by this
+change; reload/update the plugin before starting a new worker or training run.
+
 The official legacy localization checkpoint contains four obsolete geometry keys:
 `module.instance_mask_estimator.xym_1024`, `module.center_augmentator.xym`, and
 `module.instance_center_estimator.kernel_cos` / `kernel_sin`. Only these exact keys

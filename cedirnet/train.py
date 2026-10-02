@@ -34,7 +34,7 @@ import mlflow
 from mlflow.entities import RunStatus
 from diagnostics import plot_training_diagnostics, training_artifact_path
 from detection_threshold import center_detection_threshold
-from extras import load_center_model
+from extras import center_model_kwargs, load_center_state, set_center_model_mode
 from localization_checkpoint import ensure_localization_checkpoint
 from scheduling import should_validate
 from validation_metrics import POINT_MATCH_DISTANCE_PX, ValidationMetrics, extract_ground_truth
@@ -172,7 +172,7 @@ class Trainer:
         self.model = get_model(args['model']['name'], args['model']['kwargs'])
         self.model.init_output(args['num_vector_fields'])
 
-        self.center_model = get_center_model(args['center_model']['name'], args['center_model']['kwargs'], is_learnable=args['center_model'].get('use_learnable_center_estimation', True))
+        self.center_model = get_center_model(args['center_model']['name'], center_model_kwargs(args), is_learnable=args['center_model'].get('use_learnable_center_estimation', True))
         # so we can use it as center estimator with orientation even though it isn't
         self.center_model.enable_6dof = args.get('enable_6dof')
         self.center_model.use_orientation_confidence_score = args.get('use_orientation_confidence_score')
@@ -239,8 +239,10 @@ class Trainer:
                     print('WARNING: Current model differs from the pretrained one, loading weights using strict=False')
                     print('WARNING: #####################################################################################################')
 
-            if center_dict := state.get('center_model_state_dict'):
-                self.center_model.load_state_dict(center_dict, strict=True)
+            # A separate localization checkpoint overrides embedded center state,
+            # including old Toolbox exports that omitted BatchNorm buffers.
+            if state.get('center_model_state_dict') and not args.get('pretrained_center_model_path'):
+                load_center_state(self.center_model, state)
 
         
         if center_model_path := args.get('pretrained_center_model_path'):
@@ -251,17 +253,7 @@ class Trainer:
             else:
                 state = torch.load(center_model_path, weights_only=False)
 
-            INPUT_WEIGHTS_KEY = 'module.instance_center_estimator.conv_start.0.weight'
-            if (checkpoint_input_weights := state['center_model_state_dict'].get(INPUT_WEIGHTS_KEY)) is not None:
-                center_input_weights = self.center_model.module.instance_center_estimator.conv_start[0].weight
-                if checkpoint_input_weights.shape != center_input_weights.shape:
-                    state['center_model_state_dict'][INPUT_WEIGHTS_KEY] = checkpoint_input_weights[:, :2, :, :]
-
-                    print('WARNING: #####################################################################################################')
-                    print('WARNING: center input shape mismatch - will load weights for only the first two channels, is this correct ?!!!')
-                    print('WARNING: #####################################################################################################')
-
-            self.center_model.load_state_dict(state['center_model_state_dict'], strict=False)
+            load_center_state(self.center_model, state)
 
         self.denormalize_args = None
 
@@ -290,7 +282,10 @@ class Trainer:
 
         # put model into training mode
         self.model.train()
-        self.center_model.train()
+        set_center_model_mode(
+            self.center_model, training=True,
+            freeze_learning=self.args['center_model']['kwargs'].get('dilated_nn_args', {}).get('freeze_learning', False),
+        )
 
         iter=epoch*len(self.train_dataset_it)
 
@@ -498,6 +493,8 @@ class Trainer:
             progress.close()
 
     def visualize_training_samples(self, epoch):
+        self.model.eval()
+        set_center_model_mode(self.center_model, training=False)
         with torch.no_grad():
             self.visualize_samples(
                 self.training_visualization_dataset_it,
@@ -511,7 +508,7 @@ class Trainer:
             return None
 
         self.model.eval()
-        self.center_model.eval()
+        set_center_model_mode(self.center_model, training=False)
         center_evaluator = CenterGlobalMinimizationEval(tau_thr=POINT_MATCH_DISTANCE_PX)
         metrics = ValidationMetrics(
             score_threshold=self.args['validation_score_threshold'],
