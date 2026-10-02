@@ -2,6 +2,9 @@
 from pathlib import Path
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 import sys, json, io, os
+from email.parser import BytesParser
+from email.policy import default
+request_log = []
 import numpy as np
 from PIL import Image
 PLUGIN = Path(__file__).resolve().parents[1]
@@ -16,13 +19,23 @@ for w,h in [(800,400),(400,200)]:
     response['segmentation'].append(encode_mask(mask, ['Carbon','Film','Vacuum']))
 class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        self.rfile.read(int(self.headers['Content-Length']))
+        body = self.rfile.read(int(self.headers['Content-Length']))
+        message = BytesParser(policy=default).parsebytes(
+            ('Content-Type: ' + self.headers['Content-Type'] + '\r\n\r\n').encode() + body)
+        parts = list(message.iter_parts())
+        files = [p.get_filename() for p in parts if p.get_param('name', header='content-disposition') == 'images']
+        modality = next((p.get_payload(decode=True).decode() for p in parts
+            if p.get_param('name', header='content-disposition') == 'modality'), 'paired')
+        request_log.append({'images': files, 'modality': modality})
         result=json.loads(json.dumps(response))
         mode=self.path.split('mode=')[-1]
         result['tasks'] = {'nanoparticles': mode != 'segmentation', 'segmentation': mode not in ('particles', 'empty')}
         if mode in ('particles','empty'): result['segmentation']=[None,None]
         if mode in ('segmentation','empty'):
             for key in ('centers','scores','radii'): result[key]=[[],[]]
+        count = 1 if modality in ('BF', 'HAADF') else len(files) // 2
+        for key in ('centers', 'scores', 'radii', 'segmentation'):
+            result[key] = result[key][:count]
         data=json.dumps(result).encode()
         self.send_response(200); self.send_header('Content-Type','application/json'); self.end_headers(); self.wfile.write(data)
     def do_GET(self):
@@ -43,10 +56,12 @@ runFixture();
             template=(HOST/'templates/model.html').read_text()
             worker=template.split('<form class="inference-tab"')[1].split('</form>')[0]
             worker='<form class="inference-tab"'+worker+'</form>'
-            worker=worker.replace('{{ alias }}','fixture').replace('{{ form | safe }}',ui)
+            worker=worker.replace('{{ alias }}','fixture').replace(
+                '{{ model_manifest[model]["form"] | replace("@ALIAS@", alias) | safe }}', ui.replace('@ALIAS@', 'infer'))
             start=html.index('<header'); end=html.index('</main>')+len('</main>')
             html=html[:start]+'<nav>Toolbox</nav><main><div class="model-overview wrapper"><div class="inference"><details name="workers" open><summary>fixture</summary>'+worker+'</details></div></div></main>'+html[end:]
             data=html.encode(); mime='text/html'
+        elif self.path == '/request-log.json': data=json.dumps(request_log).encode(); mime='application/json'
         elif self.path == '/response.json': data=json.dumps(response).encode(); mime='application/json'
         elif self.path.startswith('/static/'):
             p=HOST/self.path.lstrip('/')

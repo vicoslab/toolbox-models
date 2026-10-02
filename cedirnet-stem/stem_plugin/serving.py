@@ -4,7 +4,7 @@ import io
 import os
 import numpy as np
 from PIL import Image
-from .annotations import load_stem_image
+from .annotations import load_stem_image, load_single_stem_image
 from .checkpoint import safe_torch_load
 from .runtime import StemRuntime
 from .task_options import task_config
@@ -33,8 +33,19 @@ def load_runtime(options, device):
     return runtime.eval()
 
 
-def load_pairs(files):
-    if not files or len(files)%2:
+def load_pairs(files, modality=None):
+    """Load paired batches, or one explicitly selected BF/HAADF detector."""
+    if modality not in (None, 'paired', 'BF', 'HAADF'):
+        raise ValueError('Input modality must be paired, BF or HAADF')
+    if not files:
+        raise ValueError('Provide at least one STEM image')
+    if modality in ('BF', 'HAADF'):
+        if len(files) != 1:
+            raise ValueError('Single-modality inference requires exactly one image')
+        return [np.asarray(load_single_stem_image(files[0], modality))]
+    if len(files) == 1:
+        raise ValueError('For a single image, select modality BF or HAADF explicitly')
+    if len(files)%2:
         raise ValueError('Input images must be pairs of STEM images (first BF, then HAADF)')
     return [np.asarray(load_stem_image(*files[i:i+2])) for i in range(0,len(files),2)]
 

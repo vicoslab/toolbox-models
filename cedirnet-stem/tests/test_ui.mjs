@@ -68,6 +68,26 @@ test('archive filenames are safe, indexed and JPEG', () => {
   assert.notEqual(annotatedFilename({name:'../../a b.png'},0), annotatedFilename({name:'../../a b.png'},1));
 });
 
+test('single upload requires an explicit detector and preserves its physical slot', () => {
+  const file = {name:'sample.png'};
+  assert.equal(typeof inferenceSamples, 'function');
+  assert.throws(() => inferenceSamples([file]), /BF.*HAADF/);
+  assert.deepEqual(inferenceSamples([file], 'BF'), [{BF:file, HAADF:null}]);
+  assert.deepEqual(inferenceSamples([file], 'HAADF'), [{BF:null, HAADF:file}]);
+  assert.throws(() => inferenceSamples([file], 'unknown'), /modality/);
+});
+
+test('paired upload retains sample boundaries and rejects ambiguous file counts', () => {
+  const files = ['a-BF.png','a-HAADF.png','b-BF.png','b-HAADF.png'].map(name => ({name}));
+  assert.equal(typeof inferenceSamples, 'function');
+  assert.deepEqual(inferenceSamples(files, 'paired'), [
+    {BF:files[0],HAADF:files[1]}, {BF:files[2],HAADF:files[3]}
+  ]);
+  assert.throws(() => inferenceSamples(files, 'BF'), /single/);
+  assert.throws(() => inferenceSamples(files.slice(0,3)), /pairs/);
+  assert.throws(() => inferenceSamples([]), /Select/);
+});
+
 function uint32(bytes, offset) {
   return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(offset, true);
 }

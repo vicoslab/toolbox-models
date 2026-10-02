@@ -1,9 +1,7 @@
 # CeDiRNet-STEM: optional particles and semantic segmentation
 
 Enable **nanoparticles**, **multiclass segmentation**, or both. At least one task
-must be enabled. Task switches are `"true"`/`"false"` string enums because the
-current Toolbox `modelargs` boolean parser rejects `false`; both CLI values are
-tested against the host parser.
+must be enabled. Task switches are booleans; CLI values are `true` or `false`.
 
 ## Annotation → export → training
 
@@ -209,8 +207,49 @@ threshold; they are not physical-unit measurements. Classes absent from ground
 truth and prediction are excluded from mIoU; no-match MAE is accompanied by a zero
 match count.
 
-`POST /infer` takes repeated `images` files in BF, HAADF order. Results contain
-per-pair centers, scores, radii, semantic masks and task metadata. Disabled tasks
+### Modality dropout training
+
+**Training modality dropout** is enabled by default for particle, semantic, and joint
+training. The plugin reuses the published upstream `stem_modality` helper once
+per batch, after dataset augmentation and before either model's normalization.
+The defaults are **BF dropout probability = 0.25** and **HAADF dropout probability = 0.25**:
+50% paired input, 25% BF-only, and 25% HAADF-only, sampled independently per image.
+These probabilities name the detector **removed**, not the detector retained;
+they must be finite, nonnegative, and sum to at most one. Both are never removed.
+
+The retained detector and auxiliary plane are unchanged; the missing detector
+is filled with raw zeros. **Modality dropout seed** creates a private stream per
+epoch, independently of shuffle/augmentation. The checkpoint records the policy
+without changing model tensors. Set **Training modality dropout = false** to retain the
+paired-only learning path without masking, copying inputs, or drawing dropout RNG.
+Training manifests and Label Studio annotation/preannotation remain **paired**;
+this option does not add singleton annotation projects or training datasets.
+Existing paired-only weights can be loaded, but enabling singleton input does not
+retrofit learned robustness: train/fine-tune with dropout and validate both detectors.
+
+### Paired and single-image inference
+
+Upload a BF/HAADF pair as before, or upload **one image**. A single upload opens
+**Which modality is this image?**; select **HAADF** or **BF**, then **Run inference**.
+There is no filename guess or remembered default. Cancel/Escape sends no request.
+Only the uploaded detector is displayed/downloaded; the missing detector occupies
+its original zero-filled input slot, not a duplicate of the supplied image.
+
+`POST /infer` takes repeated `images` files in BF, HAADF order, or exactly one
+`images` file with a `modality=BF` or `modality=HAADF` form field. Without that
+field, one file is rejected with a request to choose a modality. Paired requests
+omit `modality` or use `modality=paired`; odd multi-file requests and conflicting
+single-detector/multi-file requests are rejected. The browser sorts paired
+filenames, so continue using names that sort into BF, HAADF pairs.
+CLI examples (model options follow the existing `--` separator):
+
+```sh
+python infer.py image.png --modality BF -- --model checkpoint.pth
+python infer.py image.png --modality HAADF -- --model checkpoint.pth
+python infer.py sample_BF.png sample_HAADF.png -- --model checkpoint.pth
+```
+
+Results contain per-sample centers, scores, radii, semantic masks and task metadata. Disabled tasks
 return empty particle arrays or `null` semantic results. Semantic logits resize to
 original resolution before argmax. The UI supports class-mask PNG, JSON and
 rasterized overlay ZIP downloads. Preannotations preserve configured particle-label ellipses and
@@ -228,7 +267,7 @@ on the next animation frame, coalescing rapid inputs. Encoding happens only on d
 
 Controls and downloads for tasks excluded by the worker's explicit `tasks` metadata
 are omitted. An enabled particle task with zero detections still has thresholds and
-a valid empty detection download. Both BF and HAADF remain visible, with no counts or
+a valid empty detection download. All uploaded detectors remain visible, with no counts or
 captions; the compact legend reflects visible segmentation classes.
 
 The browser `/infer` endpoint retains localizer candidates at score cutoff **0**,
@@ -250,8 +289,8 @@ The top row contains task-appropriate downloads:
   `classes.json` maps each sample's IDs, class names and RGB colors. ID 0 is a real
   class; ID 255 means ignore and is shown as neutral gray `[128, 128, 128]`.
   Use class-ID masks for analysis, color masks for viewing; IDs are never rescaled.
-- **Download visualizations**: one ZIP of native-resolution JPEGs (quality 95%) for both
-  modalities of every pair, using the current display filters. JPEG is lossy;
+- **Download visualizations**: one ZIP of native-resolution JPEGs (quality 95%) for
+  every uploaded image, using the current display filters. JPEG is lossy;
   masks are not. Filenames are sanitized and indexed to avoid collisions.
 
 Hidden semantic classes reveal the source image without hiding particles.
@@ -261,7 +300,9 @@ The UI uses the host's TIFF decoder when available and no new CDN dependencies.
 
 `setup.sh` clones published `vicoslab/CeDiRNet-STEM` **master**, applies only the
 existing Python 3.11 `collections.abc` compatibility patch, and records the source
-revision. All new functionality resides in this plugin. It refuses to overwrite an
+revision. The source must include `src/stem_modality.py` (published commit
+`022dbc812c8438b7f6f066c92021749a7a380a12` or newer); reinstall older model caches
+to obtain it. Host integration resides in this plugin. It refuses to overwrite an
 existing cache. Set `CEDIRNET_STEM_DOWNLOAD_PARTICLES=0` for semantic-only setup.
 
 The Python 3.11 environment uses NumPy **1.26.4**, one OpenCV wheel

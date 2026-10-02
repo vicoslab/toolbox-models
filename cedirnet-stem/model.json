@@ -1,6 +1,6 @@
 {
   "title": "CeDiRNet-STEM",
-  "description": "Optional nanoparticle center/radius detection and multiclass semantic segmentation of paired BF/HAADF STEM images.",
+  "description": "Optional nanoparticle center/radius detection and multiclass semantic segmentation of BF/HAADF STEM images, with paired training and paired or single-detector inference.",
   "type": "object",
   "properties": {
     "manifest": {
@@ -57,6 +57,38 @@
       "default": 0.5,
       "minimum": 0,
       "maximum": 1
+    },
+    "modality_dropout": {
+      "title": "Training modality dropout",
+      "description": "Randomly drop BF or HAADF per training sample; never both. Labels and the auxiliary channel are preserved. Validation stays paired; dropout-trained weights can infer from either detector alone.",
+      "stage": "train",
+      "type": "boolean",
+      "default": true
+    },
+    "bf_drop_probability": {
+      "title": "BF dropout probability",
+      "description": "Probability of zeroing the BF channel. BF and HAADF dropout probabilities must sum to at most 1.",
+      "stage": "train",
+      "type": "number",
+      "default": 0.25,
+      "minimum": 0,
+      "maximum": 1
+    },
+    "haadf_drop_probability": {
+      "title": "HAADF dropout probability",
+      "description": "Probability of zeroing the HAADF channel. BF and HAADF dropout probabilities must sum to at most 1.",
+      "stage": "train",
+      "type": "number",
+      "default": 0.25,
+      "minimum": 0,
+      "maximum": 1
+    },
+    "modality_dropout_seed": {
+      "title": "Modality dropout seed",
+      "description": "Dedicated dropout RNG seed; each zero-based epoch uses seed + epoch without consuming the training RNG.",
+      "stage": "train",
+      "type": "integer",
+      "default": 0
     },
     "display_interval": {
       "title": "Validation / visualization interval",

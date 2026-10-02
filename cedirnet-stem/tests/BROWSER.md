@@ -43,3 +43,16 @@ It also covers the exact unified top download labels, all-sample archives, legen
 palette/visibility, no captions/status, task-specific control/download omission,
 enabled-but-empty particle results, immediate persistence, Close/Escape without
 rollback, corrupt storage, reset, and real BF/HAADF source pixels when requested.
+
+The singleton-upload regression uses the same running fixture:
+
+```sh
+python /path/to/cedirnet-stem/tests/verify_browser_modality.py
+```
+
+It checks that a single upload cannot submit until BF or HAADF is explicitly
+selected, cancellation/Escape sends nothing, each upload prompts again, and
+paired uploads clear stale modality choices. The fixture parses actual multipart
+requests and exposes its request log. Only supplied detectors are rendered and
+included in JPEG/mask/JSON downloads; odd multi-image uploads fail before a request.
+Predictions remain explicitly synthetic; backend/model execution is tested separately.

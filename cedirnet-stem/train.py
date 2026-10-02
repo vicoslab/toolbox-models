@@ -11,7 +11,9 @@ import torch
 import mlflow
 from tqdm import tqdm
 from matplotlib import pyplot as plt
-from stem_plugin.task_options import task_config
+from stem_modality import (apply_modality_dropout, create_modality_dropout_generator,
+                           modality_dropout_metadata, validate_probabilities)
+from stem_plugin.task_options import parse_bool, task_config
 from stem_plugin.toolbox_dataset import ToolboxDataset
 from stem_plugin.runtime import StemRuntime
 from stem_plugin.checkpoint import safe_torch_load
@@ -33,6 +35,14 @@ def log_figure_artifact(fig, artifact_file):
 class Trainer:
     def __init__(self, args):
         self.args = args
+        try:
+            self.modality_dropout = parse_bool(args.get('modality_dropout'), True)
+        except ValueError as error:
+            raise ValueError('modality_dropout must be true or false') from error
+        self.bf_drop_probability, self.haadf_drop_probability = validate_probabilities(
+            .25 if args.get('bf_drop_probability') is None else args['bf_drop_probability'],
+            .25 if args.get('haadf_drop_probability') is None else args['haadf_drop_probability'])
+        self.modality_dropout_seed = int(args.get('modality_dropout_seed') or 0)
         self.tasks = task_config(args)
         self.device = args.get('device') or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.size = (int(args.get('width',512)),int(args.get('height',512)))
@@ -67,11 +77,18 @@ class Trainer:
     def train_epoch(self, epoch):
         self.runtime.train()
         values = []
+        generator = (create_modality_dropout_generator(self.modality_dropout_seed, epoch)
+                     if self.modality_dropout else None)
         iterator = tqdm(self.loaders['train'],
                         desc=f"{epoch + 1}/{int(self.args.get('epochs',100))}",
                         dynamic_ncols=True)
         for sample in iterator:
             self.optimizer.zero_grad(set_to_none=True)
+            if self.modality_dropout:
+                # Final loader augmentation is complete; both task losses share
+                # this one ablated image without changing labels or the caller.
+                sample = dict(sample, image=apply_modality_dropout(sample['image'],
+                    self.bf_drop_probability, self.haadf_drop_probability, generator=generator))
             loss,parts = self.runtime.loss(sample)
             if not torch.isfinite(loss):
                 raise FloatingPointError('non-finite STEM training loss')
@@ -134,6 +151,9 @@ class Trainer:
 
     def checkpoint(self, epoch):
         state = self.runtime.checkpoint(epoch)
+        state['modality_dropout'] = dict(modality_dropout_metadata(
+            self.bf_drop_probability, self.haadf_drop_probability, self.modality_dropout_seed),
+            enabled=self.modality_dropout)
         run = mlflow.active_run()
         artifacts = os.getenv('MLFLOW_ARTIFACTS_DESTINATION')
         relative = 'checkpoints/checkpoint.pth'
@@ -172,7 +192,6 @@ def main():
         modelargs.emit_action('Experiment',run.info.experiment_id)
         modelargs.emit_action('Run',run.info.run_id)
         mlflow.log_params({k:v for k,v in args.items() if v is not None})
-        mlflow.log_param('manfest', cmd_args['manifest'])
         trainer.initialize(); trainer.run()
 
 

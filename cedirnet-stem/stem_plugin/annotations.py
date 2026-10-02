@@ -40,6 +40,17 @@ def load_stem_image(bf_source, haadf_source=None) -> Image.Image:
     return Image.fromarray(channels.astype(np.uint8))
 
 
+def load_single_stem_image(source, modality) -> Image.Image:
+    """Compose one explicitly identified detector as raw [BF, HAADF, zero]."""
+    if modality not in ('BF', 'HAADF'):
+        raise ValueError('Single-image modality must be BF or HAADF')
+    with Image.open(source) as image:
+        present = np.asarray(ImageOps.exif_transpose(image).convert('L'))
+    channels = np.zeros((*present.shape, 3), dtype=np.uint8)
+    channels[:, :, 0 if modality == 'BF' else 1] = present
+    return Image.fromarray(channels)
+
+
 def parse_point_radius(annotation: Sequence[float]) -> tuple[float, float, float]:
     """Return ``(center_x, center_y, radius)`` from a supported annotation.
 

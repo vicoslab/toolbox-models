@@ -52,8 +52,8 @@ with sync_playwright() as pw:
     page.get_by_role('button',name='Download detections',exact=True).scroll_into_view_if_needed()
     page.screenshot(path=str(OUT/'combined.png'),full_page=True)
     clicktext('STEM visualization settings')
-    check('native settings opens',page.locator('dialog').evaluate('(d)=>d.open'))
-    check('no Ok or Cancel buttons',page.get_by_role('button',name='Ok',exact=True).count()+page.get_by_role('button',name='Cancel',exact=True).count()==0)
+    check('native settings opens',page.get_by_role('dialog',name='STEM visualization settings').evaluate('(d)=>d.open'))
+    check('no Ok or Cancel buttons',page.get_by_role('dialog',name='STEM visualization settings').get_by_role('button',name='Ok',exact=True).count()+page.get_by_role('dialog',name='STEM visualization settings').get_by_role('button',name='Cancel',exact=True).count()==0)
     page.screenshot(path=str(OUT/'settings.png'),full_page=True)
     # Count expensive browser operations after initial preparation. No rerender may decode/encode.
     page.evaluate('''()=>{window.costs={decode:0,encode:0};
@@ -129,7 +129,7 @@ with sync_playwright() as pw:
     detections=json.loads(download('Download detections','detections.json').read_text())
     check('JSON retains every unfiltered candidate', [r['scores'] for r in detections]==response['scores'])
     clicktext('STEM visualization settings');control('threshold',0);ready(4);page.keyboard.press('Escape');ready(4)
-    check('Escape closes without rollback',not page.locator('dialog').evaluate('(d)=>d.open'))
+    check('Escape closes without rollback',not page.get_by_role('dialog',name='STEM visualization settings',include_hidden=True).evaluate('(d)=>d.open'))
     page.reload();ready(4)
     check('live settings persist without confirmation',not page.locator('[data-class-name="Film"]').is_checked())
     clicktext('STEM visualization settings');clicktext('None');ready(4)
