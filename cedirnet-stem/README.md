@@ -209,18 +209,18 @@ match count.
 
 ### Modality dropout training
 
-**Training modality dropout** is enabled by default for particle, semantic, and joint
+**Modality dropout - Enable** is enabled by default for particle, semantic, and joint
 training. The plugin reuses the published upstream `stem_modality` helper once
 per batch, after dataset augmentation and before either model's normalization.
-The defaults are **BF dropout probability = 0.25** and **HAADF dropout probability = 0.25**:
+The defaults are **Modality dropout - BF drop probability = 0.25** and **Modality dropout - HAADF drop probability = 0.25**:
 50% paired input, 25% BF-only, and 25% HAADF-only, sampled independently per image.
 These probabilities name the detector **removed**, not the detector retained;
 they must be finite, nonnegative, and sum to at most one. Both are never removed.
 
 The retained detector and auxiliary plane are unchanged; the missing detector
-is filled with raw zeros. **Modality dropout seed** creates a private stream per
+is filled with raw zeros. **Modality dropout - Seed** creates a private stream per
 epoch, independently of shuffle/augmentation. The checkpoint records the policy
-without changing model tensors. Set **Training modality dropout = false** to retain the
+without changing model tensors. Set **Modality dropout - Enable = false** to retain the
 paired-only learning path without masking, copying inputs, or drawing dropout RNG.
 Training manifests and Label Studio annotation/preannotation remain **paired**;
 this option does not add singleton annotation projects or training datasets.
