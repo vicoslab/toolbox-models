@@ -203,24 +203,24 @@ class ValidationIntegrationContractTest(unittest.TestCase):
 
     def test_validation_processes_all_images_and_logs_mlflow_metrics(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("def validate(self, epoch):", train)
+        self.assertIn("def evaluate(self, epoch, subset):", train)
         self.assertIn("ValidationMetrics(", train)
-        self.assertIn("mlflow.log_metrics(validation_metrics, step=epoch + 1)", train)
-        self.assertIn("mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), step=epoch + 1)", train)
+        self.assertIn("mlflow.log_metrics(split_metrics, step=epoch + 1)", train)
+        self.assertIn("f'training/{name}'", train)
         self.assertIn("self.visualize_sample(", train)
         self.assertNotIn("self.visualize_validation_samples(epoch)", train)
         self.assertIn("center_detection_threshold(\n", train)
         self.assertNotIn("self.visualize(self.validation_dataset_it", train)
         self.assertIn("should_validate(", train)
-        validate_call = train.index("self.validate(epoch)")
-        train_visualization_call = train.index("self.visualize_training_samples(epoch)")
-        self.assertLess(validate_call, train_visualization_call)
+        self.assertIn("self.evaluate_splits(epoch)", train)
+        self.assertIn('f"{subset}/{name}"', train)
 
     def test_train_visualization_remains_limited(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("self.visualize_training_samples(epoch)", train)
-        self.assertIn("limit=self.args['visualization_samples']", train)
-        self.assertIn("self.training_visualization_dataset_it", train)
+        self.assertIn("if visualized < visualization_limit:", train)
+        self.assertIn("self.args['visualization_samples'] if subset == 'training'", train)
+        self.assertIn("for sample in loader:", train)
+        self.assertIn("drop_last=False", train)
         self.assertNotIn("self.validation_visualization_dataset_it", train)
         self.assertIn("num_workers=0", train)
         self.assertNotIn("num_workers=dataset_workers,\n            pin_memory=True if args['cuda'] else False,\n            collate_fn=variable_len_collate,\n        ) if len(validation_dataset)", train)
@@ -245,8 +245,8 @@ class ValidationIntegrationContractTest(unittest.TestCase):
 
     def test_visualization_progress_is_counted_per_image(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("tqdm(total=total, desc='visualise'", train)
-        self.assertIn("desc='eval'", train)
+        self.assertIn("total = len(loader.dataset) if evaluate_metrics", train)
+        self.assertIn("desc=f'eval {subset}'", train)
         self.assertIn("progress.update()", train)
 
     def test_validation_logging_remains_concise(self):
@@ -269,7 +269,7 @@ class ValidationIntegrationContractTest(unittest.TestCase):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("CenterGlobalMinimizationEval(tau_thr=POINT_MATCH_DISTANCE_PX)", train)
         self.assertIn("mlflow.log_param('validation_match_distance_px', POINT_MATCH_DISTANCE_PX)", train)
-        self.assertIn("validation/point_f1_at_20px", train)
+        self.assertIn("point_f1_at_20px", train)
 
 
 if __name__ == "__main__":

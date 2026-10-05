@@ -60,7 +60,7 @@ class DiagnosticMapsTest(unittest.TestCase):
 
     def test_artifact_path_rejects_unknown_subset(self):
         with self.assertRaisesRegex(ValueError, "subset"):
-            self.module.training_artifact_path(3, "tile.jpg", "testing")
+            self.module.training_artifact_path(3, "tile.jpg", "unknown")
 
     def test_diagnostic_figure_contains_four_named_panels_and_jet_direction_map(self):
         image = np.zeros((16, 24, 3), dtype=np.uint8)
@@ -195,14 +195,14 @@ class PreparedModelContractTest(unittest.TestCase):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("training_artifact_path", train)
         self.assertIn("visualization_samples", train)
-        self.assertIn("visualized >=", train)
+        self.assertIn("visualized < visualization_limit", train)
 
     def test_training_visualizes_train_and_validation_loaders_separately(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("self.validation_dataset_it", train)
-        self.assertIn("validation_kwargs['split'] = 'test'", train)
-        self.assertIn("self.visualize_training_samples(epoch)", train)
-        self.assertIn("self.validate(epoch)", train)
+        self.assertIn("('training', 'train')", train)
+        self.assertIn("('validation', 'val')", train)
+        self.assertIn("('testing', 'test')", train)
+        self.assertIn("self.evaluate_splits(epoch)", train)
 
     def test_checkpoints_are_stored_under_checkpoint_subfolder(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")

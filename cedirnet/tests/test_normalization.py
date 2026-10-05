@@ -146,11 +146,11 @@ class NormalizationTest(unittest.TestCase):
             dataset = [0, 1]
             def __iter__(self):
                 yield sample
-        trainer.validation_dataset_it = Loader()
+        trainer.evaluation_loaders = {'validation': Loader()}
         rendered = []
         trainer.visualize_sample = lambda **kw: rendered.append(kw['localization_response'])
         with patch.object(train.mlflow, 'log_metrics'):
-            trainer.validate(0)
+            trainer.evaluate(0, 'validation')
         self.assertTrue(all(m.track_running_stats for m in self.batchnorm(center)))
         with torch.no_grad():
             expected = center(self.negative.clone())['center_heatmap'][0].numpy()

@@ -138,37 +138,7 @@ class Trainer:
             ]
             visualization_kwargs['transform'] = my_transforms.Compose(deterministic)
 
-        training_visualization_kwargs = dict(visualization_kwargs)
-        training_visualization_kwargs['split'] = 'train'
-        training_visualization_dataset, _ = get_centerdir_dataset(
-            '', training_visualization_kwargs, args['train_dataset'].get('centerdir_gt_opts'),
-            centerdir_groundtruth_op=self.centerdir_groundtruth_op,
-        )
-        self.training_visualization_dataset_it = torch.utils.data.DataLoader(
-            training_visualization_dataset,
-            batch_size=self.dataset_batch,
-            shuffle=False,
-            drop_last=False,
-            num_workers=0,
-            pin_memory=False,
-            collate_fn=variable_len_collate,
-        )
-
-        validation_kwargs = dict(visualization_kwargs)
-        validation_kwargs['split'] = 'test'
-        validation_dataset, _ = get_centerdir_dataset(
-            '', validation_kwargs, args['train_dataset'].get('centerdir_gt_opts'),
-            centerdir_groundtruth_op=self.centerdir_groundtruth_op,
-        )
-        self.validation_dataset_it = torch.utils.data.DataLoader(
-            validation_dataset,
-            batch_size=self.dataset_batch,
-            shuffle=False,
-            drop_last=False,
-            num_workers=0,
-            pin_memory=False,
-            collate_fn=variable_len_collate,
-        ) if len(validation_dataset) > 0 else None
+        self.initialize_evaluation_loaders(visualization_kwargs)
         self.model = get_model(args['model']['name'], args['model']['kwargs'])
         self.model.init_output(args['num_vector_fields'])
 
@@ -388,7 +358,10 @@ class Trainer:
             iter+=1
 
         all_samples_total_loss = {k:v['loss'] for k,v in all_samples_metrics.items()}
-        mlflow.log_metrics(pd.DataFrame(all_metrics).mean().to_dict(), step=epoch + 1)
+        mlflow.log_metrics({
+            f'training/{name}': value
+            for name, value in pd.DataFrame(all_metrics).mean().to_dict().items()
+        }, step=epoch + 1)
 
         return np.array(list(all_samples_total_loss.values())).mean() * self.dataset_batch
 
@@ -451,7 +424,7 @@ class Trainer:
         scores = centers[valid, 4]
         fig = plot_training_diagnostics(
             image=image,
-            centers=centers[valid, 1:-1],
+            centers=centers[valid, 1:3],
             scores=scores,
             angles=angles[valid],
             direction_output=direction_map,
@@ -463,52 +436,41 @@ class Trainer:
         finally:
             plt.close(fig)
 
-    def visualize_samples(self, loader, epoch, subset, limit=None,
-                          detection_score_threshold=None):
-        if loader is None:
-            return
-
-        total = len(loader.dataset) if limit is None else min(limit, len(loader.dataset))
-        visualized = 0
-        progress = tqdm(total=total, desc='visualise', dynamic_ncols=True)
-        try:
-            for sample in loader:
-                center_output = self.center_model(self.model(sample['image']), **sample)
-                direction_maps, center_pred, center_heatmap, angle_pred = map(
-                    lambda key: center_output[key].detach().cpu().numpy(),
-                    ['output', 'center_pred', 'center_heatmap', 'pred_angle'],
-                )
-                for values in zip(
-                        sample['name'], sample['image'], center_pred, angle_pred,
-                        direction_maps, center_heatmap, sample['center']):
-                    self.visualize_sample(
-                        epoch, subset, *values,
-                        detection_score_threshold=detection_score_threshold,
-                    )
-                    visualized += 1
-                    progress.update()
-                    if visualized >= total:
-                        break
-                if visualized >= total:
-                    break
-        finally:
-            progress.close()
-
-    def visualize_training_samples(self, epoch):
-        self.model.eval()
-        set_center_model_mode(self.center_model, training=False)
-        threshold = self.args['validation_score_threshold']
-        with center_detection_threshold(self.center_model, threshold), torch.no_grad():
-            self.visualize_samples(
-                self.training_visualization_dataset_it,
-                epoch,
-                'training',
-                limit=self.args['visualization_samples'],
-                detection_score_threshold=threshold,
+    def initialize_evaluation_loaders(self, dataset_kwargs):
+        """Use deterministic, complete loaders; GenericDataset handles data -> train."""
+        self.evaluation_loaders = {}
+        for subset, split in [('training', 'train'), ('validation', 'val'), ('testing', 'test')]:
+            kwargs = dict(dataset_kwargs, split=split)
+            dataset, _ = get_centerdir_dataset(
+                '', kwargs, self.args['train_dataset'].get('centerdir_gt_opts'),
+                centerdir_groundtruth_op=self.centerdir_groundtruth_op,
             )
+            self.evaluation_loaders[subset] = torch.utils.data.DataLoader(
+                dataset,
+                batch_size=self.dataset_batch,
+                shuffle=False,
+                drop_last=False,
+                num_workers=0,
+                pin_memory=False,
+                collate_fn=variable_len_collate,
+            ) if len(dataset) > 0 else None
 
-    def validate(self, epoch):
-        if self.validation_dataset_it is None:
+    def evaluate_splits(self, epoch):
+        """Evaluate enabled training and each available held-out split."""
+        results = {}
+        for subset in self.evaluation_loaders:
+            metrics = self.evaluate(epoch, subset)
+            if metrics is not None:
+                results[subset] = metrics
+        return results
+
+    def evaluate(self, epoch, subset):
+        evaluate_metrics = subset != 'training' or self.args.get('evaluate_training', True)
+        if not evaluate_metrics:
+            print('Training evaluation: skipped (disabled by user)', flush=True)
+        loader = self.evaluation_loaders[subset]
+        if loader is None:
+            print(f"{subset.capitalize()}: skipped (no labeled images in split)", flush=True)
             return None
 
         self.model.eval()
@@ -517,14 +479,19 @@ class Trainer:
         metrics = ValidationMetrics(
             score_threshold=self.args['validation_score_threshold'],
             match_centers=center_evaluator._assign_detections_to_groundtruth,
-        )
+        ) if evaluate_metrics else None
+        visualized = 0
+        visualization_limit = self.args['visualization_samples'] if subset == 'training' else len(loader.dataset)
+        total = len(loader.dataset) if evaluate_metrics else min(visualization_limit, len(loader.dataset))
+        if total == 0:
+            return None
         with tqdm(
-                total=len(self.validation_dataset_it.dataset),
-                desc='eval',
+                total=total,
+                desc=f'eval {subset}' if evaluate_metrics else f'visualise {subset}',
                 dynamic_ncols=True,
         ) as progress, center_detection_threshold(
                 self.center_model, self.args['validation_score_threshold']), torch.no_grad():
-            for sample in self.validation_dataset_it:
+            for sample in loader:
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
                     lambda key: center_output[key].detach().cpu().numpy(),
@@ -536,46 +503,56 @@ class Trainer:
                 for name, image, centers, angles, direction_map, heatmap, ground_truth, orientation_map in zip(
                         sample['name'], sample['image'], center_pred, angle_pred,
                         direction_maps, center_heatmap, ground_truth_batch, orientation_maps):
-                    valid = centers[:, 0] == 1
-                    predicted_centers = centers[valid, 1:3]
-                    predicted_scores = centers[valid, 4]
-                    predicted_angles = angles[valid]
-                    ground_truth_centers, ground_truth_angles = extract_ground_truth(
-                        ground_truth, orientation_map
-                    )
-                    metrics.update(
-                        predicted_centers=predicted_centers,
-                        predicted_scores=predicted_scores,
-                        predicted_angles_deg=predicted_angles,
-                        ground_truth_centers=ground_truth_centers,
-                        ground_truth_angles_deg=ground_truth_angles,
-                    )
-                    self.visualize_sample(
-                        epoch=epoch,
-                        subset='validation',
-                        name=name,
-                        image=image,
-                        centers=centers,
-                        angles=angles,
-                        direction_map=direction_map,
-                        localization_response=heatmap,
-                        ground_truth_centers=ground_truth,
-                        detection_score_threshold=self.args['validation_score_threshold'],
-                    )
+                    if metrics is not None:
+                        valid = centers[:, 0] == 1
+                        predicted_centers = centers[valid, 1:3]
+                        # Packed rows append eval/orientation fields after localization score.
+                        predicted_scores = centers[valid, 4]
+                        predicted_angles = angles[valid]
+                        ground_truth_centers, ground_truth_angles = extract_ground_truth(
+                            ground_truth, orientation_map
+                        )
+                        metrics.update(
+                            predicted_centers=predicted_centers,
+                            predicted_scores=predicted_scores,
+                            predicted_angles_deg=predicted_angles,
+                            ground_truth_centers=ground_truth_centers,
+                            ground_truth_angles_deg=ground_truth_angles,
+                        )
+                    if visualized < visualization_limit:
+                        self.visualize_sample(
+                            epoch=epoch,
+                            subset=subset,
+                            name=name,
+                            image=image,
+                            centers=centers,
+                            angles=angles,
+                            direction_map=direction_map,
+                            localization_response=heatmap,
+                            ground_truth_centers=ground_truth,
+                            detection_score_threshold=self.args['validation_score_threshold'],
+                        )
+                        visualized += 1
                     progress.update()
+                    if not evaluate_metrics and visualized >= total:
+                        break
+                if not evaluate_metrics and visualized >= total:
+                    break
 
-        validation_metrics = {
-            f"validation/{name}": value for name, value in metrics.compute().items()
-        }
-        mlflow.log_metrics(validation_metrics, step=epoch + 1)
+        if metrics is None:
+            return None
+        # This CLI supports point-only training, not orientation supervision.
+        values = {name: value for name, value in metrics.compute().items()
+                  if not name.startswith('orientation_')}
+        split_metrics = {f"{subset}/{name}": value for name, value in values.items()}
+        mlflow.log_metrics(split_metrics, step=epoch + 1)
         print(
-            "Validation: "
-            f"F1@20px={validation_metrics['validation/point_f1_at_20px']:.4f}, "
-            f"localization MAE={validation_metrics['validation/localization_mae_px']:.2f}px, "
-            f"orientation MAE={validation_metrics['validation/orientation_mae_deg']:.2f}deg",
+            f"{subset.capitalize()}: "
+            f"F1@20px={values['point_f1_at_20px']:.4f}, "
+            f"localization MAE={values['localization_mae_px']:.2f}px",
             flush=True,
         )
-        return validation_metrics
+        return split_metrics
 
     def run(self):
         args = self.args
@@ -590,15 +567,12 @@ class Trainer:
             if args['display'] and should_validate(
                     epoch, args['n_epochs'], args['display_it']):
                 print(
-                    f"Validation step {epoch + 1}/{args['n_epochs']} started",
+                    f"Evaluation step {epoch + 1}/{args['n_epochs']} started",
                     flush=True,
                 )
-                self.model.eval()
-                self.center_model.eval()
-                self.validate(epoch)
-                self.visualize_training_samples(epoch)
+                self.evaluate_splits(epoch)
                 print(
-                    f"Validation step {epoch + 1}/{args['n_epochs']} completed",
+                    f"Evaluation step {epoch + 1}/{args['n_epochs']} completed",
                     flush=True,
                 )
 
@@ -648,6 +622,7 @@ if __name__ == '__main__':
         )
     args['pretrained_center_model_path'] = localisation_checkpoint
     args['display_it'] = cmd_args['display_interval']
+    args['evaluate_training'] = cmd_args['evaluate_training']
     args['visualization_samples'] = cmd_args['visualization_samples']
     args['validation_score_threshold'] = cmd_args['validation_score_threshold']
     args['save_interval'] = cmd_args['save_interval']

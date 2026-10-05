@@ -5,7 +5,7 @@
     "properties": {
         "manifest": {
             "title": "Dataset manifest",
-            "description": "JSON manifest with train and test lists. Each labeled image has image_path (relative to the manifest) and points: [x,y] for centers or [x1,y1,x2,y2] for directed annotations. A submitted annotation with no points exports points: []; missing points means no submitted supervision and is skipped.",
+            "description": "JSON manifest with train (or data), optional val and optional test lists. Each labeled image has image_path (relative to the manifest) and points: [x,y] for centers or [x1,y1,x2,y2] for directed annotations. A submitted annotation with no points exports points: []; missing points means no submitted supervision and is skipped.",
             "format": "file:manifest.json",
             "stage": "train",
             "required": [
@@ -48,16 +48,23 @@
             "default": false
         },
         "display_interval": {
-            "title": "Validation interval",
-            "description": "Epoch count between full validation/test evaluation passes and diagnostic visualisations.",
+            "title": "Evaluation interval",
+            "description": "Epoch count between full training, validation and test evaluation passes and diagnostic visualisations. Evaluation also runs after the final epoch.",
             "stage": "train",
             "type": "integer",
             "default": 4,
             "minimum": 1
         },
+        "evaluate_training": {
+            "title": "Evaluate training set",
+            "description": "Calculate evaluation metrics on all labeled training images at each evaluation step.",
+            "stage": "train",
+            "type": "boolean",
+            "default": true
+        },
         "visualization_samples": {
             "title": "Training samples to visualise",
-            "description": "Maximum number of training samples saved at each validation step. Every validation/test image is always visualised.",
+            "description": "Maximum number of training samples visualised at each evaluation step. Metrics cover all labeled training images; every validation/test image is visualised.",
             "stage": "train",
             "type": "integer",
             "default": 4,
@@ -65,8 +72,8 @@
             "maximum": 16
         },
         "validation_score_threshold": {
-            "title": "Validation score threshold",
-            "description": "Minimum center confidence used to calculate validation point and orientation metrics.",
+            "title": "Evaluation score threshold",
+            "description": "Minimum center confidence used to calculate point-detection and localization metrics on training, validation and test splits.",
             "stage": "train",
             "type": "number",
             "default": 0.5,

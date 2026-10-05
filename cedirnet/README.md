@@ -63,6 +63,39 @@ The default training setup supplies that localization checkpoint.
 Update/reload the plugin before starting inference or training; already running
 workers keep their imported code. No upstream source patch is required.
 
+## Split evaluation and MLflow metrics
+
+At each **Evaluation interval**, and after the final epoch, the trainer evaluates
+all labeled images in `train`, `val`, and `test` independently. If `train` is
+absent, `data` is used for training and training-set evaluation. This does not
+create a held-out split or copy training results into validation/test metrics.
+Missing or empty evaluation splits print an explicit skip message.
+
+**Evaluate training set** is enabled by default. Disable it in the training form,
+or pass `--evaluate_training false`, to skip only training-set metric calculation.
+Training figures remain controlled by **Training samples to visualise**, training
+losses are still logged every epoch, and validation/test evaluation is unchanged.
+When enabled, metrics cover the entire labeled training set, not just the images
+selected for visualization.
+
+MLflow metrics use `training/*`, `validation/*`, and `testing/*`, respectively,
+with one-based epoch steps. Training loss components are logged under
+`training/*` every epoch; detection precision, recall, F1 at 20 px, localization
+errors, point counts and image counts are logged at evaluation epochs.
+Orientation-error metrics are omitted: the point-only training CLI does not
+provide orientation supervision.
+Training-set metrics measure fit, not generalization to unseen images.
+
+Evaluation uses deterministic resize/tensor/normalization transforms, eval mode,
+and no gradients. Every eligible image is counted, including negatives and the
+last partial batch. **Training samples to visualise** limits only saved training
+figures, not metric coverage. Validation/test figures use separate subfolders.
+**Evaluation score threshold** applies to all three splits; the CLI identifiers
+`display_interval` and `validation_score_threshold` remain unchanged.
+
+Reload/update the plugin before starting a new training job. Existing workers
+retain their imported code, and historical runs keep their old metric names.
+
 ## Regression tests
 
 Use a Python environment with the model's dependencies:

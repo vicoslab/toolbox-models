@@ -49,8 +49,8 @@ def localization_probability_map(localization_response):
 
 def training_artifact_path(epoch, sample_name, subset):
     """Build a traversal-safe, epoch-scoped MLflow artifact path."""
-    if subset not in {"training", "validation"}:
-        raise ValueError("subset must be 'training' or 'validation'")
+    if subset not in {"training", "validation", "testing"}:
+        raise ValueError("subset must be 'training', 'validation' or 'testing'")
     normalized = str(sample_name).replace("\\", "/")
     parts = [part for part in PurePosixPath(normalized).parts if part not in {".", "..", "/"}]
     stem_parts = [PurePosixPath(part).stem if index == len(parts) - 1 else part for index, part in enumerate(parts)]
