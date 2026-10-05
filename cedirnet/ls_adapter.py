@@ -26,7 +26,7 @@ def export(annotations, export_dir, relpaths, shared, config, **kwargs):
             x = int((value['x'] + value['width']/2) / 100 * w)
             y = int((value['y'] + value['height']/2) / 100 * h)
             points.append([x, y])
-        elif kind == ('brushlabels', 'brush', 'magicwand'):
+        elif kind in ('brushlabels', 'brush', 'magicwand'):
             if rle := value.get('rle'):
                 rgba = np.asarray(decode_rle(rle), dtype=np.uint8)
                 mask = rgba.reshape(h, w, 4)[:, :, 3] > 0
