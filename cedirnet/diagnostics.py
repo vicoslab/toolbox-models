@@ -93,6 +93,7 @@ def plot_training_diagnostics(
     direction_output,
     localization_response,
     ground_truth_centers=(),
+    detection_score_threshold=None,
 ):
     """Create the four views needed to inspect one augmented train sample."""
     image = _display_image(image)
@@ -124,6 +125,13 @@ def plot_training_diagnostics(
     _draw_detections(axes[0, 1], centers, scores, angles)
     axes[0, 1].set_title("Final detections")
     axes[0, 1].axis("off")
+    if detection_score_threshold is not None:
+        axes[0, 1].text(
+            0.98, 0.02, f"Score threshold ≥ {detection_score_threshold:.9g}",
+            transform=axes[0, 1].transAxes, ha="right", va="bottom",
+            fontsize=8, color="white",
+            bbox={"facecolor": "black", "alpha": 0.55, "edgecolor": "none", "pad": 3},
+        )
 
     direction = axes[1, 0].imshow(
         center_direction_angle_map(direction_output),

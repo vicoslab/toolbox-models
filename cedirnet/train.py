@@ -37,7 +37,7 @@ from detection_threshold import center_detection_threshold
 from extras import center_model_kwargs, load_center_state, set_center_model_mode
 from localization_checkpoint import ensure_localization_checkpoint
 from scheduling import should_validate
-from validation_metrics import POINT_MATCH_DISTANCE_PX, ValidationMetrics, extract_ground_truth
+from validation_metrics import POINT_MATCH_DISTANCE_PX, BestF1Metrics, extract_ground_truth
 
 
 def log_figure_artifact(fig, artifact_file):
@@ -430,6 +430,7 @@ class Trainer:
             direction_output=direction_map,
             localization_response=localization_response,
             ground_truth_centers=ground_truth_centers,
+            detection_score_threshold=detection_score_threshold,
         )
         try:
             log_figure_artifact(fig, training_artifact_path(epoch, name, subset))
@@ -476,21 +477,23 @@ class Trainer:
         self.model.eval()
         set_center_model_mode(self.center_model, training=False)
         center_evaluator = CenterGlobalMinimizationEval(tau_thr=POINT_MATCH_DISTANCE_PX)
-        metrics = ValidationMetrics(
-            score_threshold=self.args['validation_score_threshold'],
+        metrics = BestF1Metrics(
             match_centers=center_evaluator._assign_detections_to_groundtruth,
         ) if evaluate_metrics else None
-        visualized = 0
+        visualization_threshold = self.args['visualization_score_threshold']
         visualization_limit = self.args['visualization_samples'] if subset == 'training' else len(loader.dataset)
         total = len(loader.dataset) if evaluate_metrics else min(visualization_limit, len(loader.dataset))
         if total == 0:
             return None
+        visualized = 0
+        # Accumulate only point-level metric arrays. Figures are rendered in a
+        # deterministic second pass with identical batches, not split-sized maps.
         with tqdm(
                 total=total,
                 desc=f'eval {subset}' if evaluate_metrics else f'visualise {subset}',
                 dynamic_ncols=True,
         ) as progress, center_detection_threshold(
-                self.center_model, self.args['validation_score_threshold']), torch.no_grad():
+                self.center_model, None if evaluate_metrics else visualization_threshold), torch.no_grad():
             for sample in loader:
                 center_output = self.center_model(self.model(sample['image']), **sample)
                 direction_maps, center_pred, center_heatmap, angle_pred = map(
@@ -505,33 +508,22 @@ class Trainer:
                         direction_maps, center_heatmap, ground_truth_batch, orientation_maps):
                     if metrics is not None:
                         valid = centers[:, 0] == 1
-                        predicted_centers = centers[valid, 1:3]
-                        # Packed rows append eval/orientation fields after localization score.
-                        predicted_scores = centers[valid, 4]
-                        predicted_angles = angles[valid]
                         ground_truth_centers, ground_truth_angles = extract_ground_truth(
                             ground_truth, orientation_map
                         )
                         metrics.update(
-                            predicted_centers=predicted_centers,
-                            predicted_scores=predicted_scores,
-                            predicted_angles_deg=predicted_angles,
+                            predicted_centers=centers[valid, 1:3],
+                            predicted_scores=centers[valid, 4],
+                            predicted_angles_deg=angles[valid],
                             ground_truth_centers=ground_truth_centers,
                             ground_truth_angles_deg=ground_truth_angles,
                         )
-                    if visualized < visualization_limit:
-                        self.visualize_sample(
-                            epoch=epoch,
-                            subset=subset,
-                            name=name,
-                            image=image,
-                            centers=centers,
-                            angles=angles,
-                            direction_map=direction_map,
-                            localization_response=heatmap,
-                            ground_truth_centers=ground_truth,
-                            detection_score_threshold=self.args['validation_score_threshold'],
-                        )
+                    if not evaluate_metrics and visualized < visualization_limit:
+                        payload = dict(name=str(name), image=image.detach().cpu().numpy(),
+                                       centers=centers, angles=angles, direction_map=direction_map,
+                                       localization_response=heatmap, ground_truth_centers=ground_truth)
+                        self.visualize_sample(epoch=epoch, subset=subset, **payload,
+                                              detection_score_threshold=visualization_threshold)
                         visualized += 1
                     progress.update()
                     if not evaluate_metrics and visualized >= total:
@@ -544,15 +536,53 @@ class Trainer:
         # This CLI supports point-only training, not orientation supervision.
         values = {name: value for name, value in metrics.compute().items()
                   if not name.startswith('orientation_')}
+        visualization_threshold = values['best_f1_score_threshold']
         split_metrics = {f"{subset}/{name}": value for name, value in values.items()}
         mlflow.log_metrics(split_metrics, step=epoch + 1)
+        self.visualize_split(epoch, subset, visualization_threshold, visualization_limit)
         print(
             f"{subset.capitalize()}: "
-            f"F1@20px={values['point_f1_at_20px']:.4f}, "
+            f"best F1@20px={values['point_f1_at_20px']:.4f}, "
+            f"threshold={visualization_threshold:.9g}, "
             f"localization MAE={values['localization_mae_px']:.2f}px",
             flush=True,
         )
         return split_metrics
+
+    def visualize_split(self, epoch, subset, threshold, limit):
+        """Replay deterministic loader batches at the selected plot cutoff.
+
+        Keep extraction unfiltered as in the metric pass: the upstream batch-wide
+        candidate cap must see the same candidates before figure filtering.
+        """
+        loader = self.evaluation_loaders[subset]
+        total = min(limit, len(loader.dataset))
+        if total <= 0:
+            return
+        visualized = 0
+        with tqdm(total=total, desc=f'visualise {subset}', dynamic_ncols=True) as progress, \
+                center_detection_threshold(self.center_model, None), torch.no_grad():
+            for sample in loader:
+                output = self.center_model(self.model(sample['image']), **sample)
+                direction_maps, centers, heatmaps, angles = [
+                    output[key].detach().cpu().numpy()
+                    for key in ['output', 'center_pred', 'center_heatmap', 'pred_angle']
+                ]
+                for name, image, center, angle, direction, heatmap, ground_truth in zip(
+                        sample['name'], sample['image'], centers, angles, direction_maps,
+                        heatmaps, sample['center'].detach().cpu().numpy()):
+                    self.visualize_sample(
+                        epoch=epoch, subset=subset, name=str(name), image=image,
+                        centers=center, angles=angle, direction_map=direction,
+                        localization_response=heatmap, ground_truth_centers=ground_truth,
+                        detection_score_threshold=threshold,
+                    )
+                    visualized += 1
+                    progress.update()
+                    if visualized >= total:
+                        break
+                if visualized >= total:
+                    break
 
     def run(self):
         args = self.args
@@ -624,7 +654,7 @@ if __name__ == '__main__':
     args['display_it'] = cmd_args['display_interval']
     args['evaluate_training'] = cmd_args['evaluate_training']
     args['visualization_samples'] = cmd_args['visualization_samples']
-    args['validation_score_threshold'] = cmd_args['validation_score_threshold']
+    args['visualization_score_threshold'] = cmd_args['visualization_score_threshold']
     args['save_interval'] = cmd_args['save_interval']
     
     mlflow.set_tracking_uri('http://localhost:8081')

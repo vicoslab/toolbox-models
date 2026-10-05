@@ -95,7 +95,8 @@ class EvaluationSplitsTest(unittest.TestCase):
         metrics = load_helper('validation_metrics')
         self.namespace = {'torch': torch, 'np': np, 'tqdm': tqdm, 'mlflow': mlflow,
                           'POINT_MATCH_DISTANCE_PX': metrics.POINT_MATCH_DISTANCE_PX,
-                          'ValidationMetrics': metrics.ValidationMetrics,
+                          'BestF1Metrics': metrics.BestF1Metrics,
+                          'tempfile': tempfile, 'os': __import__('os'),
                           'extract_ground_truth': metrics.extract_ground_truth,
                           'center_detection_threshold': load_helper('detection_threshold').center_detection_threshold,
                           'CenterGlobalMinimizationEval': lambda **kw: SimpleNamespace(
@@ -111,7 +112,7 @@ class EvaluationSplitsTest(unittest.TestCase):
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Trainer')
         exec(compile(ast.Module(body=[cls], type_ignores=[]), str(MODEL_DIR / 'train.py'), 'exec'), self.namespace)
         self.trainer = self.namespace['Trainer']({'cuda': False, 'visualization_samples': 1,
-                                                 'validation_score_threshold': .5,
+                                                 'visualization_score_threshold': .5,
                                                  'train_dataset': {}})
         self.trainer.dataset_batch = 2
         self.trainer.centerdir_groundtruth_op = None
@@ -136,7 +137,7 @@ class EvaluationSplitsTest(unittest.TestCase):
         self.assertEqual(result['training']['training/images'], 4)
         self.assertEqual(result['training']['training/point_tp'], 3)
         self.assertEqual(result['training']['training/point_fp'], 1)
-        self.assertEqual(self.trainer.center_model.batch_sizes, [2, 2])
+        self.assertEqual(self.trainer.center_model.batch_sizes, [2, 2, 2])
         self.assertEqual(log.call_count, 1)
         self.assertEqual(log.call_args.kwargs['step'], 10)
         self.assertEqual(self.trainer.visualize_sample.call_count, 1)
@@ -162,9 +163,13 @@ class EvaluationSplitsTest(unittest.TestCase):
         for subset, count in [('training', 3), ('validation', 2), ('testing', 1)]:
             self.assertEqual(actual[f'{subset}/images'], count)
             self.assertEqual(actual[f'{subset}/point_f1_at_20px'], 1)
+            self.assertAlmostEqual(actual[f'{subset}/best_f1_score_threshold'], .9)
+            self.assertEqual(actual[f'{subset}/candidate_points'], 2 * count)
+            chosen = client.get_metric_history(run.info.run_id, f'{subset}/best_f1_score_threshold')
+            self.assertEqual(chosen[0].step, 7)
             history = client.get_metric_history(run.info.run_id, f'{subset}/images')
             self.assertEqual([(m.step, m.value) for m in history], [(7, count)])
-        self.assertEqual(self.trainer.center_model.batch_sizes, [2, 1, 2, 1])
+        self.assertEqual(self.trainer.center_model.batch_sizes, [2, 1, 2, 2, 2, 1, 1])
         self.assertEqual([c.kwargs['subset'] for c in self.trainer.visualize_sample.call_args_list],
                          ['training', 'validation', 'validation', 'testing'])
 
@@ -177,7 +182,7 @@ class EvaluationSplitsTest(unittest.TestCase):
         self.assertEqual(values['training/images'], 7)
         self.assertEqual(values['training/ground_truth_points'], 7)
         self.assertEqual(values['training/point_tp'], 7)
-        self.assertEqual(self.trainer.center_model.batch_sizes, [2, 2, 2, 1])
+        self.assertEqual(self.trainer.center_model.batch_sizes, [2, 2, 2, 1, 2])
         self.assertEqual(self.trainer.visualize_sample.call_count, 1)
 
     def test_empty_explicit_train_does_not_fall_back_to_unassigned_data(self):
@@ -300,6 +305,83 @@ class EvaluationSplitsTest(unittest.TestCase):
             namespace = {'args': {}, 'cmd_args': parsed}
             exec(compile(ast.Module(body=assignments, type_ignores=[]), 'train.py', 'exec'), namespace)
             self.assertIs(namespace['args']['evaluate_training'], expected)
+
+    def test_each_split_uses_own_best_threshold_and_ignores_visualization_setting(self):
+        class SplitScores(CenterModel):
+            def forward(self, output, **values):
+                result = super().forward(output, **values)
+                for i, name in enumerate(values['name']):
+                    score = {'train': .03, 'val': .15, 'test': .07}[name.split('-')[0]]
+                    result['center_pred'][i, 0, 4] = score
+                    result['center_pred'][i, 1, 4] = score / 2
+                    # Simulate real candidate filtering so an extraction cutoff
+                    # above the low scores causes a genuine missing-candidate error.
+                    valid = result['center_pred'][i, :, 4] > self.instance_center_estimator.local_max_thr
+                    result['center_pred'][i, :, 0] = valid
+                return result
+        self.trainer.args['visualization_score_threshold'] = 5.
+        self.trainer.center_model = SplitScores()
+        self.initialize({key: [{'image_path': f'{key}-image.png', 'points': [[2, 3]]}]
+                         for key in ['train', 'val', 'test']})
+        with patch.object(mlflow, 'log_metrics'), contextlib.redirect_stdout(io.StringIO()):
+            result = self.trainer.evaluate_splits(2)
+        for subset, expected in [('training', .03), ('validation', .15), ('testing', .07)]:
+            values = result[subset]
+            self.assertAlmostEqual(values[f'{subset}/best_f1_score_threshold'], expected)
+            self.assertEqual(values[f'{subset}/point_f1_at_20px'], 1)
+            self.assertEqual(values[f'{subset}/candidate_points'], 2)
+            fig = next(c for c in self.trainer.visualize_sample.call_args_list if c.kwargs['subset'] == subset)
+            self.assertAlmostEqual(fig.kwargs['detection_score_threshold'], expected)
+        self.assertEqual(self.trainer.center_model.instance_center_estimator.local_max_thr, .1)
+
+    def test_visualization_only_uses_user_threshold_without_metric_sweep(self):
+        self.trainer.args.update(evaluate_training=False, visualization_score_threshold=.42)
+        self.initialize({'data': [{'image_path': 'a.png', 'points': [[2, 3]]}]})
+        with patch.object(mlflow, 'log_metrics') as log, contextlib.redirect_stdout(io.StringIO()):
+            self.trainer.evaluate_splits(0)
+        log.assert_not_called()
+        self.assertEqual(self.trainer.visualize_sample.call_args.kwargs['detection_score_threshold'], .42)
+        self.assertEqual(self.trainer.center_model.instance_center_estimator.local_max_thr, .1)
+
+    def test_figures_replay_same_batches_without_split_sized_disk_cache(self):
+        self.initialize({'data': [{'image_path': f'{i}.png', 'points': [[2, 3]]}
+                                  for i in range(5)]})
+        with patch.object(np, 'savez', side_effect=AssertionError('no map cache')):
+            with patch.object(tempfile, 'TemporaryDirectory', side_effect=AssertionError('no cache directory')):
+                with patch.object(mlflow, 'log_metrics'), contextlib.redirect_stdout(io.StringIO()):
+                    result = self.trainer.evaluate_splits(0)
+        self.assertEqual(result['training']['training/images'], 5)
+        self.assertEqual(self.trainer.center_model.batch_sizes, [2, 2, 1, 2])
+        self.assertEqual(self.trainer.visualize_sample.call_count, 1)
+
+    def test_extractor_is_restored_after_replay_render_failure(self):
+        self.initialize({'data': [{'image_path': 'positive.png', 'points': [[2, 3]]}]})
+        self.trainer.visualize_sample.side_effect = RuntimeError('render failure')
+        with patch.object(mlflow, 'log_metrics'), contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(RuntimeError, 'render failure'):
+                self.trainer.evaluate_splits(0)
+        self.assertEqual(self.trainer.center_model.instance_center_estimator.local_max_thr, .1)
+
+    def test_no_confidence_cutoff_restores_extractor_on_exception(self):
+        helper = load_helper('detection_threshold')
+        with self.assertRaisesRegex(RuntimeError, 'probe'):
+            with helper.center_detection_threshold(self.trainer.center_model, None):
+                self.assertEqual(self.trainer.center_model.instance_center_estimator.local_max_thr, 0.)
+                raise RuntimeError('probe')
+        self.assertEqual(self.trainer.center_model.instance_center_estimator.local_max_thr, .1)
+
+    def test_visualization_option_rename_and_cli_assignment(self):
+        schema = json.loads((MODEL_DIR / 'model.json').read_text())
+        self.assertNotIn('validation_score_threshold', schema['properties'])
+        self.assertEqual(schema['properties']['visualization_score_threshold']['default'], .5)
+        tree = ast.parse((MODEL_DIR / 'train.py').read_text())
+        assignments = [node for node in tree.body[-1].body if isinstance(node, ast.Assign)
+                       and any(isinstance(t, ast.Subscript) and isinstance(t.slice, ast.Constant)
+                               and t.slice.value == 'visualization_score_threshold' for t in node.targets)]
+        self.assertEqual(len(assignments), 1)
+        namespace = {'args': {}, 'cmd_args': {'visualization_score_threshold': .027}}
+        exec(compile(ast.Module(body=assignments, type_ignores=[]), 'train.py', 'exec'), namespace)
+        self.assertEqual(namespace['args']['visualization_score_threshold'], .027)
 
     def test_training_losses_are_namespaced_without_changing_values(self):
         import pandas as pd

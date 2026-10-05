@@ -71,9 +71,9 @@
             "minimum": 1,
             "maximum": 16
         },
-        "validation_score_threshold": {
-            "title": "Evaluation score threshold",
-            "description": "Minimum center confidence used to calculate point-detection and localization metrics on training, validation and test splits.",
+        "visualization_score_threshold": {
+            "title": "Visualization score threshold",
+            "description": "Minimum center score for figures when evaluation is disabled. Evaluated splits automatically use their own threshold maximizing dataset-wide F1; this setting never filters evaluation candidates.",
             "stage": "train",
             "type": "number",
             "default": 0.5,

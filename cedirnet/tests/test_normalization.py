@@ -133,7 +133,7 @@ class NormalizationTest(unittest.TestCase):
         train = importlib.import_module('train')
         center = self.loaded()
         self.extras.set_center_model_mode(center, training=True, freeze_learning=True)
-        trainer = train.Trainer({'cuda': False, 'validation_score_threshold': .5})
+        trainer = train.Trainer({'cuda': False, 'visualization_score_threshold': .5})
         trainer.model = torch.nn.Identity()
         trainer.center_model = center
         sample = {

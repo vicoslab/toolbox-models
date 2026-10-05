@@ -21,16 +21,19 @@ def center_detection_threshold(center_model, threshold):
     uses ``>=``. Moving by one representable float preserves the public
     validation semantics at the boundary.
     """
-    threshold = float(threshold)
-    if not np.isfinite(threshold) or threshold < 0:
-        raise ValueError("center detection threshold must be finite and non-negative")
+    # None removes confidence filtering: keep every positive-response peak,
+    # excluding the zero plateau created by the upstream ReLU (not detections).
+    if threshold is not None:
+        threshold = float(threshold)
+        if not np.isfinite(threshold) or threshold < 0:
+            raise ValueError("center detection threshold must be finite and non-negative")
 
     model = _unwrap_model(center_model)
     localizer = model.instance_center_estimator
     previous = localizer.local_max_thr
-    localizer.local_max_thr = float(
+    localizer.local_max_thr = (0.0 if threshold is None else float(
         np.nextafter(np.float32(threshold), np.float32(-np.inf))
-    )
+    ))
     try:
         yield
     finally:

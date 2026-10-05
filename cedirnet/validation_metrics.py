@@ -104,6 +104,90 @@ class ValidationMetrics:
         }
 
 
+class BestF1Metrics:
+    """Select best F1 from a single sorted split-wide precision–recall curve.
+
+    Match all candidates once per image using CeDiRNet's spatial assignment.
+    Keep those TP/FP labels fixed, sort by score, and accumulate prefix counts.
+    Equal scores enter together so the selected point is realizable by a score
+    threshold. Equal F1 prefers the highest threshold, including no detections.
+    """
+
+    def __init__(self, *, match_centers):
+        self.match_centers = match_centers
+        self.records = []
+        self.images = 0
+        self.ground_truth_points = 0
+
+    def update(self, *, predicted_centers, predicted_scores, predicted_angles_deg,
+               ground_truth_centers, ground_truth_angles_deg):
+        centers = np.asarray(predicted_centers, dtype=np.float64).reshape(-1, 2)
+        scores = np.asarray(predicted_scores, dtype=np.float64).reshape(-1)
+        angles = np.asarray(predicted_angles_deg, dtype=np.float64).reshape(-1)
+        targets = np.asarray(ground_truth_centers, dtype=np.float64).reshape(-1, 2)
+        target_angles = np.asarray(ground_truth_angles_deg, dtype=np.float64).reshape(-1)
+        if not np.isfinite(scores).all() or (scores < 0).any():
+            raise ValueError('candidate scores must be finite and non-negative')
+        if not (len(centers) == len(scores) == len(angles)):
+            raise ValueError('prediction centers, scores, and angles must have equal length')
+        if len(targets) != len(target_angles):
+            raise ValueError('ground-truth centers and angles must have equal length')
+        # Each row stores score, fixed TP flag, localization error, angle error.
+        records = np.zeros((len(scores), 4), dtype=np.float64)
+        records[:, 0] = scores
+        if len(centers) and len(targets):
+            rows, cols = self.match_centers(centers, targets)
+            rows, cols = np.asarray(rows, dtype=int), np.asarray(cols, dtype=int)
+            records[rows, 1] = 1
+            records[rows, 2] = np.linalg.norm(centers[rows] - targets[cols], axis=1)
+            records[rows, 3] = np.abs((angles[rows] - target_angles[cols] + 180) % 360 - 180)
+        self.records.append(records)
+        self.images += 1
+        self.ground_truth_points += len(targets)
+
+    def compute(self):
+        records = np.concatenate(self.records) if self.records else np.empty((0, 4))
+        candidate_points = len(records)
+        if candidate_points:
+            records = records[np.argsort(-records[:, 0], kind='stable')]
+            scores = records[:, 0]
+            # Curve points at the end of each tied-score group. All prefixes are
+            # accumulated once; no threshold loop, matching, or model replay.
+            ends = np.r_[np.flatnonzero(scores[1:] != scores[:-1]), candidate_points - 1]
+            prefix_tp = np.cumsum(records[:, 1], dtype=np.int64)
+            counts = ends + 1
+            tp = prefix_tp[ends]
+            f1 = 2.0 * tp / (counts + self.ground_truth_points)
+            winner = int(np.argmax(f1))
+            if f1[winner] > 0:
+                count = int(counts[winner])
+                threshold = float(scores[count - 1])
+            else:
+                count = 0
+                threshold = float(np.nextafter(np.float32(scores[0]), np.float32(np.inf)))
+                if not np.isfinite(threshold) or threshold <= scores[0]:
+                    threshold = float(np.nextafter(scores[0], np.inf))
+        else:
+            count, threshold = 0, 0.0
+        selected = records[:count]
+        matched = selected[selected[:, 1] == 1]
+        # Reuse metric formatting, not its matcher. Errors/counts correspond to
+        # the same fixed-label PR point that supplied the chosen score.
+        metrics = ValidationMetrics(score_threshold=threshold, match_centers=self.match_centers)
+        metrics.tp = len(matched)
+        metrics.fp = count - metrics.tp
+        metrics.fn = self.ground_truth_points - metrics.tp
+        metrics.images = self.images
+        metrics.predicted_points = count
+        metrics.ground_truth_points = self.ground_truth_points
+        metrics.localization_errors = matched[:, 2].tolist()
+        metrics.orientation_errors = matched[:, 3].tolist()
+        result = metrics.compute()
+        result['best_f1_score_threshold'] = threshold
+        result['candidate_points'] = float(candidate_points)
+        return result
+
+
 def extract_ground_truth(centers, orientation_map):
     """Extract valid XY centers and orientation degrees from a sample map."""
     centers = np.asarray(centers, dtype=np.float64).reshape(-1, 2)

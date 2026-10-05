@@ -204,7 +204,7 @@ class ValidationIntegrationContractTest(unittest.TestCase):
     def test_validation_processes_all_images_and_logs_mlflow_metrics(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("def evaluate(self, epoch, subset):", train)
-        self.assertIn("ValidationMetrics(", train)
+        self.assertIn("BestF1Metrics(", train)
         self.assertIn("mlflow.log_metrics(split_metrics, step=epoch + 1)", train)
         self.assertIn("f'training/{name}'", train)
         self.assertIn("self.visualize_sample(", train)
@@ -217,7 +217,8 @@ class ValidationIntegrationContractTest(unittest.TestCase):
 
     def test_train_visualization_remains_limited(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("if visualized < visualization_limit:", train)
+        self.assertIn("if not evaluate_metrics and visualized < visualization_limit:", train)
+        self.assertIn("self.visualize_split(epoch, subset, visualization_threshold, visualization_limit)", train)
         self.assertIn("self.args['visualization_samples'] if subset == 'training'", train)
         self.assertIn("for sample in loader:", train)
         self.assertIn("drop_last=False", train)
@@ -264,7 +265,7 @@ class ValidationIntegrationContractTest(unittest.TestCase):
 
     def test_validation_metric_options_are_exposed(self):
         schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))
-        self.assertEqual(schema["properties"]["validation_score_threshold"]["default"], 0.5)
+        self.assertEqual(schema["properties"]["visualization_score_threshold"]["default"], 0.5)
         self.assertNotIn("validation_match_distance", schema["properties"])
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("CenterGlobalMinimizationEval(tau_thr=POINT_MATCH_DISTANCE_PX)", train)

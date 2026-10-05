@@ -90,8 +90,32 @@ Evaluation uses deterministic resize/tensor/normalization transforms, eval mode,
 and no gradients. Every eligible image is counted, including negatives and the
 last partial batch. **Training samples to visualise** limits only saved training
 figures, not metric coverage. Validation/test figures use separate subfolders.
-**Evaluation score threshold** applies to all three splits; the CLI identifiers
-`display_interval` and `validation_score_threshold` remain unchanged.
+Evaluation extracts all positive-response local maxima, without a user confidence
+cutoff (zero-valued ReLU background is not a candidate). Within each split it
+matches all candidates once per image, then sorts their scores across the entire
+split and calculates cumulative precision, recall and F1. The score at the
+maximum-F1 curve point supplies the visualization threshold; there is no separate
+threshold sweep or rematching. Tied scores enter together, and equal F1 prefers
+the highest threshold. Precision, recall, counts and localization error all describe
+that same operating point; `*/best_f1_score_threshold` records the selected value
+and `*/candidate_points` records all extracted candidates.
+
+Training, validation and testing thresholds are selected independently, using
+all labeled images in their own split. Testing metrics are therefore best-on-test
+diagnostics, not results at a threshold selected on a separate validation set.
+
+**Visualization score threshold** (`visualization_score_threshold`, default 0.5)
+is used only when evaluation is disabled for a split. Evaluated splits instead
+use their own best-F1 threshold for figures. Each figure includes a small note
+showing its threshold. The old `validation_score_threshold` option is renamed;
+update saved commands/forms to the new name. `display_interval` is unchanged.
+
+Only point-level metric arrays are retained. After threshold selection, figures
+are rendered in a deterministic second inference pass using the same loader
+batches and candidate extraction as evaluation. This avoids temporary disk usage
+proportional to full-resolution images/maps. Metrics are logged before rendering.
+Spatial TP/FP labels stay fixed while computing the precision–recall curve.
+Upstream peak smoothing, border policy and candidate-count limits are unchanged.
 
 Reload/update the plugin before starting a new training job. Existing workers
 retain their imported code, and historical runs keep their old metric names.
