@@ -497,12 +497,14 @@ class Trainer:
     def visualize_training_samples(self, epoch):
         self.model.eval()
         set_center_model_mode(self.center_model, training=False)
-        with torch.no_grad():
+        threshold = self.args['validation_score_threshold']
+        with center_detection_threshold(self.center_model, threshold), torch.no_grad():
             self.visualize_samples(
                 self.training_visualization_dataset_it,
                 epoch,
                 'training',
                 limit=self.args['visualization_samples'],
+                detection_score_threshold=threshold,
             )
 
     def validate(self, epoch):
