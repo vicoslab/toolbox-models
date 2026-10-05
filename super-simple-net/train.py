@@ -253,7 +253,7 @@ def train(
 
         if (epoch + 1) % eval_step_size == 0:
             results = eval(
-                title="Validation",
+                title=f"Validation/{epoch}",
                 model=model,
                 loader=datamodule.val_dataloader(),
                 device=device,
