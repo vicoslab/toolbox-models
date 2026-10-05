@@ -444,9 +444,11 @@ class Trainer:
                          direction_map, localization_response, ground_truth_centers,
                          detection_score_threshold=None):
         valid = centers[:, 0] == 1
+        # Packed rows are [valid, x, y, mask, localization_score, ...].
+        # Evaluation appends a constant indicator after the score.
         if detection_score_threshold is not None:
-            valid = np.logical_and(valid, centers[:, -1] >= detection_score_threshold)
-        scores = centers[valid, -1]
+            valid = np.logical_and(valid, centers[:, 4] >= detection_score_threshold)
+        scores = centers[valid, 4]
         fig = plot_training_diagnostics(
             image=image,
             centers=centers[valid, 1:-1],
@@ -534,7 +536,7 @@ class Trainer:
                         direction_maps, center_heatmap, ground_truth_batch, orientation_maps):
                     valid = centers[:, 0] == 1
                     predicted_centers = centers[valid, 1:3]
-                    predicted_scores = centers[valid, -1]
+                    predicted_scores = centers[valid, 4]
                     predicted_angles = angles[valid]
                     ground_truth_centers, ground_truth_angles = extract_ground_truth(
                         ground_truth, orientation_map
