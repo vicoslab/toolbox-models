@@ -673,9 +673,11 @@ if __name__ == '__main__':
         # this gets parsed and turned into a link in the frontend
         modelargs.emit_action('Experiment', run.info.experiment_id)
         modelargs.emit_action('Run', run.info.run_id)
-        mlflow.log_params(json.loads(json.dumps(args, default=lambda _: '<not serializable>')))
-        mlflow.log_param('validation_match_distance_px', POINT_MATCH_DISTANCE_PX)
-        mlflow.log_param('manfest', cmd_args['manifest'])
+        mlflow.create_external_model(name='CeDiRNet', params={
+            **json.loads(json.dumps(args, default=lambda _: '<not serializable>')),
+            'validation_match_distance_px': POINT_MATCH_DISTANCE_PX,
+            'manfest': cmd_args['manifest'],
+        })
         mlflow.log_input(dataset)
 
         trainer = Trainer(args)
