@@ -14,7 +14,7 @@ def parse_bool(value, default):
 
 
 def task_config(options):
-    classes = options.get('semantic_classes') or '["Carbon", "Film", "Vacuum"]'
+    classes = options.get('semantic_classes') or list(TaskConfig().classes)
     if isinstance(classes, str):
         classes = json.loads(classes)
     if not isinstance(classes, (tuple, list)):

@@ -75,7 +75,7 @@ def test_positive_particle_and_semantic_export_is_unchanged(tmp_path, reverse):
     tags = [ellipse(), brush()]
     exported = run_export(tmp_path, [tags[::-1] if reverse else tags])
     assert exported['points'] == [[16., 16., 8.]]
-    assert exported['semantic_classes'] == ['Carbon', 'Film', 'Vacuum']
+    assert exported['semantic_classes'] == ['Carbon', 'Vacuum']
 
 
 def test_exported_negative_is_retained_no_submission_is_filtered(tmp_path):

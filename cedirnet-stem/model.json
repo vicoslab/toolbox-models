@@ -34,7 +34,7 @@
       "title": "Semantic classes (JSON)",
       "description": "Ordered names; index is mask class ID. Class 0 is a real class, not implicitly background. 255 is ignored.",
       "type": "string",
-      "default": "[\"Carbon\", \"Film\", \"Vacuum\"]"
+      "default": "[\"Carbon\", \"Vacuum\"]"
     },
     "model": {
       "title": "Weights",

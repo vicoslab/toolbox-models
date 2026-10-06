@@ -11,7 +11,7 @@ must be enabled. Task switches are booleans; CLI values are `true` or `false`.
    Do not use the current host's broken `divide` grouping mode.
 2. In **Particle instances**, select **PtCo (P)** and use **Ellipse** (center click
    first); its serialized alias is **nanoparticle**. In **Segmentation**, select
-   **Carbon (C)**, **Film (F)**, **Vacuum (V)**, or **Ignore (I)** and use **Polygon**,
+   **Carbon (C)**, **Vacuum (V)**, or **Ignore (I)** and use **Polygon**,
    **Brush**, or **Magicwand** in that panel. Tools stay in their intended panels;
    there is no additional drawing-tools panel. Cross-label tool use is also
    supported by export, but is not the primary labeling workflow.
@@ -41,6 +41,18 @@ labels are rejected, not guessed or reindexed. This update does not automaticall
 change existing projects: back up their annotations before deliberately migrating
 the XML. Legacy combined-control results remain supported by export; they may need
 conversion to separate geometry/Labels results to render in the new editor.
+
+The default vocabulary is **Carbon = 0**, **Vacuum = 1**, **Ignore = 255**;
+training defaults are `["Carbon", "Vacuum"]`. Film is not a separate target in
+this annotation protocol because the polymer overlay is treated as common to the
+captured field rather than a mutually exclusive region class.
+
+Existing three-class projects, masks and checkpoints are **not** rewritten.
+For those, explicitly retain `["Carbon", "Film", "Vacuum"]` in model options and
+their original project configuration (Vacuum = 2). Do not reinterpret old mask ID
+1 as Vacuum: it represented Film. A two-class dataset requires deliberate
+relabeling/re-export, and its semantic head must be trained for the two-class
+vocabulary; the old three-class checkpoint is not silently converted.
 
 ### Export semantics
 
@@ -394,6 +406,7 @@ dependencies):
 PYTHONPATH="$PWD/cedirnet-stem" python -m pytest -q \
   cedirnet-stem/tests/test_multitool_export.py \
   cedirnet-stem/tests/test_multitool_preannotation.py \
+  cedirnet-stem/tests/test_two_class_defaults.py \
   cedirnet-stem/tests/test_negative_export.py \
   cedirnet/tests/test_export_contract.py
 ```

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 class TaskConfig:
     nanoparticles: bool = True
     segmentation: bool = False
-    classes: tuple = ('Carbon', 'Film', 'Vacuum')
+    classes: tuple = ('Carbon', 'Vacuum')
     ignore_index: int = 255
 
     def __post_init__(self):

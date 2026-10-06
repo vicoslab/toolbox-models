@@ -143,9 +143,9 @@ def test_ui_uses_separate_labels_and_unique_shared_tools():
     for kind in ('Ellipse', 'Polygon', 'Brush', 'Magicwand'):
         assert len(root.findall('.//' + kind)) == 1
     assert root.find('.//PolygonLabels') is None
-    assert [node.get('category') for node in root.findall(".//Labels[@name='semantic']/Label")] == ['0', '1', '2', '255']
+    assert [node.get('category') for node in root.findall(".//Labels[@name='semantic']/Label")] == ['0', '1', '255']
     hotkeys = [node.get('hotkey') for node in root.findall('.//Label')]
-    assert hotkeys == ['p', 'c', 'f', 'v', 'i']
+    assert hotkeys == ['p', 'c', 'v', 'i']
     assert [panel.get('value') for panel in root.findall('.//Panel')] == [
         'Split', 'Particle instances', 'Segmentation', 'Smart tools']
     particle = root.find(".//Panel[@value='Particle instances']")

@@ -171,7 +171,11 @@ def test_repository_sdk_config_preannotation_export_roundtrip(tmp_path, particle
     assert config['labels']['inputs'][0]['valueList'] == 'images'
     assert {name: config[name]['type'] for name in ['points', 'polygon', 'brush', 'wand']} == {
         'points': 'Ellipse', 'polygon': 'Polygon', 'brush': 'Brush', 'wand': 'Magicwand'}
-    prediction = preannotation(response(particles=particles, semantic=semantic), 0, (4, 2), config)
+    current_classes = ['Carbon', 'Vacuum']
+    current_mask = np.array([[0, 1, 1, 255], [1, 1, 0, 255]], dtype=np.uint8)
+    data = response(particles=particles, semantic=semantic)
+    data['segmentation'] = [encode_mask(current_mask, current_classes) if semantic else None]
+    prediction = preannotation(data, 0, (4, 2), config)
     tags = json.loads(json.dumps(prediction))['result']
     assert all(tag['from_name'] in config for tag in tags)
     assert all(tag['type'] == config[tag['from_name']]['type'].lower() for tag in tags)
@@ -179,7 +183,7 @@ def test_repository_sdk_config_preannotation_export_roundtrip(tmp_path, particle
     exported = export([tags], tmp_path, ['BF.png', 'HAADF.png'], False, ET.fromstring(xml))
     assert exported['points'] == ([[1, 1, 1], [3, 1, .5]] if particles else [])
     if semantic:
-        assert exported['semantic_classes'] == CLASSES
-        np.testing.assert_array_equal(np.asarray(Image.open(tmp_path / exported['semantic_mask'])), MASK)
+        assert exported['semantic_classes'] == current_classes
+        np.testing.assert_array_equal(np.asarray(Image.open(tmp_path / exported['semantic_mask'])), current_mask)
     else:
         assert 'semantic_mask' not in exported
