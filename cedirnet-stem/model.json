@@ -38,17 +38,16 @@
     },
     "model": {
       "title": "Weights",
-      "description": "Optional training initialization. Inference requires trained weights for each enabled task. Legacy stock particle checkpoint is supported only for particle-only mode.",
+      "description": "Use 'default' (or leave unset) for downloaded stock particle weights during inference and no model initialization during training. Segmentation inference requires a trained semantic checkpoint. A custom checkpoint path overrides the default.",
       "format": "file:checkpoint.pth",
-      "required": [
-        "infer"
-      ],
+      "default": "default",
       "type": "string"
     },
     "localisation": {
       "title": "Localisation weights",
-      "description": "Particle-only dependency; ignored when nanoparticles is false.",
+      "description": "Use 'default' (or leave unset) to keep the model checkpoint's localizer, or the setup-downloaded localizer when training without a model checkpoint. A custom path overrides it. Ignored when nanoparticles is false.",
       "format": "file:checkpoint.pth",
+      "default": "default",
       "type": "string"
     },
     "score_threshold": {

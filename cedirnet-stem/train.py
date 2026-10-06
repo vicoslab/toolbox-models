@@ -9,6 +9,8 @@ import tempfile
 import numpy as np
 import torch
 import mlflow
+from mlflow.data.meta_dataset import MetaDataset
+from mlflow.data.dataset_source_registry import resolve_dataset_source
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from stem_modality import (apply_modality_dropout, create_modality_dropout_generator,
@@ -16,7 +18,7 @@ from stem_modality import (apply_modality_dropout, create_modality_dropout_gener
 from stem_plugin.task_options import parse_bool, task_config
 from stem_plugin.toolbox_dataset import ToolboxDataset
 from stem_plugin.runtime import StemRuntime
-from stem_plugin.checkpoint import safe_torch_load
+from stem_plugin.checkpoint import checkpoint_override, safe_torch_load
 from stem_plugin.diagnostics import plot_training_diagnostics, training_artifact_path
 from stem_plugin.validation_metrics import ParticleMetrics
 
@@ -55,11 +57,12 @@ class Trainer:
     def initialize(self):
         args = self.args
         self.runtime = StemRuntime(self.tasks,self.device,args.get('backbone') or 'tu-convnext_base',pretrained=False)
-        if args.get('model'):
-            self.runtime.load(safe_torch_load(args['model'],map_location=self.device))
+        model = checkpoint_override(args.get('model'))
+        if model:
+            self.runtime.load(safe_torch_load(model,map_location=self.device))
         if self.tasks.nanoparticles:
-            path = args.get('localisation')
-            if not path and not args.get('model'):
+            path = checkpoint_override(args.get('localisation'))
+            if not path and not model:
                 path = os.path.join(os.environ.get('TOOLBOX_CACHE','.'),'cedirnet-stem','localization_checkpoint.pth')
             if path:
                 self.runtime.load_center(safe_torch_load(path,map_location=self.device))
@@ -184,6 +187,7 @@ def main():
     trainer = Trainer(args)
     mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI','http://localhost:8081'))
     mlflow.set_experiment('CeDiRNet-STEM')
+    dataset = MetaDataset(source=resolve_dataset_source(args["manifest"]), name=args["manifest"].removesuffix("/manifest.json"))
     with mlflow.start_run(run_name=args.get('name')) as run:
         def handler(_signal,_frame):
             mlflow.end_run('KILLED')
@@ -191,7 +195,8 @@ def main():
         signal.signal(signal.SIGINT,handler); signal.signal(signal.SIGTERM,handler)
         modelargs.emit_action('Experiment',run.info.experiment_id)
         modelargs.emit_action('Run',run.info.run_id)
-        mlflow.log_params({k:v for k,v in args.items() if v is not None})
+        mlflow.create_external_model(name='CeDiRNet-STEM', params={k:v for k,v in args.items() if v is not None})
+        mlflow.log_input(dataset)
         trainer.initialize(); trainer.run()
 
 

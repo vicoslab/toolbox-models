@@ -12,6 +12,8 @@ import signal
 
 import mlflow
 from mlflow.entities import RunStatus
+from mlflow.data.meta_dataset import MetaDataset
+from mlflow.data.dataset_source_registry import resolve_dataset_source
 
 from tqdm import tqdm
 import numpy as np
@@ -253,7 +255,7 @@ def train(
 
         if (epoch + 1) % eval_step_size == 0:
             results = eval(
-                title="Validation",
+                title=f"Validation/{epoch}",
                 model=model,
                 loader=datamodule.val_dataloader(),
                 device=device,
@@ -398,6 +400,7 @@ def eval(
 def train_and_eval(model, datamodule, config, device):
     mlflow.set_tracking_uri("http://localhost:8081")
     mlflow.set_experiment("SuperSimpleNet")
+    dataset = MetaDataset(source=resolve_dataset_source(config["manifest"]), name=config["manifest"].removesuffix("/manifest.json"))
     with mlflow.start_run(run_name=config.get("name")) as run:
         def handler(sig, frame):
             mlflow.end_run(RunStatus.to_string(RunStatus.KILLED))
@@ -407,7 +410,8 @@ def train_and_eval(model, datamodule, config, device):
 
         modelargs.emit_action("Experiment", run.info.experiment_id)
         modelargs.emit_action("Run", run.info.run_id)
-        mlflow.log_params(config)
+        mlflow.create_external_model(name="SuperSimpleNet", params=config)
+        mlflow.log_input(dataset)
         args = {
             "model": model,
             "device": device,
