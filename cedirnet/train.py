@@ -31,6 +31,8 @@ from criterions.loss_weighting.weight_methods import get_weight_method
 
 import modelargs
 import mlflow
+from mlflow.data.meta_dataset import MetaDataset
+from mlflow.data.dataset_source_registry import resolve_dataset_source
 from mlflow.entities import RunStatus
 from diagnostics import plot_training_diagnostics, training_artifact_path
 from detection_threshold import center_detection_threshold
@@ -659,6 +661,7 @@ if __name__ == '__main__':
     
     mlflow.set_tracking_uri('http://localhost:8081')
     mlflow.set_experiment('CeDiRNet')
+    dataset = MetaDataset(source=resolve_dataset_source(cmd_args["manifest"]), name=cmd_args["manifest"].removesuffix("/manifest.json"))
 
     with mlflow.start_run(run_name=cmd_args.get('name')) as run:
         def handler(sig, frame):
@@ -673,6 +676,7 @@ if __name__ == '__main__':
         mlflow.log_params(json.loads(json.dumps(args, default=lambda _: '<not serializable>')))
         mlflow.log_param('validation_match_distance_px', POINT_MATCH_DISTANCE_PX)
         mlflow.log_param('manfest', cmd_args['manifest'])
+        mlflow.log_input(dataset)
 
         trainer = Trainer(args)
 

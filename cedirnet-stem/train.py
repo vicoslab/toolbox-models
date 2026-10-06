@@ -9,6 +9,8 @@ import tempfile
 import numpy as np
 import torch
 import mlflow
+from mlflow.data.meta_dataset import MetaDataset
+from mlflow.data.dataset_source_registry import resolve_dataset_source
 from tqdm import tqdm
 from matplotlib import pyplot as plt
 from stem_modality import (apply_modality_dropout, create_modality_dropout_generator,
@@ -184,6 +186,7 @@ def main():
     trainer = Trainer(args)
     mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI','http://localhost:8081'))
     mlflow.set_experiment('CeDiRNet-STEM')
+    dataset = MetaDataset(source=resolve_dataset_source(args["manifest"]), name=args["manifest"].removesuffix("/manifest.json"))
     with mlflow.start_run(run_name=args.get('name')) as run:
         def handler(_signal,_frame):
             mlflow.end_run('KILLED')
@@ -192,6 +195,7 @@ def main():
         modelargs.emit_action('Experiment',run.info.experiment_id)
         modelargs.emit_action('Run',run.info.run_id)
         mlflow.log_params({k:v for k,v in args.items() if v is not None})
+        mlflow.log_input(dataset)
         trainer.initialize(); trainer.run()
 
 
