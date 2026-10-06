@@ -5,7 +5,7 @@ import os
 import numpy as np
 from PIL import Image
 from .annotations import load_stem_image, load_single_stem_image
-from .checkpoint import safe_torch_load
+from .checkpoint import checkpoint_override, safe_torch_load
 from .runtime import StemRuntime
 from .task_options import task_config
 from .results import label_studio_ellipse_result
@@ -15,7 +15,7 @@ import torch
 
 def load_runtime(options, device):
     tasks = task_config(options)
-    path = options.get('model')
+    path = checkpoint_override(options.get('model'))
     if path:
         state = safe_torch_load(path,map_location=device)
     elif tasks.segmentation:
@@ -27,8 +27,9 @@ def load_runtime(options, device):
         state = torch.hub.load_state_dict_from_url(url,map_location=device)
     backbone = state.get('backbone',state.get('metadata',{}).get('backbone','tu-convnext_base'))
     runtime = StemRuntime(tasks,device,backbone,pretrained=False)
-    if tasks.nanoparticles and options.get('localisation'):
-        state = dict(state,center_model_state_dict=safe_torch_load(options['localisation'],map_location=device)['center_model_state_dict'])
+    localisation = checkpoint_override(options.get('localisation'))
+    if tasks.nanoparticles and localisation:
+        state = dict(state,center_model_state_dict=safe_torch_load(localisation,map_location=device)['center_model_state_dict'])
     runtime.load(state,inference=True)
     return runtime.eval()
 

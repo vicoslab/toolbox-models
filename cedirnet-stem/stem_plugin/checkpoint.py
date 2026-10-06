@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 
+def checkpoint_override(value):
+    """Map the UI's explicit default sentinel to the legacy no-override value."""
+    return None if value in (None, '', 'default') else value
+
+
 def safe_torch_load(path, *, map_location):
     """Load tensor checkpoints while allowing legacy NumPy scalar metadata only."""
     import numpy as np

@@ -168,6 +168,18 @@ starts the FPNs randomly (no implicit backbone-weight download). Particle and jo
 training still load the setup-installed `localization_checkpoint.pth` by default;
 semantic-only training neither reads nor requires localization weights.
 
+The **Weights** and **Localisation weights** options use the literal value
+`default` for their built-in behavior; leaving either option unset or empty has
+the same meaning. Particle-only inference downloads the official STEM checkpoint.
+Training still starts the FPNs randomly and uses the setup-downloaded localizer,
+unless a custom model checkpoint is supplied. Default localisation keeps a custom
+model checkpoint's embedded localizer; an explicit localisation path overrides it.
+Segmentation inference always requires a trained semantic checkpoint, not `default`.
+Weights are not unconditionally required by the Toolbox form, so a fresh particle
+worker can start without selecting a checkpoint; the runtime enforces task-specific
+weight requirements. Custom checkpoint paths and MLflow artifact selection remain
+supported.
+
 The pretrained particle localizer stays in evaluation mode during training,
 validation, and inference: its weights **and BatchNorm running statistics** remain
 fixed. The enclosing estimator still follows train/eval mode so the training loss
