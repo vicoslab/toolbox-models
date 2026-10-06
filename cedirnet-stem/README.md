@@ -9,10 +9,12 @@ must be enabled. Task switches are booleans; CLI values are `true` or `false`.
    registered, equally sized images in **BF, HAADF** order. Use interlaced groups
    with filenames that sort into pairs (e.g. `sample_BF.png`, `sample_HAADF.png`).
    Do not use the current host's broken `divide` grouping mode.
-2. Use the two open sidebar panels, **Particle instances** and **Segmentation**.
-   Select **PtCo (P)**, then draw particle ellipses (center click first). The exported
-   particle label is its alias **nanoparticle**. Paint **Carbon (1)**, **Film (2)**,
-   **Vacuum (3)**, or **Ignore (4)**; the segmentation panel also includes Magicwand.
+2. Select a label in **Particle instances** or **Segmentation**, then use the shared
+   **Drawing tools** panel: **Ellipse**, **Polygon**, **Brush**, or **Magicwand**.
+   Every drawing tool supports either label group. Select **PtCo (P)** for one
+   particle instance; its serialized alias is **nanoparticle**. Select **Carbon (C)**,
+   **Film (F)**, **Vacuum (V)**, or **Ignore (I)** for a filled semantic region.
+   Press **Escape** before selecting the next class to avoid relabeling the active region.
    Regions are shared across the aligned pair. There are no N/S visibility toggles.
 3. Submit one annotation per pair. A submitted annotation without particle regions
    exports `points: []`, including semantic-only submissions. No additional
@@ -29,11 +31,15 @@ must be enabled. Task switches are booleans; CLI values are `true` or `false`.
 5. Select that manifest for training, enable the tasks you annotated, and set
    **Semantic classes (JSON)** to the same ordered names as the template.
 
-To change semantic classes, edit the ordered `semantic` BrushLabels in the plugin
-`config.yml` **before creating the project**, and use the same names/order in the
-model option. `Ignore` is reserved and excluded from the class list. Do not change
-only the project XML after creation: the host export API does not pass project
-configuration to the adapter. Unknown classes are rejected, not reindexed.
+To change semantic classes, edit `Labels name="semantic"` in the plugin `config.yml`
+**before creating the project**, assigning unique contiguous `category` IDs starting
+at zero; use the same names/ID order in the model option. `Ignore` uses category 255
+and is excluded from the class list. The host passes the exporting project's XML
+to the adapter, which reads category IDs and serialized aliases from it. Unknown
+labels are rejected, not guessed or reindexed. This update does not automatically
+change existing projects: back up their annotations before deliberately migrating
+the XML. Legacy combined-control results remain supported by export; they may need
+conversion to separate geometry/Labels results to render in the new editor.
 
 ### Export semantics
 
@@ -58,12 +64,11 @@ configuration to the adapter. Unknown classes are rejected, not reindexed.
 
 | Region/tool | Export coverage |
 |---|---|
-| BrushLabels | Every configured class and Ignore, RGBA RLE |
-| Magicwand | Same-ID `magicwand` + labeled `brushlabels` results; every class and Ignore |
-| PolygonLabels / Polygon + Labels | Closed, filled percentage-coordinate polygons |
-| RectangleLabels / Rectangle + Labels | Filled rectangles, including clockwise rotation about their top-left corner |
-| Semantic EllipseLabels / Ellipse + Labels | Filled ellipses, including rotation about the center |
-| Particle EllipseLabels / Ellipse + Labels | Particle `labels` control only; center and mean pixel radius, never a semantic class |
+| BrushLabels / Brush + Labels | Semantic classes and Ignore become RGBA RLE masks; particle labels become centroid/equal-area circles |
+| Magicwand | Separate Labels or same-ID labeled brush partner; same semantic/particle behavior as Brush |
+| PolygonLabels / Polygon + Labels | Closed polygons; semantic masks or particle centroid/equal-area circles |
+| RectangleLabels / Rectangle + Labels | Filled rectangles with rotation; same label-driven routing (export/import support, not a shipped UI button) |
+| EllipseLabels / Ellipse + Labels | Semantic labels become filled rotated masks; particle labels retain center and mean pixel radius |
 
 Separate geometry and Labels results are joined using region ID, image target,
 and gallery `item_index`. Unlabeled geometry (including a wand with no assigned
@@ -71,9 +76,9 @@ class), unknown classes, unsupported spatial types and conflicting paired result
 raise errors rather than disappearing. Select a class for every wand region;
 press Escape before creating a separate region/class instead of relabeling the
 currently selected region. Disjoint regions of the same class are all retained.
-The shipped UI remains BrushLabels + Magicwand and the particle ellipse control;
-additional semantic geometries support existing/imported LS projects, not new UI
-buttons. Class vocabulary still comes from the plugin's semantic BrushLabels.
+The shipped UI separates the two Labels controls from the shared drawing tools.
+Export routing depends on the assigned label, not the geometry tool. Both the
+combined-control legacy format and separate geometry/Labels format are accepted.
 Polygon fill uses even/odd pixel-center inclusion; rectangle and ellipse masks
 also sample pixel centers. Image rotation, open polygons, video sequences, holes
 as separate subtractive polygons, keypoints and arbitrary vector segmentation
@@ -117,9 +122,19 @@ them to pixels and writes `[cx, cy, (rx + ry) / 2]`. This arithmetic-mean radius
 an explicit **circle approximation**: ellipse rotation/eccentricity are not trained
 or predicted. Rotated ellipses are accepted; image rotation must be reset to zero.
 Legacy two-vertex particle exports remain readable. Preannotations now require an
-`EllipseLabels` control and encode the existing circle prediction as equal **pixel**
-radii (different percentages on non-square images), without clipping at edges.
-Update old project XML deliberately before using the new preannotation backend.
+`EllipseLabels` control or particle `Labels` plus a shared `Ellipse`, and encode
+the existing circle prediction as equal **pixel** radii (different percentages on
+non-square images), without clipping at edges. Semantic preannotations use a
+`BrushLabels` control or semantic `Labels` plus shared `Brush`. Separate-control
+predictions carry matching geometry and label results with the same region ID.
+
+Particle polygons, rectangles, brushes and wands rasterize at original image size;
+their center is the mean of included **pixel-center coordinates** and their radius
+is `sqrt(area_pixels / pi)`, retained as floating-point values. This is a circle
+approximation, not an instance-mask training target. One Label Studio region is one
+particle: disconnected strokes within that region are not split into instances.
+Use separate regions for separate particles. Unlabeled brushes/wands now fail
+export rather than being silently treated as particles.
 
 The image is nested in a flex layout beside a fixed 380px, two-column sidebar,
 with bordered open Collapse panels. The host's create script validates only direct
@@ -132,7 +147,8 @@ SDK parsing uses `alias` before `value`: preannotations use the project's single
 configured particle label/alias. Export accepts the plugin's configured serialized
 label and legacy `Particle`, rejecting unknown labels (including display-only
 `PtCo` when its alias is configured). Change the plugin config before project
-creation, not only the project XML, because export receives no project config.
+creation, or deliberately migrate both project XML and model options; the host
+passes project config during export, but the model's class order must still match.
 
 The loader accepts host `train`, `val`, `test`, and `data`. `data` is used for
 training only when `train` is absent. Validation uses **only `val`**, never the
@@ -368,6 +384,25 @@ Import helpers as `stem_plugin.runtime`, for example, rather than `runtime`.
 Only the plugin root belongs on `PYTHONPATH`, not `stem_plugin/` itself.
 
 ## Verification
+
+For shared-tool labeling changes, run the focused contracts from the repository
+root with the plugin on `PYTHONPATH` (the host/loader cases also need the training
+dependencies):
+
+```bash
+PYTHONPATH="$PWD/cedirnet-stem" python -m pytest -q \
+  cedirnet-stem/tests/test_multitool_export.py \
+  cedirnet-stem/tests/test_multitool_preannotation.py \
+  cedirnet-stem/tests/test_negative_export.py \
+  cedirnet/tests/test_export_contract.py
+```
+
+These cover every drawing-tool/label combination, real captured wand results,
+SDK-parsed preannotations, and the unchanged host export script through joint
+training-target loading. Host SDK transport is stubbed; they are not a live
+Label Studio deployment test. Older ellipse/export tests still target a previous
+adapter signature/UI; compare a full-suite run against the unchanged base before
+attributing those failures to a shared-tool change.
 
 From the plugin root, add the plugin, installed upstream `src`, and current
 Toolbox `apps/modelargs` to `PYTHONPATH`:

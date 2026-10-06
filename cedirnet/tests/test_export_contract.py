@@ -98,8 +98,14 @@ def test_brush_geometry(adapter, tmp_path, kind):
     mask[20:40, 10:30] = 255
     tag = region(kind)
     tag['value'] = {'rle': mask2rle(mask)}
-    result = export(adapter, tmp_path, [[tag]])
-    assert result['points'][0][:2] == [19, 29]
+    tags = [tag]
+    if adapter[0] == 'cedirnet-stem':
+        # STEM now requires an explicit class instead of guessing that unlabeled
+        # geometry is a particle. Plain CeDiRNet keeps its legacy contract.
+        tags.append(dict(id=tag['id'], type='labels', value={'labels': ['Particle']}))
+    result = export(adapter, tmp_path, [tags])
+    expected = [20, 30] if adapter[0] == 'cedirnet-stem' else [19, 29]
+    assert result['points'][0][:2] == expected
 
 
 def test_stem_semantic_brush(adapter, tmp_path):

@@ -1,13 +1,14 @@
 """Label Studio image results, including separate geometry/Labels controls.
 
-LS 1.23 editor serializes Magicwand as RGBA RLE with a separate brushlabels
-result sharing its region id when a semantic class is assigned. Shape coordinates are percentages; rotations are
-clockwise in image pixels. Raster masks sample pixel centers.
+Magicwand can carry separate Labels or a labeled brush partner sharing its region
+ID. Labels can describe particles or semantic classes; export decides their role.
+Shape coordinates are percentages; rotations are clockwise in image pixels.
+Raster masks sample pixel centers.
 """
 import copy
 import numpy as np
 
-KINDS = ('ellipse', 'rectangle', 'polygon', 'brush')
+KINDS = ('ellipse', 'rectangle', 'polygon', 'brush', 'vector')
 
 
 def normalize_results(tags):
@@ -30,16 +31,16 @@ def normalize_results(tags):
             key = (tag.get('id'), tag.get('to_name'), tag.get('item_index', 0))
             paired = [t for t in tags if t.get('type') == 'brushlabels' and
                       (t.get('id'), t.get('to_name'), t.get('item_index', 0)) == key]
-            if not key[0] or not paired:
-                raise ValueError('Magicwand region has no semantic label; assign a class before re-export')
-            for other in paired:
-                for field in ('original_width', 'original_height', 'image_rotation'):
-                    if other.get(field, 0) != tag.get(field, 0):
-                        raise ValueError('Magicwand and label dimensions/rotation disagree')
-                if any(other.get('value', {}).get(f) != tag.get('value', {}).get(f) for f in ('format', 'rle')):
-                    raise ValueError('Magicwand and label masks disagree')
-            # The paired brushlabels contains the same geometry and its class.
-            continue
+            if paired:
+                for other in paired:
+                    for field in ('original_width', 'original_height', 'image_rotation'):
+                        if other.get(field, 0) != tag.get(field, 0):
+                            raise ValueError('Magicwand and label dimensions/rotation disagree')
+                    if any(other.get('value', {}).get(f) != tag.get('value', {}).get(f) for f in ('format', 'rle')):
+                        raise ValueError('Magicwand and label masks disagree')
+                # The labeled partner carries the same mask; do not export twice.
+                continue
+            tag['type'] = kind = 'brush'
         if kind == 'labels':
             continue
         base = kind.removesuffix('labels')
@@ -61,7 +62,7 @@ def normalize_results(tags):
                 value[base+'labels'] = incoming
                 tag['from_name'] = paired.get('from_name')
                 consumed.add(key)
-            if not value.get(base+'labels'):
+            if not value.get(base+'labels') and base != 'vector':
                 raise ValueError(f'{base} region {tag.get("id")!r} has no label; use the configured particle or semantic label and re-export with its Labels result')
             tag['type'] = base+'labels'
         yield tag

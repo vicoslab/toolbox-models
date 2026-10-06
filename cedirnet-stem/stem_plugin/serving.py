@@ -50,18 +50,44 @@ def load_pairs(files, modality=None):
     return [np.asarray(load_stem_image(*files[i:i+2])) for i in range(0,len(files),2)]
 
 
+def _geometry_control(parsed_config, kind, target):
+    """Find the shared tool for this image, not a tool for another target."""
+    candidates = [name for name, tag in parsed_config.items()
+                  if tag.get('type') == kind and tag.get('to_name') == [target]]
+    if len(candidates) != 1:
+        raise ValueError(f'Separate Labels predictions require exactly one {kind} control for {target!r}')
+    return candidates[0]
+
+
+def _region_results(result, tag, parsed_config, kind):
+    """Separate controls serialize geometry plus Labels with identical IDs."""
+    if any(image.get('valueList') for image in tag.get('inputs', [])):
+        # index in preannotation is a batch index, not the BF/HAADF gallery index.
+        result['item_index'] = 0
+    if tag['type'] != 'Labels':
+        return [result]
+    tool = _geometry_control(parsed_config, kind, result['to_name'])
+    geometry_value = {key: value for key, value in result['value'].items() if key != 'labels'}
+    geometry = dict(result, from_name=tool, type=kind.lower(), value=geometry_value)
+    return [geometry, dict(result, type='labels')]
+
+
 def preannotation(response, index, size, parsed_config):
-    """Resolve controls by type, never use a semantic label as a particle label."""
+    """Resolve class controls and emit editor-loadable shared-tool regions."""
     results = []
     if response['tasks']['nanoparticles']:
-        candidates = [(name,tag) for name,tag in parsed_config.items() if tag.get('labels',[]) == ['nanoparticle']]
-        if len(candidates)!=1:
-            raise ValueError('nanoparticles requires exactly one EllipseLabels control')
-        name,tag = candidates[0]
-        labels = { tag['type'].lower(): [tag['labels_attrs']['nanoparticle']['value']] }
-        for j,(center,radius,score) in enumerate(zip(response['centers'][index],response['radii'][index],response['scores'][index])):
-            results.append(label_studio_ellipse_result(center=center,radius=radius,score=score,original_size=size,
-                from_name=name,to_name=tag['to_name'][0],label=labels,result_id=f'particle-{j}'))
+        candidates = [(name, tag) for name, tag in parsed_config.items()
+                      if tag.get('type') in ('Labels', 'EllipseLabels')
+                      and tag.get('labels', []) == ['nanoparticle']]
+        if len(candidates) != 1:
+            raise ValueError('nanoparticles requires exactly one Labels or EllipseLabels control')
+        name, tag = candidates[0]
+        # Parsed labels are already serialized aliases, not display values (PtCo).
+        labels = {tag['type'].lower(): tag['labels']}
+        for j, (center, radius, score) in enumerate(zip(response['centers'][index], response['radii'][index], response['scores'][index])):
+            result = label_studio_ellipse_result(center=center, radius=radius, score=score, original_size=size,
+                from_name=name, to_name=tag['to_name'][0], label=labels, result_id=f'particle-{j}')
+            results.extend(_region_results(result, tag, parsed_config, 'Ellipse'))
     semantic = response['segmentation'][index]
     if semantic is not None:
         labels = None
@@ -70,13 +96,14 @@ def preannotation(response, index, size, parsed_config):
             aliases = {attrs.get('value', label): label
                     for label, attrs in tag.get('labels_attrs', {}).items()}
             _labels = [aliases.get(label, label) for label in semantic['classes']]
-            if set(_labels).issubset(tag.get('labels',[])):
+            if tag.get('type', '').endswith('Labels') and set(_labels).issubset(tag.get('labels', [])):
                 tagid = tag['type'].lower()
-                labels = [ { tagid: [label] } for label in _labels]
+                labels = [{tagid: [label]} for label in _labels]
                 break
         if labels is None:
             raise ValueError('Labeling config does not include any *Labels tags with matching semantic classes.')
         mask = np.array(Image.open(io.BytesIO(base64.b64decode(semantic['mask_png'].split(',',1)[1]))))
-        results.extend(brush_results(mask,labels,name,tag['to_name'][0]))
+        for result in brush_results(mask, labels, name, tag['to_name'][0]):
+            results.extend(_region_results(result, tag, parsed_config, 'Brush'))
     scores = response['scores'][index]
     return dict(result=results,model_version='CeDiRNet-STEM-tasks-v2',score=sum(scores)/max(len(scores),1))
