@@ -146,6 +146,14 @@ def test_ui_uses_separate_labels_and_unique_shared_tools():
     assert [node.get('category') for node in root.findall(".//Labels[@name='semantic']/Label")] == ['0', '1', '2', '255']
     hotkeys = [node.get('hotkey') for node in root.findall('.//Label')]
     assert hotkeys == ['p', 'c', 'f', 'v', 'i']
+    assert [panel.get('value') for panel in root.findall('.//Panel')] == [
+        'Split', 'Particle instances', 'Segmentation', 'Smart tools']
+    particle = root.find(".//Panel[@value='Particle instances']")
+    semantic = root.find(".//Panel[@value='Segmentation']")
+    assert particle.find('Ellipse').attrib == {'name': 'points', 'toName': 'image'}
+    assert [node.tag for node in semantic if node.tag in ('Polygon', 'Brush', 'Magicwand')] == [
+        'Polygon', 'Brush', 'Magicwand']
+    assert 'Drawing tools' not in ET.tostring(root, encoding='unicode')
 
 
 @pytest.mark.parametrize('kind', ['ellipse', 'polygon', 'brush', 'magicwand'])

@@ -6,7 +6,7 @@ details: |
   <h1>STEM nanoparticles and semantic regions</h1>
   <p>Create groups of two registered images in BF, HAADF order. The model combines BF grayscale, HAADF grayscale, and a zero third channel.</p>
   <p>Use the Particle instances and Segmentation panels beside the image. Annotation tools do not change training options. Submit an annotation without particle regions for a particle-free pair; images with no submitted annotation remain missing supervision.</p>
-  <p>Select a particle or semantic class, then use any drawing tool. Ellipses train the particle circle model using the mean of their pixel radii; particle polygons and brushes use their pixel centroid and equal-area radius. Each region is one instance. Export creates the paired-image manifest and class-ID masks; conflicting classes and unpainted pixels are ignored.</p>
+  <p>Use Ellipse for particles and Polygon, Brush or Magicwand for segmentation in their respective panels. Cross-label tool use is also supported. Ellipses train the particle circle model using the mean of their pixel radii; particle polygons and brushes use their pixel centroid and equal-area radius. Each region is one instance. Export creates the paired-image manifest and class-ID masks; conflicting classes and unpainted pixels are ignored.</p>
 config: |
   <View className="toolbox-annotation">
     <Style>
@@ -28,11 +28,12 @@ config: |
         </Collapse>
         <Collapse open="true" bordered="true">
           <Panel value="Particle instances">
-            <Header size="5" value="Select particle class, then use Ellipse, Brush, Polygon or Magicwand to define one particle." />
+            <Header size="5" value="Select particle class, then draw an ellipse (center click first)." />
             <Labels name="labels" toName="image" canRotate="true" strokeWidth="2" opacity="0.3">
               <Label value="PtCo" alias="nanoparticle" background="#14c850" hotkey="p" />
             </Labels>
-            <Header size="6" value="Use the shared Drawing tools below. Each region exports one center and radius; shape outlines are not predicted." />
+            <Ellipse name="points" toName="image" />
+            <Header size="6" value="The center and mean pixel radius train the circle model; ellipse rotation and eccentricity are not predicted." />
           </Panel>
         </Collapse>
         <Collapse open="true" bordered="true">
@@ -44,14 +45,9 @@ config: |
               <Label value="Vacuum" background="#4949f2" hotkey="v" category="2" />
               <Label value="Ignore" background="#808080" hotkey="i" category="255" hint="Use when unsure which category." />
             </Labels>
-            <Header size="6" value="Press ESC before selecting the next class. All Drawing tools work with semantic labels too." />
-          </Panel>
-        </Collapse>
-        <Collapse open="true" bordered="true">
-          <Panel value="Drawing tools">
-            <Ellipse name="points" toName="image" />
             <Polygon name="polygon" toName="image" />
             <Brush name="brush" toName="image" />
+            <Header size="6" value="Press ESC before selecting the next class." />
             <Magicwand name="wand" toName="image" />
           </Panel>
         </Collapse>

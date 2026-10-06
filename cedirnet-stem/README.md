@@ -9,11 +9,12 @@ must be enabled. Task switches are booleans; CLI values are `true` or `false`.
    registered, equally sized images in **BF, HAADF** order. Use interlaced groups
    with filenames that sort into pairs (e.g. `sample_BF.png`, `sample_HAADF.png`).
    Do not use the current host's broken `divide` grouping mode.
-2. Select a label in **Particle instances** or **Segmentation**, then use the shared
-   **Drawing tools** panel: **Ellipse**, **Polygon**, **Brush**, or **Magicwand**.
-   Every drawing tool supports either label group. Select **PtCo (P)** for one
-   particle instance; its serialized alias is **nanoparticle**. Select **Carbon (C)**,
-   **Film (F)**, **Vacuum (V)**, or **Ignore (I)** for a filled semantic region.
+2. In **Particle instances**, select **PtCo (P)** and use **Ellipse** (center click
+   first); its serialized alias is **nanoparticle**. In **Segmentation**, select
+   **Carbon (C)**, **Film (F)**, **Vacuum (V)**, or **Ignore (I)** and use **Polygon**,
+   **Brush**, or **Magicwand** in that panel. Tools stay in their intended panels;
+   there is no additional drawing-tools panel. Cross-label tool use is also
+   supported by export, but is not the primary labeling workflow.
    Press **Escape** before selecting the next class to avoid relabeling the active region.
    Regions are shared across the aligned pair. There are no N/S visibility toggles.
 3. Submit one annotation per pair. A submitted annotation without particle regions
