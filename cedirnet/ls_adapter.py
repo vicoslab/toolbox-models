@@ -12,7 +12,7 @@ def export(annotations, export_dir, relpaths, shared, config, **kwargs):
         return None
     points = []
     for tag in annotations:
-        kind, value, w, h = map(tag.__getitem__, ['type', 'value', 'original_width', 'original_height'])
+        kind, value, w, h = map(tag.get, ['type', 'value', 'original_width', 'original_height'])
         if kind == 'choices':
             continue
         elif kind in ('keypointlabels', 'keypoint'):
