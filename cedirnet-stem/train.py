@@ -195,7 +195,9 @@ def main():
         signal.signal(signal.SIGINT,handler); signal.signal(signal.SIGTERM,handler)
         modelargs.emit_action('Experiment',run.info.experiment_id)
         modelargs.emit_action('Run',run.info.run_id)
-        mlflow.create_external_model(name='CeDiRNet-STEM', params={k:v for k,v in args.items() if v is not None})
+        params = {k:v for k,v in args.items() if v is not None}
+        mlflow.create_external_model(name='CeDiRNet-STEM', params=params)
+        mlflow.log_params(params)
         mlflow.log_input(dataset)
         trainer.initialize(); trainer.run()
 

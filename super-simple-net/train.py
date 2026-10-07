@@ -411,6 +411,7 @@ def train_and_eval(model, datamodule, config, device):
         modelargs.emit_action("Experiment", run.info.experiment_id)
         modelargs.emit_action("Run", run.info.run_id)
         mlflow.create_external_model(name="SuperSimpleNet", params=config)
+        mlflow.log_params(config)
         mlflow.log_input(dataset)
         args = {
             "model": model,
