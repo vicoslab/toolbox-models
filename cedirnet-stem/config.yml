@@ -14,7 +14,7 @@ config: |
       .ant-collapse { width: 100%; }
     </Style>
     <View style="display: grid; grid-template-columns: 1fr minmax(0, 256px); gap: 16px;">
-      <Image name="image" valueList="$images" zoom="true" gallery="true" shared="true" />
+      <Image name="image" @DATA@ zoom="true" />
       <View style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 0 0 380px;">
         <Collapse open="true" bordered="true">
           <Panel value="Split">
