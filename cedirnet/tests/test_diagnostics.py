@@ -191,12 +191,6 @@ class PreparedModelContractTest(unittest.TestCase):
         self.assertEqual(option["format"], "file:localization_checkpoint.pth")
         self.assertNotIn("localisation", schema.get("required", []))
 
-    def test_training_logs_nested_diagnostics_and_limits_sample_count(self):
-        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("training_artifact_path", train)
-        self.assertIn("visualization_samples", train)
-        self.assertIn("visualized < visualization_limit", train)
-
     def test_training_visualizes_train_and_validation_loaders_separately(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("('training', 'train')", train)

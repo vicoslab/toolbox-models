@@ -165,6 +165,31 @@
             "type": "integer",
             "stage": "train",
             "default": 4
+        },
+        "display_size": {
+            "title": "Evaluation size",
+            "description": "Number or ratio of images to display.",
+            "stage": "train",
+            "type": "number",
+            "default": 5,
+            "minimum": 0
+        },
+        "eval_splits": {
+            "title": "Evaluation splits",
+            "description": "Dataset splits to run evaluation on.",
+            "stage": "train",
+            "type": "array",
+            "items": {
+                "enum": [
+                    "train",
+                    "val",
+                    "test"
+                ]
+            },
+            "default": [
+                "train",
+                "val"
+            ]
         }
     }
 }

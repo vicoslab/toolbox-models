@@ -97,12 +97,37 @@
       "default": 10,
       "minimum": 1
     },
+    "display_size": {
+      "title": "Evaluation size",
+      "description": "Number or ratio of images to display.",
+      "stage": "train",
+      "type": "number",
+      "default": 5,
+      "minimum": 0
+    },
     "visualization_samples": {
       "title": "Plots per split",
       "stage": "train",
       "type": "integer",
       "default": 4,
       "minimum": 1
+    },
+    "evaluation_splits": {
+      "title": "Evaluation splits",
+      "description": "Dataset splits to run evaluation on.",
+      "stage": "train",
+      "type": "array",
+      "items": {
+        "enum": [
+          "training",
+          "validation",
+          "testing"
+        ]
+      },
+      "default": [
+        "training",
+        "validation"
+      ]
     },
     "save_interval": {
       "title": "Weights save interval",

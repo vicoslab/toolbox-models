@@ -111,7 +111,7 @@ class EvaluationSplitsTest(unittest.TestCase):
         tree = ast.parse((MODEL_DIR / 'train.py').read_text())
         cls = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == 'Trainer')
         exec(compile(ast.Module(body=[cls], type_ignores=[]), str(MODEL_DIR / 'train.py'), 'exec'), self.namespace)
-        self.trainer = self.namespace['Trainer']({'cuda': False, 'visualization_samples': 1,
+        self.trainer = self.namespace['Trainer']({'cuda': False, 'display_size': 1,
                                                  'visualization_score_threshold': .5,
                                                  'train_dataset': {}})
         self.trainer.dataset_batch = 2
@@ -174,7 +174,7 @@ class EvaluationSplitsTest(unittest.TestCase):
                          ['training', 'validation', 'validation', 'testing'])
 
     def test_enabled_training_metrics_cover_all_samples_beyond_figure_limit(self):
-        self.trainer.args.update(evaluate_training=True, visualization_samples=1)
+        self.trainer.args.update(evaluation_splits=['training'], display_size=1)
         self.initialize({'data': [{'image_path': f'{i}.png', 'points': [[2, 3]]}
                                   for i in range(7)]})
         with patch.object(mlflow, 'log_metrics'), contextlib.redirect_stdout(io.StringIO()):
@@ -247,7 +247,7 @@ class EvaluationSplitsTest(unittest.TestCase):
         self.assertNotIn('orientation MAE', output.getvalue())
 
     def test_disabled_training_evaluation_keeps_held_out_evaluation(self):
-        self.trainer.args['evaluate_training'] = False
+        self.trainer.args['evaluation_splits'] = ['validation', 'testing']
         factory = self.namespace['get_centerdir_dataset']
         with patch.dict(self.namespace, get_centerdir_dataset=Mock(wraps=factory)):
             self.initialize({key: [{'image_path': f'{key}.png', 'points': [[2, 3]]}]
@@ -263,7 +263,7 @@ class EvaluationSplitsTest(unittest.TestCase):
         self.assertIn('Training evaluation: skipped (disabled by user)', output.getvalue())
 
     def test_disabled_training_evaluation_still_visualizes_limited_data_only_samples(self):
-        self.trainer.args.update(evaluate_training=False, visualization_samples=3)
+        self.trainer.args.update(evaluation_splits=['validation', 'testing'], display_size=3)
         self.initialize({'data': [{'image_path': f'{i}.png', 'points': [[2, 3]]}
                                   for i in range(7)]})
         with patch.object(mlflow, 'log_metrics') as log, contextlib.redirect_stdout(io.StringIO()):
@@ -274,37 +274,6 @@ class EvaluationSplitsTest(unittest.TestCase):
         self.assertTrue(all(c.kwargs['subset'] == 'training'
                             for c in self.trainer.visualize_sample.call_args_list))
         self.assertEqual(self.trainer.center_model.instance_center_estimator.local_max_thr, .1)
-
-    def test_training_evaluation_option_defaults_true_and_cli_false_is_propagated(self):
-        schema = json.loads((MODEL_DIR / 'model.json').read_text())
-        option = schema['properties']['evaluate_training']
-        self.assertEqual(option['type'], 'boolean')
-        self.assertIs(option['default'], True)
-        self.assertEqual(option['stage'], 'train')
-        toolbox = MODEL_DIR.parents[1] / 'toolbox/apps/modelargs/modelargs/__init__.py'
-        spec = importlib.util.spec_from_file_location('evaluation_modelargs', toolbox)
-        assert spec is not None and spec.loader is not None
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        import sys
-        tree = ast.parse((MODEL_DIR / 'train.py').read_text())
-        main = tree.body[-1]
-        assignments = [node for node in main.body if isinstance(node, ast.Assign)
-                       and any(isinstance(t, ast.Subscript) and isinstance(t.value, ast.Name)
-                               and t.value.id == 'args' and isinstance(t.slice, ast.Constant)
-                               and t.slice.value == 'evaluate_training' for t in node.targets)]
-        self.assertEqual(len(assignments), 1)
-        # Isolate this option from the existing parser's unrelated required-field
-        # bug; retain the exact production option schema and real boolean parser.
-        parser_schema = Path(self.tmp.name) / 'option-schema.json'
-        parser_schema.write_text(json.dumps(dict(schema, properties={'evaluate_training': option})))
-        for flags, expected in [([], True), (['--evaluate_training', 'false'], False)]:
-            with patch.object(sys, 'argv', ['train.py', *flags]):
-                parsed = module.parse(str(parser_schema))
-            self.assertIs(parsed['evaluate_training'], expected)
-            namespace = {'args': {}, 'cmd_args': parsed}
-            exec(compile(ast.Module(body=assignments, type_ignores=[]), 'train.py', 'exec'), namespace)
-            self.assertIs(namespace['args']['evaluate_training'], expected)
 
     def test_each_split_uses_own_best_threshold_and_ignores_visualization_setting(self):
         class SplitScores(CenterModel):
@@ -335,7 +304,7 @@ class EvaluationSplitsTest(unittest.TestCase):
         self.assertEqual(self.trainer.center_model.instance_center_estimator.local_max_thr, .1)
 
     def test_visualization_only_uses_user_threshold_without_metric_sweep(self):
-        self.trainer.args.update(evaluate_training=False, visualization_score_threshold=.42)
+        self.trainer.args.update(evaluation_splits=['validation', 'testing'], visualization_score_threshold=.42)
         self.initialize({'data': [{'image_path': 'a.png', 'points': [[2, 3]]}]})
         with patch.object(mlflow, 'log_metrics') as log, contextlib.redirect_stdout(io.StringIO()):
             self.trainer.evaluate_splits(0)

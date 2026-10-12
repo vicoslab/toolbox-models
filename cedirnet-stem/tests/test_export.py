@@ -134,7 +134,7 @@ def test_host_export_loader_training(tmp_path, monkeypatch, particles, semantic)
     manifest.write_text(json.dumps(data))
     options = dict(manifest=str(manifest), nanoparticles=particles, segmentation=semantic,
                    width=64, height=64, batch_size=1, workers=0, epochs=1,
-                   save_interval=1, display_interval=1, visualization_samples=1,
+                   save_interval=1, display_interval=1, display_size=1,
                    backbone='resnet18', device='cpu')
     if particles:
         initial = StemRuntime(tasks, backbone='resnet18')

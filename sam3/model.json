@@ -1,5 +1,5 @@
 {
-    "title": "Segment anything model",
+    "title": "SAM3",
     "description": "Inference worker for assisted annotations in label studio",
     "type": "object",
     "properties": {}

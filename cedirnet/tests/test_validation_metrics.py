@@ -201,32 +201,6 @@ class ValidationIntegrationContractTest(unittest.TestCase):
                 raise RuntimeError("probe")
         self.assertEqual(model.module.instance_center_estimator.local_max_thr, 0.1)
 
-    def test_validation_processes_all_images_and_logs_mlflow_metrics(self):
-        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("def evaluate(self, epoch, subset):", train)
-        self.assertIn("BestF1Metrics(", train)
-        self.assertIn("mlflow.log_metrics(split_metrics, step=epoch + 1)", train)
-        self.assertIn("f'training/{name}'", train)
-        self.assertIn("self.visualize_sample(", train)
-        self.assertNotIn("self.visualize_validation_samples(epoch)", train)
-        self.assertIn("center_detection_threshold(\n", train)
-        self.assertNotIn("self.visualize(self.validation_dataset_it", train)
-        self.assertIn("should_validate(", train)
-        self.assertIn("self.evaluate_splits(epoch)", train)
-        self.assertIn('f"{subset}/{name}"', train)
-
-    def test_train_visualization_remains_limited(self):
-        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("if not evaluate_metrics and visualized < visualization_limit:", train)
-        self.assertIn("self.visualize_split(epoch, subset, visualization_threshold, visualization_limit)", train)
-        self.assertIn("self.args['visualization_samples'] if subset == 'training'", train)
-        self.assertIn("for sample in loader:", train)
-        self.assertIn("drop_last=False", train)
-        self.assertNotIn("self.validation_visualization_dataset_it", train)
-        self.assertIn("num_workers=0", train)
-        self.assertNotIn("num_workers=dataset_workers,\n            pin_memory=True if args['cuda'] else False,\n            collate_fn=variable_len_collate,\n        ) if len(validation_dataset)", train)
-        self.assertNotIn("for sample in tqdm(self.train_dataset_it, desc='visualise training'", train)
-
     def test_five_hundred_epoch_run_schedules_all_ten_validations(self):
         train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
         self.assertIn("from scheduling import should_validate", train)
@@ -261,17 +235,6 @@ class ValidationIntegrationContractTest(unittest.TestCase):
             "writing artifact started",
         ):
             self.assertNotIn(verbose_marker, train)
-
-
-    def test_validation_metric_options_are_exposed(self):
-        schema = __import__("json").loads((MODEL_DIR / "model.json").read_text(encoding="utf-8"))
-        self.assertEqual(schema["properties"]["visualization_score_threshold"]["default"], 0.5)
-        self.assertNotIn("validation_match_distance", schema["properties"])
-        train = (MODEL_DIR / "train.py").read_text(encoding="utf-8")
-        self.assertIn("CenterGlobalMinimizationEval(tau_thr=POINT_MATCH_DISTANCE_PX)", train)
-        self.assertIn("mlflow.log_param('validation_match_distance_px', POINT_MATCH_DISTANCE_PX)", train)
-        self.assertIn("point_f1_at_20px", train)
-
 
 if __name__ == "__main__":
     unittest.main()

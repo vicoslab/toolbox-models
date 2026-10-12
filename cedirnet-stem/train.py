@@ -50,9 +50,11 @@ class Trainer:
         self.size = (int(args.get('width',512)),int(args.get('height',512)))
         if any(s <= 0 or s % 32 for s in self.size):
             raise ValueError('image dimensions must be positive multiples of 32')
-        for key in ('epochs','batch_size','save_interval','display_interval','visualization_samples'):
+        for key in ('epochs','batch_size','save_interval','display_interval'):
             if int(args.get(key,1)) < 1:
                 raise ValueError(f'{key} must be positive')
+        if type(args['display_size']) == float and not 0 <= limit <= 1:
+            raise ValueError(f'{key} is not in range [0,1]')
 
     def initialize(self):
         args = self.args
@@ -106,7 +108,9 @@ class Trainer:
     @torch.no_grad()
     def visualize(self, epoch, subset):
         self.runtime.eval()
-        limit = int(self.args.get('visualization_samples',4))
+        limit = self.args['display_size']
+        if type(limit) == float:
+            limit = int(limit * len(self.loaders[subset]))
         threshold = float(self.args.get('score_threshold',.5))
         confusion = np.zeros((len(self.tasks.classes),len(self.tasks.classes)),dtype=np.int64)
         visualized = 0

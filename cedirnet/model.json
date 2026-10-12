@@ -55,12 +55,30 @@
             "default": 4,
             "minimum": 1
         },
-        "evaluate_training": {
-            "title": "Evaluate training set",
-            "description": "Calculate evaluation metrics on all labeled training images at each evaluation step.",
+        "display_size": {
+            "title": "Evaluation size",
+            "description": "Number or ratio of images to display.",
             "stage": "train",
-            "type": "boolean",
-            "default": true
+            "type": "number",
+            "default": 5,
+            "minimum": 0
+        },
+        "evaluation_splits": {
+            "title": "Evaluation splits",
+            "description": "Dataset splits to run evaluation on.",
+            "stage": "train",
+            "type": "array",
+            "items": {
+                "enum": [
+                    "training",
+                    "validation",
+                    "testing"
+                ]
+            },
+            "default": [
+                "training",
+                "validation"
+            ]
         },
         "visualization_samples": {
             "title": "Training samples to visualise",

@@ -4,7 +4,7 @@ site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/super-simple-net')
 import sys
 import tempfile
 
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 import copy
 import json
 from pathlib import Path
@@ -164,15 +164,14 @@ class Results:
 
 def train(
     model: SuperSimpleNet,
-    epochs: int,
+    config,
     datamodule: LightningDataModule,
     device: str,
     image_metrics: dict[str, Metric],
     pixel_metrics: dict[str, Metric],
     th: float = 0.5,
-    clip_grad: bool = True,
-    eval_step_size: int = 4,
 ):
+    epochs = config["epochs"]
     model.to(device)
     optimizer, scheduler = model.get_optimizers()
 
@@ -234,7 +233,7 @@ def train(
 
                 loss.backward()
 
-                if clip_grad:
+                if config["clip_grad"]:
                     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), 1)
                 else:
                     norm = None
@@ -253,18 +252,22 @@ def train(
                 prog_bar.set_postfix(**output)
                 prog_bar.update(1)
 
-        if (epoch + 1) % eval_step_size == 0:
-            results = eval(
-                title=f"Validation/{epoch}",
-                model=model,
-                loader=datamodule.val_dataloader(),
-                device=device,
-                image_metrics=image_metrics,
-                pixel_metrics=pixel_metrics,
-                normalize=True,
-            )
-            mlflow.log_metrics(results, epoch)
-        mlflow.log_metrics(output, epoch)
+        if (epoch + 1) % config["eval_step_size"] == 0:
+            splits = [("train", datamodule.train_dataloader), ("val", datamodule.val_dataloader), ("test", datamodule.test_dataloader)]
+            for split, loader_fn in splits:
+                if split in config["eval_splits"]:
+                    results = eval(
+                        title=f"visualisations/{epoch}/{split}",
+                        model=model,
+                        loader=loader_fn(),
+                        device=device,
+                        image_metrics=image_metrics,
+                        pixel_metrics=pixel_metrics,
+                        normalize=True,
+                        display_size=config["display_size"],
+                    )
+                    mlflow.log_metrics({ f"{split}/{k}": v for k, v in results.items() }, epoch)
+        mlflow.log_metrics({ f"train/{k}": v for k, v in output.items() }, epoch)
         scheduler.step()
 
 
@@ -277,8 +280,7 @@ def eval(
     image_metrics: dict[str, Metric],
     pixel_metrics: dict[str, Metric],
     normalize: bool = True,
-    image_save_path: Path = None,
-    score_save_path: Path = None,
+    display_size: float | int = 5,
 ):
     model.to(device)
     model.eval()
@@ -375,7 +377,8 @@ def eval(
             results_dict[name] = 0
         metric.to("cpu")
 
-    Visualizer(Path(title)).visualize(results)
+    n = display_size if type(display_size) == int else int(display_size * len(results.score))
+    Visualizer(Path(title)).visualize(Results(**{ k: v[:n] for k, v in asdict(results).items() }))
     score_dict = {}
     # save both segscore and score to json
     for img_path, score, seg_score, label in zip(
@@ -427,13 +430,7 @@ def train_and_eval(model, datamodule, config, device):
             },
         }
 
-        train(
-            **args,
-            datamodule=datamodule,
-            epochs=config["epochs"],
-            clip_grad=config["clip_grad"],
-            eval_step_size=config["eval_step_size"],
-        )
+        train(**args, datamodule=datamodule, config=config)
 
         with tempfile.TemporaryDirectory() as d:
             p = Path(d)
@@ -443,7 +440,7 @@ def train_and_eval(model, datamodule, config, device):
         
         test_loader = datamodule.test_dataloader()
         if len(test_loader) > 0:
-            eval(title="Test", **args, loader=test_loader, normalize=True)
+            eval(title=f"visualisations/{config['epochs'] - 1}/{split}", **args, loader=test_loader, normalize=True, display_size=config["display_size"])
 
 if __name__ == "__main__":
     base_config = modelargs.parse('./model.json')

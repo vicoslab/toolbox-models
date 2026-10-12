@@ -71,8 +71,9 @@ absent, `data` is used for training and training-set evaluation. This does not
 create a held-out split or copy training results into validation/test metrics.
 Missing or empty evaluation splits print an explicit skip message.
 
-**Evaluate training set** is enabled by default. Disable it in the training form,
-or pass `--evaluate_training false`, to skip only training-set metric calculation.
+**Evaluation splits** allows you to control which splits are used during evaluation.
+By default, `train` and `val` splits are used, but you can override this with e.g.
+`--evaluation_splits train test`.
 Training figures remain controlled by **Training samples to visualise**, training
 losses are still logged every epoch, and validation/test evaluation is unchanged.
 When enabled, metrics cover the entire labeled training set, not just the images

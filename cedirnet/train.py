@@ -468,7 +468,7 @@ class Trainer:
         return results
 
     def evaluate(self, epoch, subset):
-        evaluate_metrics = subset != 'training' or self.args.get('evaluate_training', True)
+        evaluate_metrics = subset in self.args['evaluation_splits']
         if not evaluate_metrics:
             print('Training evaluation: skipped (disabled by user)', flush=True)
         loader = self.evaluation_loaders[subset]
@@ -483,7 +483,12 @@ class Trainer:
             match_centers=center_evaluator._assign_detections_to_groundtruth,
         ) if evaluate_metrics else None
         visualization_threshold = self.args['visualization_score_threshold']
-        visualization_limit = self.args['visualization_samples'] if subset == 'training' else len(loader.dataset)
+        visualization_limit = self.args['display_size']
+        if type(visualization_limit) == float:
+            if 0 <= visualization_limit <= 1:
+                visualization_limit = int(visualization_limit * len(loader.dataset))
+            else:
+                raise ValueError('Visualisation limit is outside allowed range')
         total = len(loader.dataset) if evaluate_metrics else min(visualization_limit, len(loader.dataset))
         if total == 0:
             return None
@@ -654,8 +659,8 @@ if __name__ == '__main__':
         )
     args['pretrained_center_model_path'] = localisation_checkpoint
     args['display_it'] = cmd_args['display_interval']
-    args['evaluate_training'] = cmd_args['evaluate_training']
-    args['visualization_samples'] = cmd_args['visualization_samples']
+    args['evaluation_splits'] = cmd_args['evaluation_splits']
+    args['display_size'] = cmd_args['display_size']
     args['visualization_score_threshold'] = cmd_args['visualization_score_threshold']
     args['save_interval'] = cmd_args['save_interval']
     

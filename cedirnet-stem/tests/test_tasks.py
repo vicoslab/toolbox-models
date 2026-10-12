@@ -99,7 +99,7 @@ def test_trainer_real_epoch(tmp_path, monkeypatch, particles, semantic):
     mlflow.set_experiment('stem-smoke')
     options = dict(manifest=str(fixture_manifest(tmp_path,particles)),nanoparticles=str(particles).lower(),segmentation=str(semantic).lower(),
         width=64,height=64,batch_size=1,workers=0,epochs=1,save_interval=1,
-        display_interval=1,visualization_samples=1,backbone='resnet18',device='cpu')
+        display_interval=1,display_size=1,backbone='resnet18',device='cpu')
     if particles:
         from stem_plugin.runtime import StemRuntime
         from stem_plugin.stem_tasks import TaskConfig

@@ -308,7 +308,7 @@ def test_exact_training_cli_launch_completes_with_default_policy(tmp_path):
     result = subprocess.run([sys.executable, 'train.py', '--manifest', str(manifest),
         '--nanoparticles', 'false', '--segmentation', 'true', '--width', '64', '--height', '64',
         '--batch_size', '1', '--workers', '0', '--epochs', '1', '--save_interval', '1',
-        '--display_interval', '1', '--visualization_samples', '1'], cwd=ROOT, env=env,
+        '--display_interval', '1', '--display_size', '1'], cwd=ROOT, env=env,
         text=True, capture_output=True, timeout=240)
     assert result.returncode == 0, result.stdout + result.stderr
     assert '1/1:' in result.stderr and '100%' in result.stderr
