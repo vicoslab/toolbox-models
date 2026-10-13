@@ -39,8 +39,8 @@ else
         cd "$dir"
         uv pip install --python "$python" --override dependency-overrides.txt \
             -r requirements.txt \
-            "${CEDIRNET_STEM_MODELARGS:-/opt/apps/modelargs}" \
             "${CEDIRNET_STEM_ML_BACKEND:-/opt/apps/label-studio-ml-backend}"
+        uv pip install -e "${CEDIRNET_STEM_MODELARGS:-/opt/apps/modelargs}" # use editable install so it works when docker image updates
     )
 fi
 PYTHONPATH="$model_dir/src:$dir" "$model_dir/.venv/bin/python" -c \
