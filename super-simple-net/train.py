@@ -19,7 +19,10 @@ from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from matplotlib import pyplot as plt
+import cv2
 
+import albumentations as A
 import torch
 import torch.nn.functional as F
 from torchvision.transforms.v2 import Compose
@@ -66,6 +69,9 @@ class GenericDataset(SSNDataset):
             debug=debug,
         )
         self.manifest = manifest
+        self.vflip = A.VerticalFlip(always_apply=True, p=1.0)
+        self.hflip = A.HorizontalFlip(always_apply=True, p=1.0)
+        self.rotate = A.Rotate(limit=(180, 180), always_apply=True, p=1.0)
 
     def make_dataset(
         self,
@@ -81,6 +87,11 @@ class GenericDataset(SSNDataset):
         if len(normal) == 0 and split != "test":
             raise ValueError("Cannot start training without any normal samples")
         return pd.DataFrame(normal), pd.DataFrame([x for x in samples if x["label_index"] == LabelName.ABNORMAL])
+    
+    def __getitem__(self, index):
+        item = super().__getitem__(index)
+        item["index"] = index
+        return item
 
 class Generic(SSNDataModule):
 
@@ -161,6 +172,36 @@ class Results:
     def __getitem__(self, k):
         return getattr(self, k)
 
+def visualize(save_dir, image_path, image, gt_mask, anomaly_map, score, seg_score, label):
+    anomaly_map = anomaly_map.squeeze()
+    h, w = anomaly_map.shape
+    # images are normed to [0, 1] so we cut off at 0.5
+    pred_mask = anomaly_map >= 0.5
+    gt_label = "Anomalous" if label.item() else "Normal"
+
+    # adjust height and width as 256 as baseline
+    fig, plots = plt.subplots(1, 5, figsize=(w / 256 * 12, h / 256 * 4))
+    fig.tight_layout(rect=[0,0,1,0.9])
+
+    panels = [
+        (image, {}, "Image"),
+        (gt_mask, dict(vmin=0, vmax=1), f"Ground truth.\n{gt_label}"),
+        (pred_mask, {}, "Predicted mask"),
+        (anomaly_map, {}, f"Anomaly map\nNorm."),
+        (anomaly_map, dict(vmin=0, vmax=1), f"Anomaly map.\nScore: {round(score.item(), 4)}\nSScore: {round(seg_score.item(), 4)}"),
+    ]
+    for plot, (im, kwargs, title) in zip(plots, panels):
+        plot.axis("off")
+        plot.imshow(im, **kwargs)
+        plot.set_title(title)
+
+    total_path = save_dir / gt_label
+    total_path.mkdir(exist_ok=True, parents=True)
+
+    subdir_name = Path(image_path).parent.name
+    plot_name = f"{subdir_name}_{Path(image_path).stem}.png"
+    mlflow.log_figure(fig, total_path / plot_name)
+    plt.close("all")
 
 def train(
     model: SuperSimpleNet,
@@ -257,7 +298,7 @@ def train(
             for split, loader_fn in splits:
                 if split in config["eval_splits"]:
                     results = eval(
-                        title=f"visualisations/{epoch}/{split}",
+                        save_dir=Path("visualisations") / str(epoch) / split,
                         model=model,
                         loader=loader_fn(),
                         device=device,
@@ -273,7 +314,7 @@ def train(
 
 @torch.no_grad()
 def eval(
-    title: str,
+    save_dir: Path,
     model: SuperSimpleNet,
     loader,
     device: str,
@@ -307,6 +348,7 @@ def eval(
         "image_path": [],
         "mask_path": [],
     }
+    indices = []
     for batch in tqdm(loader, position=0, leave=True, desc="eval"):
         image_batch = batch["image"].to(device)
         anomaly_map, anomaly_score = model.forward(image_batch)
@@ -325,6 +367,7 @@ def eval(
 
         results["image_path"].extend(batch["image_path"])
         results["mask_path"].extend(batch["mask_path"])
+        indices.extend(batch["index"])
 
     results = Results(
         anomaly_map = torch.cat(results["anomaly_map"]),
@@ -377,8 +420,13 @@ def eval(
             results_dict[name] = 0
         metric.to("cpu")
 
-    n = display_size if type(display_size) == int else int(display_size * len(results.score))
-    Visualizer(Path(title)).visualize(Results(**{ k: v[:n] for k, v in asdict(results).items() }))
+    n = display_size if type(display_size) == int else int(display_size * len(loader.dataset))
+    indices = { results.image_path[i]: (i, idx) for i, idx in enumerate(indices) }
+    for image_path, (i, idx) in tqdm(indices.items(), desc="visualise"):
+        im = cv2.cvtColor(cv2.imread(image_path), cv2.COLOR_BGR2RGB)
+        if flip := loader.dataset.get_flip_augmentation(idx):
+            im = flip(image=im)["image"]
+        visualize(save_dir, image_path, im, *[getattr(results, prop)[i] for prop in ["gt_mask", "anomaly_map", "score", "seg_score", "label"]])
     score_dict = {}
     # save both segscore and score to json
     for img_path, score, seg_score, label in zip(
@@ -395,8 +443,8 @@ def eval(
             "seg_score": seg_score.item(),
         }
 
-    mlflow.log_text(json.dumps(score_dict), f"{title}/image_scores.json")
-    mlflow.log_text(json.dumps(results_dict), f"{title}/results.json")
+    mlflow.log_text(json.dumps(score_dict), save_dir / "image_scores.json")
+    mlflow.log_text(json.dumps(results_dict), save_dir / "results.json")
 
     return results_dict
 
@@ -440,7 +488,7 @@ def train_and_eval(model, datamodule, config, device):
         
         test_loader = datamodule.test_dataloader()
         if len(test_loader) > 0:
-            eval(title=f"visualisations/{config['epochs'] - 1}/{split}", **args, loader=test_loader, normalize=True, display_size=config["display_size"])
+            eval(save_dir=Path("visualisations") / str(config['epochs'] - 1) / split, **args, loader=test_loader, normalize=True, display_size=config["display_size"])
 
 if __name__ == "__main__":
     base_config = modelargs.parse('./model.json')
