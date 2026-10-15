@@ -86,6 +86,7 @@ else:
                         'rle': brush.mask2rle(mask),
                         'labels': [label],
                     },
+                    'origin': 'prediction',
                     'score': float(score),
                     'type': 'labels',
                     'readonly': False

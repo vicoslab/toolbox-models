@@ -77,6 +77,7 @@ else:
                         'format': 'rle',
                         'rle': rle,
                     },
+                    'origin': 'prediction',
                     'score': float(prob),
                     'type': 'labels',
                     'readonly': False,

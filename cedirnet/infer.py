@@ -142,6 +142,7 @@ else:
                 'original_height': height,
                 'image_rotation': 0,
                 'readonly': False,
+                'origin': 'prediction',
                 **extra
             }
             if angles is None:

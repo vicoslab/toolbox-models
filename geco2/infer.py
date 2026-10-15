@@ -145,6 +145,7 @@ else:
                         'rle': rle,
                         'labels': labels,
                     },
+                    'origin': 'prediction',
                     'score': float(prob),
                     'type': 'brushlabels',
                     'readonly': False,

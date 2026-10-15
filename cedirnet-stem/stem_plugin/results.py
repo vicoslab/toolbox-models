@@ -59,6 +59,7 @@ def label_studio_ellipse_result(
             "radiusY": float(radius) / original_height * 100,
             "rotation": 0,
         },
+        'origin': 'prediction',
         "score": float(score),
         "type": "ellipselabels",
         "readonly": False,
