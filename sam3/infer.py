@@ -1,6 +1,6 @@
 # so we parse -- and any possible future args?
 import modelargs
-_ = modelargs.parse("./model.json")
+args = modelargs.parse("./model.json")
 
 import os
 import site
@@ -17,7 +17,9 @@ sys.path.insert(0, ROOT_DIR)
 from sam3.model_builder import build_sam3_image_model
 from sam3.model.sam3_image_processor import Sam3Processor
 
-MODEL_CHECKPOINT = f'{CACHE}/sam3/sam3.pt'
+if not (MODEL_CHECKPOINT := args.get("weights")):
+    torch.hub.load_state_dict_from_url("https://www.modelscope.cn/models/facebook/sam3/resolve/96f3e1b404ba14f2cfac60ee6ae87c269a7b7923/sam3.pt")
+    MODEL_CHECKPOINT = os.path.join(os.environ["TORCH_HOME"], "hub", "checkpoints", "sam3.pt")
 
 if torch.cuda.is_available():
     # use bfloat16 for the entire notebook

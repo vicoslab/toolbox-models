@@ -6,5 +6,12 @@
         "rectangle",
         "keypoint"
     ],
-    "properties": {}
+    "x-toolbox-notice": "This model contains code covered by a [restrictive license](https://raw.githubusercontent.com/facebookresearch/sam3/refs/heads/main/LICENSE). Furthermore, if you do not provide and configure your own weights, they will be downloaded automatically from a (possibly) untrusted source.",
+    "properties": {
+        "weights": {
+            "title": "Weights",
+            "description": "Path to saved model.",
+            "type": "string"
+        }
+    }
 }
