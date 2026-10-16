@@ -2,6 +2,11 @@
     "title": "SAM3",
     "description": "Inference worker for assisted annotations in label studio",
     "type": "object",
+    "x-toolbox-tags": [
+        "counting",
+        "segmentation",
+        "training-free"
+    ],
     "x-toolbox-tools": [
         "rectangle",
         "keypoint"

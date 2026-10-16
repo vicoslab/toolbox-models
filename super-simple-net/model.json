@@ -1,6 +1,11 @@
 {
     "title": "SuperSimpleNet",
     "description": "Anomaly detection model with flexible training regime (unsupervised, weakly supervised, fully supervised, mixed supervision)",
+    "x-toolbox-tags": [
+        "anomaly detection",
+        "supervised",
+        "unsupervised"
+    ],
     "type": "object",
     "properties": {
         "manifest": {

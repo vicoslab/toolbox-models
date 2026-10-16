@@ -2,6 +2,13 @@
     "title": "CeDiRNet",
     "description": "Center estimation model",
     "type": "object",
+    "x-toolbox-tags": [
+        "attribute",
+        "counting",
+        "detection",
+        "point",
+        "supervised"
+    ],
     "properties": {
         "manifest": {
             "title": "Dataset manifest",

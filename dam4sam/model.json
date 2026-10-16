@@ -2,6 +2,11 @@
     "title": "DAM4SAM",
     "description": "Distractor-aware memory-based visual object tracking",
     "type": "object",
+    "x-toolbox-tags": [
+        "segmentation",
+        "tracking",
+        "training-free"
+    ],
     "properties": {
         "tracker_name": {
             "title": "Tracker name",

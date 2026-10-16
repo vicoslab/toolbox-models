@@ -2,6 +2,11 @@
     "title": "GeCo2",
     "description": "Generalized-Scale Object Counting with Gradual Query Aggregation",
     "type": "object",
+    "x-toolbox-tags": [
+        "counting",
+        "segmentation",
+        "training-free"
+    ],
     "x-toolbox-tools": [
         "rectangle"
     ],

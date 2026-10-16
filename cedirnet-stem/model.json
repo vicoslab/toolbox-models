@@ -2,6 +2,12 @@
   "title": "CeDiRNet-STEM",
   "description": "Optional nanoparticle center/radius detection and multiclass semantic segmentation of BF/HAADF STEM images, with paired training and paired or single-detector inference.",
   "type": "object",
+  "x-toolbox-tags": [
+    "attribute",
+    "detection",
+    "point",
+    "segmentation"
+  ],
   "properties": {
     "manifest": {
       "title": "Dataset manifest",
