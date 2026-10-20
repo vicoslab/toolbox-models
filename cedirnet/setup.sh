@@ -3,19 +3,10 @@ set -euo pipefail
 
 dir=$(realpath ${0%/*})
 
-git clone --depth 1 https://github.com/vicoslab/CeDiRNet-3DoF.git "$TOOLBOX_CACHE/cedirnet"
-cd "$TOOLBOX_CACHE/cedirnet"
+: "${INSTALL_DIR:?Model definition requires newer toolbox version}"
+git clone --depth 1 https://github.com/vicoslab/CeDiRNet-3DoF.git "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 git apply "$dir"/*.patch
-
-localization_checkpoint="$TOOLBOX_CACHE/cedirnet/localization_checkpoint.pth"
-localization_checkpoint_part="$TOOLBOX_CACHE/cedirnet/localization_checkpoint.pth.part"
-trap 'rm -f -- "$localization_checkpoint_part"' EXIT
-curl --fail --location --retry 3 \
-    --output "$localization_checkpoint_part" \
-    https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth
-echo "cffcfde184a22c03a67ecc741f3943d0325d4aabe812cb1787796f236403df84  $localization_checkpoint_part" | sha256sum --check --status
-mv -- "$localization_checkpoint_part" "$localization_checkpoint"
-trap - EXIT
 
 uv venv --python 3.12
 

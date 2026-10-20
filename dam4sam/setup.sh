@@ -2,8 +2,9 @@
 set -euo pipefail
 
 dir=$(realpath ${0%/*})
-git clone --depth 1 https://github.com/jovanavidenovic/DAM4SAM "$TOOLBOX_CACHE/dam4sam"
-cd "$TOOLBOX_CACHE/dam4sam"
+: "${INSTALL_DIR:?Model definition requires newer toolbox version}"
+git clone --depth 1 https://github.com/jovanavidenovic/DAM4SAM "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 
 git apply "$dir"/*.patch
 

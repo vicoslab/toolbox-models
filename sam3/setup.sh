@@ -1,8 +1,9 @@
 #! /usr/bin/env bash
 set -euo pipefail
 
-git clone --depth 1 https://github.com/facebookresearch/sam3.git "$TOOLBOX_CACHE/sam3"
-cd "$TOOLBOX_CACHE/sam3"
+: "${INSTALL_DIR:?Model definition requires newer toolbox version}"
+git clone --depth 1 https://github.com/facebookresearch/sam3.git "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 curl https://patch-diff.githubusercontent.com/raw/facebookresearch/sam3/pull/403.patch | git apply -
 
 uv venv --python 3.12

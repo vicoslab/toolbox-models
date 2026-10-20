@@ -2,8 +2,9 @@
 set -euo pipefail
 
 dir=$(realpath ${0%/*})
-git clone --depth 1 https://github.com/blaz-r/SuperSimpleNet.git "$TOOLBOX_CACHE/super-simple-net"
-cd "$TOOLBOX_CACHE/super-simple-net"
+: "${INSTALL_DIR:?Model definition requires newer toolbox version}"
+git clone --depth 1 https://github.com/blaz-r/SuperSimpleNet.git "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 
 git apply "$dir"/*.patch
 

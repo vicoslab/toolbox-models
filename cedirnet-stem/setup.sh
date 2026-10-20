@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 dir=$(cd "$(dirname "$0")" && pwd)
-: "${TOOLBOX_CACHE:?TOOLBOX_CACHE must be set}"
-model_dir="$TOOLBOX_CACHE/cedirnet-stem"
+: "${INSTALL_DIR:?Model definition requires newer toolbox version}"
+model_dir="$INSTALL_DIR"
 repository=${CEDIRNET_STEM_REPOSITORY:-https://github.com/vicoslab/CeDiRNet-STEM.git}
 branch=master
 if [[ -e "$model_dir" ]]; then
