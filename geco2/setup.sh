@@ -2,8 +2,9 @@
 set -euo pipefail
 
 dir=$(realpath ${0%/*})
-git clone --depth 1 https://github.com/jerpelhan/GECO2 "$TOOLBOX_CACHE/geco2"
-cd "$TOOLBOX_CACHE/geco2"
+: "${INSTALL_DIR:?Model definition requires newer toolbox version}"
+git clone --depth 1 https://github.com/jerpelhan/GECO2 "$INSTALL_DIR"
+cd "$INSTALL_DIR"
 
 # git apply "$dir"/*.patch
 curl -L -o CNTQG_multitrain_ca44.pt https://huggingface.co/datasets/jerpelhan/geco2-assets/resolve/main/weights/CNTQG_multitrain_ca44.pth?download=true
