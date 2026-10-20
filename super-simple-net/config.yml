@@ -19,7 +19,7 @@ config: |
       <View style="display: flex; flex-direction: column; align-items: flex-start; gap: 8px; flex: 0 0 380px;">
         <Collapse open="true" bordered="true">
           <Panel value="Split">
-            <Choices name="split" showInline="true" choice="single-radio">
+            <Choices name="split" toName="image" showInline="true" choice="single-radio">
               <Choice value="Train"/>
               <Choice value="Validation"/>
               <Choice value="Test"/>
