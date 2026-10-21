@@ -8,6 +8,7 @@ site.addsitedir(INSTALL_DIR + '/src')
 
 import signal
 import tempfile
+import json
 import numpy as np
 import torch
 import mlflow
@@ -38,6 +39,7 @@ def log_figure_artifact(fig, artifact_file):
 
 class Trainer:
     def __init__(self, args):
+        args = dict(args)
         self.args = args
         try:
             self.modality_dropout = parse_bool(args.get('modality_dropout'), True)
@@ -47,7 +49,10 @@ class Trainer:
             .25 if args.get('bf_drop_probability') is None else args['bf_drop_probability'],
             .25 if args.get('haadf_drop_probability') is None else args['haadf_drop_probability'])
         self.modality_dropout_seed = int(args.get('modality_dropout_seed') or 0)
-        self.tasks = task_config(args)
+        self.tasks = task_config(args, manifest=args.get('manifest'))
+        if self.tasks.segmentation:
+            # Log the resolved ID order, not an ambiguous 'auto' option.
+            args['semantic_classes'] = json.dumps(list(self.tasks.classes))
         self.device = args.get('device') or ('cuda' if torch.cuda.is_available() else 'cpu')
         self.size = (int(args.get('width',512)),int(args.get('height',512)))
         if any(s <= 0 or s % 32 for s in self.size):
@@ -201,7 +206,7 @@ def main():
         signal.signal(signal.SIGINT,handler); signal.signal(signal.SIGTERM,handler)
         modelargs.emit_action('Experiment',run.info.experiment_id)
         modelargs.emit_action('Run',run.info.run_id)
-        params = {k:v for k,v in args.items() if v is not None}
+        params = {k:v for k,v in trainer.args.items() if v is not None}
         mlflow.create_external_model(name='CeDiRNet-STEM', params=params)
         mlflow.log_params(params)
         mlflow.log_input(dataset)

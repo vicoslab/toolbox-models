@@ -25,6 +25,8 @@ def load_runtime(options, device):
         url = "https://data.vicos.si/skokec/STEM/checkpoint.pth"
         print(f'Loading CeDiRNet-STEM model from "{url}"')
         state = torch.hub.load_state_dict_from_url(url,map_location=device)
+    # Construct the semantic head only after its saved class identity is known.
+    tasks = task_config(options, checkpoint=state)
     backbone = state.get('backbone',state.get('metadata',{}).get('backbone','tu-convnext_base'))
     runtime = StemRuntime(tasks,device,backbone,pretrained=False)
     localisation = checkpoint_override(options.get('localisation'))

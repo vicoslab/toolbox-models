@@ -37,10 +37,10 @@
       "default": false
     },
     "semantic_classes": {
-      "title": "Semantic classes (JSON)",
-      "description": "Ordered names; index is mask class ID. Class 0 is a real class, not implicitly background. 255 is ignored.",
+      "title": "Semantic classes (auto or JSON)",
+      "description": "Use auto (default) to read the ordered classes from the training manifest or inference checkpoint. An explicit JSON list must match that exact class-ID order. Class 0 is a real class; 255 is ignored. Different datasets may use different class names and counts; existing semantic weights require the same classes.",
       "type": "string",
-      "default": "[\"Carbon\", \"Film\", \"Vacuum\"]"
+      "default": "auto"
     },
     "model": {
       "title": "Weights",

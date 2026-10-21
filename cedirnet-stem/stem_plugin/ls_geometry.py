@@ -8,6 +8,8 @@ import copy
 import numpy as np
 
 KINDS = ('ellipse', 'rectangle', 'polygon', 'brush')
+# Absolute percentage-point tolerance, not a relative coordinate tolerance.
+_POLYGON_BOUNDARY_TOLERANCE = 1e-9
 
 
 def normalize_results(tags):
@@ -75,14 +77,19 @@ def shape_mask(kind, value, width, height):
     xx += .5
     yy += .5
     try:
-        if kind == 'polygonlabels':
+        if kind in ('polygonlabels', 'polygon'):
             if value.get('closed', True) is not True:
                 raise ValueError('semantic polygon must be closed')
             points = np.asarray(value['points'], dtype=float)
             if points.ndim != 2 or points.shape[1] != 2 or len(points) < 3:
                 raise ValueError('polygon requires at least three xy points')
-            if not np.isfinite(points).all() or (points < 0).any() or (points > 100).any():
+            if (not np.isfinite(points).all()
+                    or (points < -_POLYGON_BOUNDARY_TOLERANCE).any()
+                    or (points > 100 + _POLYGON_BOUNDARY_TOLERANCE).any()):
                 raise ValueError('polygon points must be finite percentages in 0..100')
+            # LS can serialize an edge at zero as -2.22e-16. Normalize only
+            # validated roundoff outside the image; leave interior points alone.
+            points = np.clip(points, 0, 100)
             points = points * [width/100, height/100]
             area = np.sum(points[:,0]*np.roll(points[:,1],-1)-points[:,1]*np.roll(points[:,0],-1))
             if abs(area) < 1e-10:

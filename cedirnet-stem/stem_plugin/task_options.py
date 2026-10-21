@@ -1,6 +1,6 @@
 """Strict options, including a workaround for old Toolbox boolean parsing."""
-import json
 from .stem_tasks import TaskConfig
+from .semantic_classes import resolve_classes
 
 
 def parse_bool(value, default):
@@ -13,11 +13,10 @@ def parse_bool(value, default):
     raise ValueError('task option must be true or false')
 
 
-def task_config(options):
-    classes = options.get('semantic_classes') or '["Carbon", "Film", "Vacuum"]'
-    if isinstance(classes, str):
-        classes = json.loads(classes)
-    if not isinstance(classes, (tuple, list)):
-        raise ValueError('semantic_classes must be a JSON list')
-    return TaskConfig(parse_bool(options.get('nanoparticles'), True),
-                      parse_bool(options.get('segmentation'), False), tuple(classes))
+def task_config(options, *, manifest=None, checkpoint=None):
+    particles = parse_bool(options.get('nanoparticles'), True)
+    semantic = parse_bool(options.get('segmentation'), False)
+    classes = resolve_classes(options.get('semantic_classes'),
+                              manifest=manifest if semantic else None,
+                              checkpoint=checkpoint if semantic else None)
+    return TaskConfig(particles, semantic, classes)
