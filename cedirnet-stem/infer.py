@@ -1,7 +1,9 @@
 import os
 import site
 from pathlib import Path
-site.addsitedir(str(Path(os.environ.get('CEDIRNET_STEM_SOURCE',os.path.join(os.environ.get('TOOLBOX_CACHE','.'),'cedirnet-stem'))) / 'src'))
+if not (INSTALL_DIR := os.getenv('CEDIRNET_STEM_SOURCE')) and not (INSTALL_DIR := os.getenv("INSTALL_DIR")):
+    raise ValueError("Model definition requires newer toolbox version")
+site.addsitedir(INSTALL_DIR + '/src')
 
 import torch
 import modelargs
