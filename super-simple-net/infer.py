@@ -1,6 +1,8 @@
 import os
 import site
-site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/super-simple-net')
+if not (INSTALL_DIR := os.getenv("INSTALL_DIR")):
+    raise ValueError("Model definition requires newer toolbox version")
+site.addsitedir(INSTALL_DIR)
 import sys
 import numpy as np
 from model.supersimplenet import SuperSimpleNet

@@ -1,6 +1,9 @@
 import os
 import site
-site.addsitedir(f'{os.environ["TOOLBOX_CACHE"]}/geco2')
+if not (INSTALL_DIR := os.getenv("INSTALL_DIR")):
+    raise ValueError("Model definition requires newer toolbox version")
+site.addsitedir(INSTALL_DIR)
+
 import sys
 import torch
 from torch.nn import DataParallel
@@ -24,7 +27,8 @@ args = dict(
     **args,
 )
 model = DataParallel(CNT(**args).to(device))
-model.load_state_dict(torch.load(f'{os.environ["TOOLBOX_CACHE"]}/geco2/CNTQG_multitrain_ca44.pt', weights_only=True)['model'], strict=False)
+state = torch.load_state_dict_from_url("https://huggingface.co/datasets/jerpelhan/geco2-assets/resolve/main/weights/CNTQG_multitrain_ca44.pth?download=true", weights_only=True)
+model.load_state_dict(state, strict=False)
 model.eval()
 
 def load(src):
