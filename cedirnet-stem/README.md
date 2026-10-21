@@ -21,23 +21,50 @@ must be enabled. Task switches are booleans; CLI values are `true` or `false`.
    particles if the particle task will be enabled. Resolve multiple annotators
    before export; the adapter rejects multiple annotations rather than guessing
    a consensus.
-4. Assign Train, Validation, or Test splits and use Toolbox **Export**. The host
+4. Leave samples on Auto, or assign Train, Validation, or Test splits, and use
+   Toolbox **Export**. The host
    imports this plugin's `ls_adapter.export(annotations, export_dir, relpaths,
    shared, config)` and writes the version-4 manifest. The adapter writes lossless class-ID
    PNGs and attaches their paths and class order to each item. **No manually
    authored manifest or host modification is needed.**
-5. Select that manifest for training, enable the tasks you annotated, and set
-   **Semantic classes (JSON)** to the same ordered names as the template.
+5. Select that manifest for training, enable the tasks you annotated, and leave
+   **Semantic classes (auto or JSON)** on `auto` (the default).
 
-To change semantic classes, edit the ordered `semantic` BrushLabels in the plugin
-`config.yml` **before creating the project**, and use the same names/order in the
-model option. `Ignore` is reserved and excluded from the class list. Do not change
-only the project XML after creation: the host export API does not pass project
-configuration to the adapter. Unknown classes are rejected, not reindexed.
+To change semantic classes, configure the segmentation labels in the annotation
+project (or edit the template before project creation), then re-export. Assign
+unique contiguous `category` IDs **0, 1, ...** to the predicted classes and reserve
+**255** for Ignore. The exporter reads the saved project XML and writes the ordered
+class names into each annotated manifest item. Training supports **2..255** classes;
+it does not require the template's Carbon/Film/Vacuum vocabulary.
+
+### Automatic class identity
+
+`auto` reads training classes from the selected manifest's per-item
+`semantic_classes`, with legacy root-level metadata as a fallback. The semantic
+head and loss are built for that number of classes. All semantic items used for
+training and validation must agree on names **and order**; conflicts fail before
+model construction. Class 0 remains a real class, and Ignore 255 is not a model
+class. No masks or metadata are relabeled or rewritten.
+
+With all samples on Auto, the manifest's `data` list is used for training and
+validation may be empty. Auto does **not** randomly partition samples. An explicit
+`train` split takes precedence over `data`; `test` is never used to infer the
+training classes or as a validation fallback.
+
+Resolved classes are recorded in MLflow parameters and semantic checkpoints.
+Inference with `auto` reconstructs its class names and output count from the
+checkpoint, without requiring a training manifest. An explicit JSON list remains
+supported but must exactly match the manifest/checkpoint class order; it cannot
+rename or reorder existing weights. For older semantic checkpoints without class
+metadata, provide their original ordered JSON list explicitly. Changing the class
+set requires training compatible semantic weights, not resizing a loaded head.
+
+If Toolbox retained a previously selected explicit class list, remove that option
+or set it to `auto`; a new schema default does not overwrite saved option values.
 
 ### Export semantics
 
-- IDs 0, 1, … follow template class order, not annotation encounter order. Class 0
+- IDs 0, 1, … follow the project's numeric categories, not annotation encounter order. Class 0
   is a real class, **not** implicit background. 255 is ignored.
 - Unpainted pixels, explicit Ignore, and overlapping *different* classes become
   255. Same-class overlaps are unions. Region order does not change the mask.
@@ -73,7 +100,7 @@ press Escape before creating a separate region/class instead of relabeling the
 currently selected region. Disjoint regions of the same class are all retained.
 The shipped UI remains BrushLabels + Magicwand and the particle ellipse control;
 additional semantic geometries support existing/imported LS projects, not new UI
-buttons. Class vocabulary still comes from the plugin's semantic BrushLabels.
+buttons. Class vocabulary comes from the saved project's semantic label controls.
 Polygon fill uses even/odd pixel-center inclusion; rectangle and ellipse masks
 also sample pixel centers. Image rotation, open polygons, video sequences, holes
 as separate subtractive polygons, keypoints and arbitrary vector segmentation
@@ -131,8 +158,8 @@ incompatible with this template. Keep group size 2. No host changes are needed.
 SDK parsing uses `alias` before `value`: preannotations use the project's single
 configured particle label/alias. Export accepts the plugin's configured serialized
 label and legacy `Particle`, rejecting unknown labels (including display-only
-`PtCo` when its alias is configured). Change the plugin config before project
-creation, not only the project XML, because export receives no project config.
+`PtCo` when its alias is configured). Project XML updates affect subsequent
+exports; they do not migrate existing manifests or checkpoints.
 
 The loader accepts host `train`, `val`, `test`, and `data`. `data` is used for
 training only when `train` is absent. Validation uses **only `val`**, never the
