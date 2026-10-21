@@ -75,7 +75,7 @@ def shape_mask(kind, value, width, height):
     xx += .5
     yy += .5
     try:
-        if kind == 'polygonlabels':
+        if kind in ('polygonlabels', 'polygon'):
             if value.get('closed', True) is not True:
                 raise ValueError('semantic polygon must be closed')
             points = np.asarray(value['points'], dtype=float)
