@@ -33,9 +33,7 @@ print('Orientation enabled?', enable_3dof)
 args = get_args(width, height, enable_3dof=enable_3dof)
 
 args['checkpoint_path'] = cmd_args["model"]
-default_localisation_checkpoint = os.path.join(
-    os.environ["TOOLBOX_CACHE"], "cedirnet", "localization_checkpoint.pth"
-)
+default_localisation_checkpoint = os.path.join(INSTALL_DIR, "localization_checkpoint.pth")
 localisation_checkpoint = cmd_args.get("localisation") or default_localisation_checkpoint
 if localisation_checkpoint == default_localisation_checkpoint:
     localisation_checkpoint = str(
