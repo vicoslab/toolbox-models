@@ -14,10 +14,11 @@
     </svg>
 </template>
 
-<script>
+<script type="module">
     const template = document.getElementById("template-marker");
-    const SETTINGS_KEY = "toolbox-ui-cedirnet-detection-dialog";
+    const SETTINGS_KEY = "toolbox-ui-cedirnet-detection-dialog-@ALIAS@";
     const SHOW_3DOF = false; // Reserved for a future training/inference option.
+    const root = document.getElementById("@ALIAS@");
 
     function filterDetectionIndices(scores, threshold) {
         const selected = [];
@@ -125,9 +126,9 @@
             dialog.append(wrapper);
             dialog.cedirnetSlider = thresholdInput;
             dialog.cedirnetLabel = thresholdLabel;
-            document.querySelector(".toolbar-right").append(button, dialog);
+            const form = root.closest?.("form");
+            form.querySelector(".toolbar-right").append(button, dialog);
 
-            const form = document.getElementById("@ALIAS@").closest?.("form");
             const removeSettings = () => {
                 button.remove();
                 dialog.remove();
@@ -143,7 +144,7 @@
         onThreshold(Number(dialog.cedirnetSlider.value));
     }
 
-    document.getElementById("@ALIAS@").onInference = function (request, response) {
+    root.onInference = function (request, response) {
         const group = document.createElement("div");
         group.classList.add("group");
         const images = request.getAll("images");
