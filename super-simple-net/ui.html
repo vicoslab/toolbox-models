@@ -13,6 +13,7 @@
         return scores.map((score, i) => {
             const wrapper = document.createElement("div");
             wrapper.className = "activation-wrapper";
+            wrapper.dataset.score = score;
 
             const reference = document.createElement("img");
             reference.src = URL.createObjectURL(images[i]);
