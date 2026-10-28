@@ -102,7 +102,10 @@ The shipped UI remains BrushLabels + Magicwand and the particle ellipse control;
 additional semantic geometries support existing/imported LS projects, not new UI
 buttons. Class vocabulary comes from the saved project's semantic label controls.
 Polygon fill uses even/odd pixel-center inclusion; rectangle and ellipse masks
-also sample pixel centers. Image rotation, open polygons, video sequences, holes
+also sample pixel centers. Finite polygon vertices may extend beyond the image
+(negative or above 100 percent). The original contour is rasterized only inside
+the image bounds; vertices are not clamped. Non-finite coordinates still fail.
+Image rotation, open polygons, video sequences, holes
 as separate subtractive polygons, keypoints and arbitrary vector segmentation
 are not supported. Use brush RLE for raster masks with holes.
 
