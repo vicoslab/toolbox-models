@@ -5,11 +5,12 @@ result sharing its region id when a semantic class is assigned. Shape coordinate
 clockwise in image pixels. Raster masks sample pixel centers.
 """
 import copy
+from fractions import Fraction
+from math import ceil
+
 import numpy as np
 
 KINDS = ('ellipse', 'rectangle', 'polygon', 'brush')
-# Absolute percentage-point tolerance, not a relative coordinate tolerance.
-_POLYGON_BOUNDARY_TOLERANCE = 1e-9
 
 
 def normalize_results(tags):
@@ -71,6 +72,31 @@ def normalize_results(tags):
         raise ValueError('labels without matching geometry (check region id, target and item_index)')
 
 
+def _exact_polygon_mask(points, width, height):
+    """Rasterize boundary-domain polygons exactly, avoiding cancellation/overflow."""
+    sx, sy = Fraction(width, 100), Fraction(height, 100)
+    points = [(Fraction(float(x))*sx, Fraction(float(y))*sy) for x, y in points]
+    edges = list(zip(points, points[1:] + points[:1]))
+    area = sum(x1*y2-y1*x2 for (x1,y1),(x2,y2) in edges)
+    if abs(area) < Fraction(1e-10):
+        raise ValueError('polygon must have nonzero area')
+    mask = np.zeros((height,width),dtype=bool)
+    half = Fraction(1, 2)
+    for (x1,y1),(x2,y2) in edges:
+        if y1 == y2:
+            continue
+        # Match min(y1,y2) <= row+.5 < max(y1,y2), clipping only row indices.
+        start = max(0, min(height, ceil(min(y1,y2)-half)))
+        stop = max(0, min(height, ceil(max(y1,y2)-half)))
+        slope = (x2-x1)/(y2-y1)
+        for row in range(start, stop):
+            intersection = x1+slope*(row+half-y1)
+            # x+.5 < intersection: one exact intersection, not Fraction/pixel.
+            count = max(0, min(width, ceil(intersection-half)))
+            mask[row,:count] ^= True
+    return mask
+
+
 def shape_mask(kind, value, width, height):
     """Rasterize supported filled shapes; no implicit background or holes."""
     yy, xx = np.mgrid[:height, :width].astype(float)
@@ -83,21 +109,26 @@ def shape_mask(kind, value, width, height):
             points = np.asarray(value['points'], dtype=float)
             if points.ndim != 2 or points.shape[1] != 2 or len(points) < 3:
                 raise ValueError('polygon requires at least three xy points')
-            if (not np.isfinite(points).all()
-                    or (points < -_POLYGON_BOUNDARY_TOLERANCE).any()
-                    or (points > 100 + _POLYGON_BOUNDARY_TOLERANCE).any()):
-                raise ValueError('polygon points must be finite percentages in 0..100')
-            # LS can serialize an edge at zero as -2.22e-16. Normalize only
-            # validated roundoff outside the image; leave interior points alone.
-            points = np.clip(points, 0, 100)
-            points = points * [width/100, height/100]
-            area = np.sum(points[:,0]*np.roll(points[:,1],-1)-points[:,1]*np.roll(points[:,0],-1))
-            if abs(area) < 1e-10:
-                raise ValueError('polygon must have nonzero area')
-            mask = np.zeros((height,width),dtype=bool)
-            for (x1,y1),(x2,y2) in zip(points,np.roll(points,-1,axis=0)):
-                if y1 != y2:
-                    mask ^= ((y1 > yy) != (y2 > yy)) & (xx < (x2-x1)*(yy-y1)/(y2-y1)+x1)
+            if not np.isfinite(points).all():
+                raise ValueError('polygon points must be finite percentages')
+            # Keep boundary-crossing vertices unchanged. Sampling only image
+            # pixel centers crops the contour without distorting its edges.
+            # Use exact arithmetic outside the legacy 0..100 domain: float
+            # cancellation can lose image-scale geometry without overflowing.
+            if (points < 0).any() or (points > 100).any():
+                return _exact_polygon_mask(points, width, height)
+            try:
+                with np.errstate(over='raise', invalid='raise', divide='raise'):
+                    pixels = points * [width/100, height/100]
+                    area = np.sum(pixels[:,0]*np.roll(pixels[:,1],-1)-pixels[:,1]*np.roll(pixels[:,0],-1))
+                    if abs(area) < 1e-10:
+                        raise ValueError('polygon must have nonzero area')
+                    mask = np.zeros((height,width),dtype=bool)
+                    for (x1,y1),(x2,y2) in zip(pixels,np.roll(pixels,-1,axis=0)):
+                        if y1 != y2:
+                            mask ^= ((y1 > yy) != (y2 > yy)) & (xx < (x2-x1)*(yy-y1)/(y2-y1)+x1)
+            except FloatingPointError:
+                return _exact_polygon_mask(points, width, height)
             return mask
         x,y,rotation = map(float, (value['x'], value['y'], value.get('rotation',0)))
         fields = ('radiusX','radiusY') if kind == 'ellipselabels' else ('width','height')
