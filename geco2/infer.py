@@ -28,7 +28,7 @@ args = dict(
 )
 model = DataParallel(CNT(**args).to(device))
 state = torch.hub.load_state_dict_from_url("https://huggingface.co/datasets/jerpelhan/geco2-assets/resolve/main/weights/CNTQG_multitrain_ca44.pth?download=true", weights_only=True)
-model.load_state_dict(state, strict=False)
+model.load_state_dict(state['model'], strict=False)
 model.eval()
 
 def load(src):

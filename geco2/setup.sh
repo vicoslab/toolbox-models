@@ -6,12 +6,9 @@ dir=$(realpath ${0%/*})
 git clone --depth 1 https://github.com/jerpelhan/GECO2 "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# git apply "$dir"/*.patch
-curl -L -o CNTQG_multitrain_ca44.pt https://huggingface.co/datasets/jerpelhan/geco2-assets/resolve/main/weights/CNTQG_multitrain_ca44.pth?download=true
-
 cp -r Deformable-DETR/models/ops/ models/
 
-uv venv --python 3.10
-uv pip install torchvision==0.26.0 torchaudio==2.11.0 numpy==1.26.4 pillow==10.4.0 opencv-python-headless matplotlib scipy scikit-image pycocotools https://github.com/vicoslab/toolbox-models/releases/download/v0.3.8/multiscaledeformableattention-1.0-cp310-cp310-linux_x86_64.whl tqdm einops==0.8.1 hydra-core==1.3.2 omegaconf==2.3.0 pandas==2.2.3 imageio==2.37.0
-uv pip install gunicorn /opt/apps/label-studio-ml-backend
+uv venv --python 3.11
+uv pip install torchvision==0.26.0 torchaudio==2.11.0 numpy==1.26.4 pillow==10.4.0 opencv-python-headless matplotlib scipy scikit-image pycocotools tqdm einops==0.8.1 hydra-core==1.3.2 omegaconf==2.3.0 pandas==2.2.3 imageio==2.37.0
+uv pip install gunicorn /opt/apps/label-studio-ml-backend https://github.com/vicoslab/toolbox-models/releases/download/slaif-1.1.1/multiscaledeformableattention-1.0-cp311-cp311-linux_x86_64.whl
 uv pip install -e /opt/apps/modelargs # use editable install so it works when docker image updates

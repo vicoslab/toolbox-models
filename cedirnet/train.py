@@ -651,9 +651,7 @@ if __name__ == '__main__':
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']
     args['pretrained_model_path'] = cmd_args['model']
-    default_localisation_checkpoint = os.path.join(
-        os.environ['TOOLBOX_CACHE'], 'cedirnet', 'localization_checkpoint.pth'
-    )
+    default_localisation_checkpoint = os.path.join(INSTALL_DIR, 'localization_checkpoint.pth')
     localisation_checkpoint = cmd_args.get('localisation') or default_localisation_checkpoint
     if localisation_checkpoint == default_localisation_checkpoint:
         localisation_checkpoint = str(

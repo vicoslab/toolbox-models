@@ -72,7 +72,7 @@ class Trainer:
         if self.tasks.nanoparticles:
             path = checkpoint_override(args.get('localisation'))
             if not path and not model:
-                path = os.path.join(os.environ.get('TOOLBOX_CACHE','.'),'cedirnet-stem','localization_checkpoint.pth')
+                path = os.path.join(INSTALL_DIR, 'localization_checkpoint.pth')
             if path:
                 self.runtime.load_center(safe_torch_load(path,map_location=self.device))
         self.loaders = {}

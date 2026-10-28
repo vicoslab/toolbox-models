@@ -8,9 +8,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 
 ENV TORCH_CUDA_ARCH_LIST="7.5;8.0;8.6;8.9;9.0+PTX"
 ENTRYPOINT ["bash", "-ic", "\
-    cd /cache/geco2/Deformable-DETR/models/ops && \
+    cd /cache/a6e1467-geco2/Deformable-DETR/models/ops && \
     uv run python setup.py build && \
-    uvx patchelf --set-rpath '$ORIGIN/torch/lib' build/lib.linux-x86_64-cpython-310/MultiScaleDeformableAttention.cpython-310-x86_64-linux-gnu.so && \
+    uvx patchelf --set-rpath '$ORIGIN/torch/lib' build/lib.linux-x86_64-cpython-311/MultiScaleDeformableAttention.cpython-311-x86_64-linux-gnu.so && \
     uv run python setup.py bdist_wheel \
 "]
 # result should be whatever /cache/geco2/Deformable-DETR/models/ops/dist/*.whl resolved to

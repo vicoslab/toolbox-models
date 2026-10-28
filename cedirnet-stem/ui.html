@@ -6,7 +6,7 @@
   <div id="results"></div>
 </infer-image>
 
-<script>
+<script type="module">
   const ZIP_UTF8_FLAG = 0x0800;
   const ZIP16_MAX = 0xffff;
   const ZIP32_MAX = 0xffffffff;
@@ -22,7 +22,7 @@
     return table;
   })();
 
-  const VIEW_KEY = "toolbox-ui-stem-inference";
+  const VIEW_KEY = "toolbox-ui-stem-inference-@ALIAS@";
 
   function normalizeView(value, maximum, defaultThreshold = .5) {
     const bounded = (v, fallback, max) => typeof v === "number" && Number.isFinite(v)
@@ -371,7 +371,8 @@
     });
   }
 
-  document.getElementById("@ALIAS@").onInference = function (request, response) {
+  const root = document.getElementById("@ALIAS@");
+  root.onInference = function (request, response) {
     if (response.error) throw new Error(response.error);
     const images = request.getAll("images");
     const samples = inferenceSamples(images, request.get("modality") || "paired");
@@ -533,7 +534,7 @@
     const close = document.createElement("button"); close.type = "button"; close.textContent = "Close";
     close.onclick = () => dialog.close();
     panel.append(close); dialog.append(panel);
-    (document.querySelector(".toolbar-right") || actions).append(button, dialog);
+    (root?.closest("form")?.querySelector(".toolbar-right") || actions).append(button, dialog);
     syncControls();
 
     const rendered = [];
@@ -611,7 +612,7 @@
       } catch (error) { showToast("error", `Could not prepare images: ${error.message}`); }
       finally { downloading = false; if (!disposed) imageDownload.disabled = false; }
     };
-    const form = document.getElementById("@ALIAS@").closest("form");
+    const form = root?.closest("form");
     const dispose = () => {
       disposed = true;
       if (frame !== null) cancelAnimationFrame(frame);
@@ -627,5 +628,5 @@
     prepare();
     return [actions, group];
   };
-  installModalityPrompt(document.getElementById("@ALIAS@"));
+  installModalityPrompt(root);
 </script>
