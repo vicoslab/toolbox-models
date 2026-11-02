@@ -39,6 +39,23 @@ Scenario('Nanoparticle demo', async ({ I }) => {
     I.assert(holds, 'Predictions didn\'t contain center at expected position(s)');
 });
 
+Scenario('Default weights with single image', async ({ I }) => {
+    I.click('Inference');
+    I.waitForURL(url => url.pathname.startsWith('/models/'));
+    const results = await I.inference(() => {
+        const files = [`../data/nanoparticles/PtCo_IL_a-0016_BF.png`];
+        I.usePlaywrightTo('Attach single file', async ({ page }) => {
+            await page.locator('.inference-tab input[type="file"]').setInputFiles(files);
+        });
+        I.click('BF');
+        I.click('Run Inference');
+        I.waitForElement('.stem-results', 5);
+    });
+    const centers = [[0.5, 0.5]];
+    const holds = centers.every(([cx, cy]) => results.centers[0].some(([px, py]) => Math.hypot(cx-px, cy-py) < 0.05));
+    I.assert(holds, 'Predictions didn\'t contain center at expected position(s)');
+});
+
 AfterSuite(async ({ I }) => {
     I.section('Cleanup');
     I.deleteModel();
