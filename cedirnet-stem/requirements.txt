@@ -8,6 +8,7 @@ torchaudio==2.7.0
 pandas
 scikit-learn
 scikit-image
+six
 tensorboard
 matplotlib
 scipy
