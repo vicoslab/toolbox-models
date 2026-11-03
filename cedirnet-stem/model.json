@@ -9,7 +9,7 @@
     "segmentation"
   ],
   "x-toolbox-tools": [
-    "nanoparticle"
+    "image"
   ],
   "properties": {
     "manifest": {
