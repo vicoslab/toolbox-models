@@ -6,6 +6,10 @@
         "supervised",
         "unsupervised"
     ],
+    "x-toolbox-tools": {
+        "default": [],
+        "supported": ["image"]
+    },
     "type": "object",
     "properties": {
         "manifest": {
