@@ -19,7 +19,7 @@ BeforeSuite(({ I }) => {
 Before(({ I }) => {
     I.amOnPage('/models?tour=1');
     I.click('GeCo2', { css: 'a.model' });
-    I.waitForURL(url => url.pathname.startsWith('/models/') && url.pathname.endsWith('geco2'), { timeout: 5000 });
+    I.waitForURL(url => url.pathname.startsWith('/model/') && url.pathname.endsWith('geco2/infer'), { timeout: 5000 });
 });
 
 function matches([rx, ry, rw, rh], [px, py, pw, ph]) {

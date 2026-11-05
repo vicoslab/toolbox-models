@@ -41,7 +41,7 @@ Scenario('Nanoparticle demo', async ({ I }) => {
 
 Scenario('Default weights with single image', async ({ I }) => {
     I.click('Inference');
-    I.waitForURL(url => url.pathname.startsWith('/models/'));
+    I.waitForURL(url => url.pathname.startsWith('/model/'));
     const results = await I.inference(() => {
         const files = [`../data/nanoparticles/PtCo_IL_a-0016_BF.png`];
         I.usePlaywrightTo('Attach single file', async ({ page }) => {

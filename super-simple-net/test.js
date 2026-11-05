@@ -25,7 +25,7 @@ Scenario('Train tile demo', async ({ I }) => {
     I.section('Setup dataset');
     I.waitForURL(url => url.pathname == '/dataset');
     await I.externalDataset('../data/cell-tile-demo.zip', '/data/cell-tiles-demo/manifest.json');
-    I.waitForURL(url => url.pathname.startsWith('/models/') && url.pathname.endsWith('super-simple-net'), { timeout: 5000 });
+    I.waitForURL(url => url.pathname.startsWith('/model/') && url.pathname.endsWith('super-simple-net/train'), { timeout: 5000 });
 
     I.training([['Batch size', 'text', '16'], ['Training duration', 'text', '2'], ['Evaluation interval', 'text', '100'], ['Flip augmentation', 'enum', 'true']], 60*5);
     const { scores } = await I.inference(() => {
