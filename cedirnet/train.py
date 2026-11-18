@@ -39,7 +39,6 @@ from mlflow.entities import RunStatus
 from diagnostics import plot_training_diagnostics, training_artifact_path
 from detection_threshold import center_detection_threshold
 from extras import center_model_kwargs, load_center_state, set_center_model_mode
-from localization_checkpoint import ensure_localization_checkpoint
 from scheduling import should_validate
 from validation_metrics import POINT_MATCH_DISTANCE_PX, BestF1Metrics, extract_ground_truth
 
@@ -651,12 +650,11 @@ if __name__ == '__main__':
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']
     args['pretrained_model_path'] = cmd_args['model']
-    default_localisation_checkpoint = os.path.join(INSTALL_DIR, 'localization_checkpoint.pth')
-    localisation_checkpoint = cmd_args.get('localisation') or default_localisation_checkpoint
-    if localisation_checkpoint == default_localisation_checkpoint:
-        localisation_checkpoint = str(
-            ensure_localization_checkpoint(default_localisation_checkpoint)
-        )
+
+    if not (localisation_checkpoint := cmd_args.get("localisation")):
+        torch.hub.load_state_dict_from_url("https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth")
+        localisation_checkpoint = os.path.join(os.environ["TORCH_HOME"], "hub", "checkpoints", "localization_checkpoint.pth")
+
     args['pretrained_center_model_path'] = localisation_checkpoint
     args['display_it'] = cmd_args['display_interval']
     args['evaluation_splits'] = cmd_args['evaluation_splits']
