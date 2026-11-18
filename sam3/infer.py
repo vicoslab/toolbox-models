@@ -4,8 +4,7 @@ args = modelargs.parse("./model.json")
 
 import os
 import site
-CACHE = os.environ["TOOLBOX_CACHE"]
-os.chdir(f'{CACHE}/sam3')
+os.chdir(os.environ["INSTALL_DIR"])
 
 import torch
 import numpy as np
