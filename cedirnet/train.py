@@ -664,7 +664,7 @@ if __name__ == '__main__':
     args['visualization_score_threshold'] = cmd_args['visualization_score_threshold']
     args['save_interval'] = cmd_args['save_interval']
     
-    mlflow.set_tracking_uri('http://localhost:8081')
+    mlflow.set_tracking_uri('https://localhost/app/mlflow')
     mlflow.set_experiment('CeDiRNet')
     dataset = MetaDataset(source=resolve_dataset_source(cmd_args["manifest"]), name=cmd_args["manifest"].removesuffix("/manifest.json"))
 

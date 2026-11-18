@@ -196,7 +196,7 @@ def main():
     import modelargs
     args = modelargs.parse('./model.json')
     trainer = Trainer(args)
-    mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI','http://localhost:8081'))
+    mlflow.set_tracking_uri(os.getenv('MLFLOW_TRACKING_URI','https://localhost/app/mlflow'))
     mlflow.set_experiment('CeDiRNet-STEM')
     dataset = MetaDataset(source=resolve_dataset_source(args["manifest"]), name=args["manifest"].removesuffix("/manifest.json"))
     with mlflow.start_run(run_name=args.get('name')) as run:
