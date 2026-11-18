@@ -16,7 +16,18 @@ uv run gunicorn --bind :9090 infer:app -- --weights /path/to/model/weights.pt
 ```
 
 ### Installation
-Model installation is not done inside the docker image, but rather by a install script. Installations are done in the `TOOLBOX_CACHE` dir, which may be deleted at any point for any reason. You should fetch publicly accessible sources, where possible.
+Model installation is not done inside the docker image, but rather by a install script. Installations are done in the `TOOLBOX_CACHE` dir, which may be deleted at any point for any reason. You should fetch publicly accessible sources, where possible. Python environment should be installed using some version of `UV_PROJECT_ENVIRONMENT="$INSTALL_DIR/.venv" uv sync --python 3.12`.
+
+uv sync is preferrable because it:
+- resyncs every time, so if the lockfile changes it gets automatically synced
+- all package versions are pinned
+
+Constructing the lockfile is a bit tricky
+```
+UV_PROJECT_ENVIRONMENT=/cache/b2e0727-super-simple-net/.venv uv add --extra-index-url "https://download.pytorch.org/whl/cu118" --index-strategy unsafe-best-match <package>
+and 
+UV_PROJECT_ENVIRONMENT=/cache/b2e0727-super-simple-net/.venv uv add --extra-index-url "https://download.pytorch.org/whl/cu118" --index-strategy unsafe-best-match --editable /opt/apps/modelargs /opt/apps/label-studio-ml-backend
+```
 
 ### Registry
 Model import strings are base64 encoded json. Easiest way to read/write one is in the browser console:

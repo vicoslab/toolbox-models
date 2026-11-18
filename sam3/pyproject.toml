@@ -1,0 +1,21 @@
+[project]
+name = "toolbox-sam3"
+version = "0.1.0"
+dependencies = [
+    "einops>=0.8.2",
+    "flash-attn-3>=3.0.1",
+    "gunicorn>=27.0.1",
+    "label-studio-ml",
+    "modelargs",
+    "ninja>=1.13.2",
+    "psutil>=7.2.2",
+    "pycocotools>=2.0.11",
+    "sam3",
+    "setuptools==79.0.0",
+    "torch==2.10.0",
+]
+
+[tool.uv.sources]
+sam3 = { path = "/cache/2d57aa4-sam3" }
+modelargs = { path = "/opt/apps/modelargs", editable = true }
+label-studio-ml = { path = "/opt/apps/label-studio-ml-backend", editable = true }
