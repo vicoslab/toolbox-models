@@ -1,0 +1,46 @@
+From cdb198bc7e7f8112702e0c04c5bd07909b994be1 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Andra=C5=BE=20Andol=C5=A1ek=20Peklaj?= <andraz.ap@pm.me>
+Date: Wed, 18 Nov 2026 16:02:22 +0100
+Subject: [PATCH 1/1] Support center-only datasets
+
+---
+ src/datasets/GenericDataset.py | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/src/datasets/GenericDataset.py b/src/datasets/GenericDataset.py
+index 9827c82..56c4913 100644
+--- a/src/datasets/GenericDataset.py
++++ b/src/datasets/GenericDataset.py
+@@ -116,19 +116,23 @@ class GenericDataset(Dataset):
+ 			M = self.fixed_bbox_size
+ 			instance_counter = 1
+ 
+-			for x1,y1,x2,y2 in annot:
++			for points in annot:
++				if len(points) not in [2,4]:
++					raise ValueError(f'Expected [x, y] or [x1, y1, x2, y2], got {point!r}')
+ 
+-				pt1 = np.array([x1, y1])
+-				pt2 = np.array([x2, y2])
++				pt1 = np.array(points[:2])
++				pt2 = np.array(points[2:4])
+ 
+ 				if self.resize_factor is not None and self.resize_factor != 1.0:
+ 					pt1 = pt1 * self.resize_factor
+ 					pt2 = pt2 * self.resize_factor
+ 
+-				direction = pt2 - pt1
+-				direction = np.arctan2(direction[1], direction[0])
++				if pt2.size > 0:
++					direction = pt2 - pt1
++					direction = np.arctan2(direction[1], direction[0])
++
++					orientation[:, int(pt1[1] - M):int(pt1[1] + M), int(pt1[0] - M):int(pt1[0] + M)] = direction
+ 
+-				orientation[:, int(pt1[1] - M):int(pt1[1] + M), int(pt1[0] - M):int(pt1[0] + M)] = direction
+ 				label[int(pt1[1] - M):int(pt1[1] + M), int(pt1[0] - M):int(pt1[0] + M)] = 1
+ 				instances[int(pt1[1] - M):int(pt1[1] + M), int(pt1[0] - M):int(pt1[0] + M)] = instance_counter
+ 				centers.append(pt1)
+-- 
+2.56.0
+

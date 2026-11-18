@@ -643,9 +643,7 @@ if __name__ == '__main__':
     cmd_args = modelargs.parse('./model.json')
 
     from base_config import get_args
-    if cmd_args.get('orientation', False):
-        raise ValueError('Orientation training is not supported for point-only CeDiRNet datasets')
-    args = get_args(cmd_args['width'], cmd_args['height'], enable_3dof=False)
+    args = get_args(cmd_args['width'], cmd_args['height'], enable_3dof=cmd_args['orientation'])
 
     args['train_dataset']['kwargs']['manifest'] = cmd_args['manifest']
     args['n_epochs'] = cmd_args['epochs']

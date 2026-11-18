@@ -6,7 +6,6 @@
         <circle cx="25" cy="25" r="4" fill="#1677ff" stroke="white" stroke-width="2" opacity="0.75" />
     </svg>
 </template>
-<!-- Retained for a future explicit 3DoF display option. -->
 <template id="template-marker-3dof">
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 50 50" stroke="limegreen" stroke-width="4px"
         stroke-linecap="round" stroke-linejoin="round" fill="none">
@@ -17,7 +16,6 @@
 <script type="module">
     const template = document.getElementById("template-marker");
     const SETTINGS_KEY = "toolbox-ui-cedirnet-detection-dialog-@ALIAS@";
-    const SHOW_3DOF = false; // Reserved for a future training/inference option.
     const root = document.getElementById("@ALIAS@");
 
     function filterDetectionIndices(scores, threshold) {
@@ -34,7 +32,7 @@
     }
 
     function createMarker(markerSize, center, score, angle) {
-        const markerTemplate = SHOW_3DOF && angle != null ? document.getElementById("template-marker-3dof") : template;
+        const markerTemplate = angle != null ? document.getElementById("template-marker-3dof") : template;
         const marker = document.importNode(markerTemplate.content.children[0], true);
         marker.classList.add("cedirnet-marker");
         marker.style.width = markerSize;
@@ -42,7 +40,7 @@
         marker.style.left = center[0] * 100 + "%";
         marker.style.top = center[1] * 100 + "%";
         marker.style.position = "absolute";
-        if (SHOW_3DOF && angle != null) {
+        if (angle != null) {
             marker.style.transformOrigin = "left center";
             marker.style.transform = `translateY(-50%) rotate(${Math.round(angle)}deg)`;
         } else {
