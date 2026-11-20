@@ -451,7 +451,7 @@ def eval(
     return results_dict
 
 def train_and_eval(model, datamodule, config, device):
-    mlflow.set_tracking_uri("https://localhost/app/mlflow")
+    mlflow.set_tracking_uri("http://localhost:8081/app/mlflow")
     mlflow.set_experiment("SuperSimpleNet")
     dataset = MetaDataset(source=resolve_dataset_source(config["manifest"]), name=config["manifest"].removesuffix("/manifest.json"))
     with mlflow.start_run(run_name=config.get("name")) as run:
