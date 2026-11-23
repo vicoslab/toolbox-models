@@ -60,7 +60,7 @@ class Trainer:
         for key in ('epochs','batch_size','save_interval','display_interval'):
             if int(args.get(key,1)) < 1:
                 raise ValueError(f'{key} must be positive')
-        if type(args['display_size']) == float and not 0 <= limit <= 1:
+        if type(limit := args['display_size']) == float and not 0 <= limit <= 1:
             raise ValueError(f'{key} is not in range [0,1]')
 
     def initialize(self):
@@ -70,11 +70,11 @@ class Trainer:
         if model:
             self.runtime.load(safe_torch_load(model,map_location=self.device))
         if self.tasks.nanoparticles:
-            path = checkpoint_override(args.get('localisation'))
-            if not path and not model:
-                path = os.path.join(INSTALL_DIR, 'localization_checkpoint.pth')
-            if path:
-                self.runtime.load_center(safe_torch_load(path,map_location=self.device))
+            if (path := checkpoint_override(args.get('localisation'))):
+                state = safe_torch_load(path,map_location=self.device)
+            else:
+                state = torch.hub.load_state_dict_from_url("https://data.vicos.si/skokec/rtfm/CeDiRNet-3DoF/localization_checkpoint.pth")
+            self.runtime.load_center(state)
         self.loaders = {}
         for subset,split,augment in [('train','train',True),('training','train',False),('validation','val',False)]:
             dataset = ToolboxDataset(args['manifest'],self.tasks,split,self.size,augment,
