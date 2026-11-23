@@ -4,10 +4,12 @@
     "type": "object",
     "x-toolbox-tags": [
         "attribute",
+        "anomaly detection",
         "counting",
         "detection",
         "point",
-        "supervised"
+        "supervised",
+        "training"
     ],
     "properties": {
         "manifest": {

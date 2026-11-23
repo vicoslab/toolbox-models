@@ -6,7 +6,9 @@
     "attribute",
     "detection",
     "point",
-    "segmentation"
+    "segmentation",
+    "training",
+    "training-free"
   ],
   "x-toolbox-tools": [
     "image"
