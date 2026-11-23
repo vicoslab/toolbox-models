@@ -36,7 +36,7 @@ Scenario('Nanoparticle', async ({ I }) => {
         I.usePlaywrightTo('Select exemplar object', async ({ page }) => {
             const area = page.locator('.area');
             const ref = await area.boundingBox();
-            await area.dragTo(area, { sourcePosition: { x: 0.48*ref.width, y: 0.48*ref.height }, targetPosition: { x: 0.54*ref.width, y: 0.54*ref.height }});
+            await area.dragTo(area, { sourcePosition: { x: 0.48 * ref.width, y: 0.48 * ref.height }, targetPosition: { x: 0.54 * ref.width, y: 0.54 * ref.height } });
             // set threshold to known value
             await page.evaluate('localStorage["toolbox-ui-detection-dialog"] = JSON.stringify({ hideBoxes: false, hideMasks: false, hideExemplars: false, threshold: 0.42 })');
         });
@@ -47,8 +47,8 @@ Scenario('Nanoparticle', async ({ I }) => {
         I.wait(0.25);
     });
     // preds.boxes = preds.boxes.map(([x,y,width,height]) => [x*ref.width, y*ref.width, width*ref.width, height*ref.height]);
-    boxes = boxes.map(({ x, y, width, height }) => [ (x - ref.x )/ref.width, (y - ref.y)/ref.height, width/ref.width, height/ref.height]);
-    const holds = preds.scores.every((x,i) => x < 0.42 || boxes.some(dims => matches(preds.boxes[i], dims)));
+    boxes = boxes.map(({ x, y, width, height }) => [(x - ref.x) / ref.width, (y - ref.y) / ref.height, width / ref.width, height / ref.height]);
+    const holds = preds.scores.every((x, i) => x < 0.42 || boxes.some(dims => matches(preds.boxes[i], dims)));
     I.assert(holds, 'Displayed predictions must match calculated positions');
 });
 

@@ -23,11 +23,11 @@ Before(({ I }) => {
 
 Scenario('Train tile demo', async ({ I }) => {
     I.section('Setup dataset');
-    I.waitForURL(url => url.pathname == '/dataset');
+    I.waitForURL(url => url.pathname.startsWith('/dataset'));
     await I.externalDataset('../data/cell-tile-demo.zip', '/data/cell-tiles-demo/manifest.json');
     I.waitForURL(url => url.pathname.startsWith('/model/') && url.pathname.endsWith('super-simple-net/train'), { timeout: 5000 });
 
-    I.training([['Batch size', 'text', '16'], ['Training duration', 'text', '2'], ['Evaluation interval', 'text', '100'], ['Flip augmentation', 'enum', 'true']], 60*5);
+    I.training([['Batch size', 'text', '16'], ['Training duration', 'text', '2'], ['Evaluation interval', 'text', '100'], ['Flip augmentation', 'enum', 'true']], 60 * 5);
     const { scores } = await I.inference(() => {
         I.attachFile('.inference-tab input[type="file"]', '../data/cell-tiles-demo/damaged_0_0000_ls3_camera0.jpg');
         I.waitForElement('.activation-wrapper');
@@ -44,7 +44,7 @@ Scenario('Unsupervised', async ({ I }) => {
     I.fillField('Include', 'jpg');
     I.fillField('Exclude', 'damaged');
     I.click('Create', '#manage-project');
-    I.waitForURL(url => url.pathname == '/label');
+    I.waitForURL(url => url.pathname === '/label');
 
     I.section('Submit annotations');
     I.click('button.close');
@@ -58,12 +58,12 @@ Scenario('Unsupervised', async ({ I }) => {
 
     I.section('Export dataset');
     I.click('Export');
-    I.waitForURL(url => url.pathname == '/export');
+    I.waitForURL(url => url.pathname === '/export');
     I.click('Start export');
     I.waitForText('Go to training', 5);
     I.click('Go to training');
 
-    I.training([['Batch size', 'text', '16'], ['Training duration', 'text', '20'], ['Evaluation interval', 'text', '100'], ['Flip augmentation', 'enum', 'true']], 60*5);
+    I.training([['Batch size', 'text', '16'], ['Training duration', 'text', '20'], ['Evaluation interval', 'text', '100'], ['Flip augmentation', 'enum', 'true']], 60 * 5);
     const { scores } = await I.inference(() => {
         I.attachFile('.inference-tab input[type="file"]', '../data/cell-tiles-demo/damaged_0_0000_ls3_camera0.jpg');
         I.waitForElement('.activation-wrapper');
